@@ -13,18 +13,19 @@ import brainsss
 #import bigbadbrain as bbb
 #import dataflow as flow
 
-def main(args):
+def main():
     ### Move folders from imports to fly dataset - need to restructure folders ###
 
-    logfile = args['logfile']
-    flagged_dir = args['flagged_dir']
-    target_path = args['dataset_path']
-    fly_dirs = args['fly_dirs']
-    user = args['user']
-    printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
-    #printlog('\nBuilding flies from directory {}'.format(flagged_dir))
+    basedir = '/data/brainsss'
+    logfile = os.path.join(basedir, 'log.txt') # args['logfile']
+    flagged_dir = os.path.join(basedir, 'imports') # args['flagged_dir']
+    target_path = os.path.join(basedir, 'processed') # args['dataset_path']
+    fly_dirs = None # ['20223029'] #args['fly_dirs']
+    user = 'poldack' # args['user']
+    #print = getattr(brainsss.print(logfile=logfile), 'print_to_log')
+    print('\nBuilding flies from directory {}'.format(flagged_dir))
     width = 120
-    #printlog(F"\n{'#' * width}\n"
+    #print(F"\n{'#' * width}\n"
     #         F"{'   Building flies from directory ' + os.path.split(flagged_dir)[-1] + '   ':#^{width}}\n"
     #         F"{'#' * width}")
 
@@ -35,22 +36,22 @@ def main(args):
     # Need to move into fly_X folder that reflects it's date
 
     # get fly folders in flagged directory and sort to ensure correct fly order
-    printlog("Building flies from {}".format(flagged_dir))
+    print("Building flies from {}".format(flagged_dir))
     likely_fly_folders = os.listdir(flagged_dir)
     brainsss.sort_nicely(likely_fly_folders)
     likely_fly_folders = [i for i in likely_fly_folders if 'fly' in i]
-    printlog(F"Found fly folders{str(likely_fly_folders):.>{width-17}}")
+    print(F"Found fly folders{str(likely_fly_folders):.>{width-17}}")
 
     if fly_dirs is not None:
         likely_fly_folders = fly_dirs
-        printlog(F"Continuing with only{str(likely_fly_folders):.>{width-20}}")
+        print(F"Continuing with only{str(likely_fly_folders):.>{width-20}}")
 
     for likely_fly_folder in likely_fly_folders:
         if 'fly' in likely_fly_folder:
 
             new_fly_number = get_new_fly_number(target_path)
-            #printlog(f'\n*Building {likely_fly_folder} as fly number {new_fly_number}*')
-            printlog(f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   ':-^{width}}")
+            #print(f'\n*Building {likely_fly_folder} as fly number {new_fly_number}*')
+            print(f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   ':-^{width}}")
 
             # Define source fly directory
             source_fly = os.path.join(flagged_dir, likely_fly_folder)
@@ -61,18 +62,19 @@ def main(args):
 
             destination_fly = os.path.join(target_path, new_fly_folder)
             os.mkdir(destination_fly)
-            printlog(F'Created fly directory:{destination_fly:.>{width-22}}')
+            print(F'Created fly directory:{destination_fly:.>{width-22}}')
 
             # Copy fly data
-            copy_fly(source_fly, destination_fly, printlog, user)
+            print('Copying fly data')
+            copy_fly(source_fly, destination_fly, print, user)
 
             # Add date to fly.json file
             try:
                 add_date_to_fly(destination_fly)
-            except Exception as e: printlog(str(e))
+            except Exception as e: print(str(e))
 
             # Add json metadata to master dataset
-            add_fly_to_xlsx(destination_fly, printlog)
+            add_fly_to_xlsx(destination_fly, print)
 
 def add_date_to_fly(destination_fly):
     ''' get date from xml file and add to fly.json'''
@@ -108,7 +110,7 @@ def add_date_to_fly(destination_fly):
         json.dump(metadata, f, indent=4)
         f.truncate()
 
-def copy_fly(source_fly, destination_fly, printlog, user):
+def copy_fly(source_fly, destination_fly, print, user):
 
     ''' There will be two types of folders in a fly folder.
     1) func_x folder
@@ -138,7 +140,7 @@ def copy_fly(source_fly, destination_fly, printlog, user):
                 # Make imaging folder and copy
                 imaging_destination = os.path.join(expt_folder, 'imaging')
                 os.mkdir(imaging_destination)
-                copy_bruker_data(source_expt_folder, imaging_destination, 'anat', printlog)
+                copy_bruker_data(source_expt_folder, imaging_destination, 'anat', print)
                 ######################################################################
                 print(f"anat:{expt_folder}") # IMPORTANT - FOR COMMUNICATING WITH MAIN
                 ######################################################################
@@ -146,11 +148,11 @@ def copy_fly(source_fly, destination_fly, printlog, user):
                 # Make imaging folder and copy
                 imaging_destination = os.path.join(expt_folder, 'imaging')
                 os.mkdir(imaging_destination)
-                copy_bruker_data(source_expt_folder, imaging_destination, 'func', printlog)
+                copy_bruker_data(source_expt_folder, imaging_destination, 'func', print)
                 # Copt fictrac data based on timestamps
-                copy_fictrac(expt_folder, printlog, user)
+                copy_fictrac(expt_folder, print, user)
                 # Copy visual data based on timestamps, and create visual.json
-                copy_visual(expt_folder, printlog)
+                copy_visual(expt_folder, print)
 
                 ######################################################################
                 print(f"func:{expt_folder}") # IMPORTANT - FOR COMMUNICATING WITH MAIN
@@ -158,7 +160,7 @@ def copy_fly(source_fly, destination_fly, printlog, user):
                 # REMOVED TRIGGERING
 
             else:
-                printlog('Invalid directory in fly folder (skipping): {}'.format(item))
+                print('Invalid directory in fly folder (skipping): {}'.format(item))
 
         # Copy fly.json file
         else:
@@ -171,10 +173,10 @@ def copy_fly(source_fly, destination_fly, printlog, user):
                 ##sys.stdout.flush()
                 copyfile(source_path, target_path)
             else:
-                printlog('Invalid file in fly folder (skipping): {}'.format(item))
+                print('Invalid file in fly folder (skipping): {}'.format(item))
                 ##sys.stdout.flush()
 
-def copy_bruker_data(source, destination, folder_type, printlog):
+def copy_bruker_data(source, destination, folder_type, print):
     # Do not update destination - download all files into that destination
     for item in os.listdir(source):
         # Create full path to item
@@ -183,7 +185,7 @@ def copy_bruker_data(source, destination, folder_type, printlog):
         # Check if item is a directory
         if os.path.isdir(source_item):
             # Do not update destination - download all files into that destination
-            copy_bruker_data(source_item, destination, folder_type, printlog)
+            copy_bruker_data(source_item, destination, folder_type, print)
 
         # If the item is a file
         else:
@@ -226,9 +228,9 @@ def copy_bruker_data(source, destination, folder_type, printlog):
             if '.xml' in item and folder_type == 'func' and 'Voltage' not in item:
                 item = 'functional.xml'
                 target_item = os.path.join(destination, item)
-                copy_file(source_item, target_item, printlog)
+                copy_file(source_item, target_item, print)
                 # Create json file
-                create_imaging_json(target_item, printlog)
+                create_imaging_json(target_item, print)
                 continue
             if '.xml' in item and 'VoltageOutput' in item:
                 item = 'voltage_output.xml'
@@ -240,19 +242,19 @@ def copy_bruker_data(source, destination, folder_type, printlog):
 
             # Actually copy the file
             target_item = os.path.join(destination, item)
-            copy_file(source_item, target_item, printlog)
+            copy_file(source_item, target_item, print)
 
-def copy_file(source, target, printlog):
-    #printlog('Transfering file {}'.format(target))
+def copy_file(source, target, print):
+    #print('Transfering file {}'.format(target))
     to_print = ('/').join(target.split('/')[-4:])
     width = 120
-    printlog(f'Transfering file{to_print:.>{width-16}}')
+    print(f'Transfering file{to_print:.>{width-16}}')
     ##sys.stdout.flush()
     copyfile(source, target)
 
-def copy_visual(destination_region, printlog):
+def copy_visual(destination_region, print):
     width=120
-    printlog(F"Copying visual stimulus data{'':.^{width-28}}")
+    print(F"Copying visual stimulus data{'':.^{width-28}}")
     visual_folder = '/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports/visual'
     visual_destination = os.path.join(destination_region, 'visual')
 
@@ -276,17 +278,17 @@ def copy_visual(destination_region, printlog):
             time_difference = np.abs(true_total_seconds - test_total_seconds)
             if time_difference < 3 * 60:
                 folders.append([folder, test_total_seconds])
-                printlog('Found reasonable visual folder: {}'.format(folder))
+                print('Found reasonable visual folder: {}'.format(folder))
 
     #if more than 1 folder, use the oldest folder
     if len(folders) == 1:
         correct_folder = folders[0]
     #if no matching folder,
     elif len(folders) == 0:
-        printlog(F"{'No matching visual folders found; continuing without visual data':.<{width}}")
+        print(F"{'No matching visual folders found; continuing without visual data':.<{width}}")
         return
     else:
-        printlog('Found more than 1 visual stimulus folder within 3min of expt. Picking oldest.')
+        print('Found more than 1 visual stimulus folder within 3min of expt. Picking oldest.')
         correct_folder = folders[0] # set default to first folder
         for folder in folders:
             # look at test_total_seconds entry. If larger, call this the correct folder.
@@ -294,14 +296,14 @@ def copy_visual(destination_region, printlog):
                 correct_folder = folder
 
     # now that we have the correct folder, copy it's contents
-    printlog('Found correct visual stimulus folder: {}'.format(correct_folder[0]))
+    print('Found correct visual stimulus folder: {}'.format(correct_folder[0]))
     try:
         os.mkdir(visual_destination)
     except:
         pass
         ##print('{} already exists'.format(visual_destination))
     source_folder = os.path.join(visual_folder, correct_folder[0])
-    printlog('Copying from: {}'.format(source_folder))
+    print('Copying from: {}'.format(source_folder))
     for file in os.listdir(source_folder):
         target_path = os.path.join(visual_destination, file)
         source_path = os.path.join(source_folder, file)
@@ -318,7 +320,7 @@ def copy_visual(destination_region, printlog):
     with open(os.path.join(visual_destination, 'visual.json'), 'w') as f:
         json.dump(unique_stimuli, f, indent=4)
 
-def copy_fictrac(destination_region, printlog, user):
+def copy_fictrac(destination_region, print, user):
     #fictrac_folder = '/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports/fictrac'
 
     if user == 'brezovec':
@@ -328,7 +330,7 @@ def copy_fictrac(destination_region, printlog, user):
 
     # Find time of experiment based on functional.xml
     true_ymd, true_total_seconds = get_expt_time(os.path.join(destination_region,'imaging'))
-    #printlog(f'true_ymd: {true_ymd}; true_total_seconds: {true_total_seconds}')
+    #print(f'true_ymd: {true_ymd}; true_total_seconds: {true_total_seconds}')
 
     # Find .dat file of 1) correct-ish time, 2) correct-ish size
     datetime_correct = None
@@ -352,26 +354,26 @@ def copy_fictrac(destination_region, printlog, user):
         # Year/month/day must be exact
         if true_ymd != test_ymd:
             continue
-        #printlog('Found file from same day: {}'.format(file))
+        #print('Found file from same day: {}'.format(file))
 
         # Time must be within 10min
         time_difference = np.abs(true_total_seconds - test_total_seconds)
         if time_difference > 10 * 60:
             continue
-        #printlog('Found fictrac file that matches time.')
+        #print('Found fictrac file that matches time.')
 
         # Must be correct size
         fp = os.path.join(fictrac_folder, file)
         file_size = os.path.getsize(fp)
         if file_size > 30000000: #30MB
             width = 120
-            printlog(F"Found correct .dat file{file:.>{width-23}}")
+            print(F"Found correct .dat file{file:.>{width-23}}")
             datetime_correct = datetime
             break
 
     if datetime_correct is None:
         width = 120
-        printlog(F"{'   No fictrac data found --- continuing without fictrac data   ':*^{width}}")
+        print(F"{'   No fictrac data found --- continuing without fictrac data   ':*^{width}}")
         return
 
     # Collect all fictrac files with correct datetime
@@ -383,7 +385,7 @@ def copy_fictrac(destination_region, printlog, user):
     #         correct_time_files.append(file)
 
 
-    #printlog('Found these files with correct times: {}'.format(correct_time_files))
+    #print('Found these files with correct times: {}'.format(correct_time_files))
     ##sys.stdout.flush()
 
     # Now transfer these 4 files to the fly
@@ -392,8 +394,8 @@ def copy_fictrac(destination_region, printlog, user):
         target_path = os.path.join(fictrac_destination, file)
         source_path = os.path.join(fictrac_folder, file)
         to_print = ('/').join(target_path.split('/')[-4:])
-        printlog(f'Transfering file{to_print:.>{width-16}}')
-        #printlog('Transfering {}'.format(target_path))
+        print(f'Transfering file{to_print:.>{width-16}}')
+        #print('Transfering {}'.format(target_path))
         ##sys.stdout.flush()
         copyfile(source_path, target_path)
 
@@ -408,7 +410,7 @@ def copy_fictrac(destination_region, printlog, user):
     with open(os.path.join(fictrac_destination, 'fictrac.xml'), 'wb') as file:
         tree.write(file, pretty_print=True)
 
-def create_imaging_json(xml_source_file, printlog):
+def create_imaging_json(xml_source_file, print):
 
     # Make empty dict
     source_data = {}
@@ -417,7 +419,7 @@ def create_imaging_json(xml_source_file, printlog):
     try:
         datetime_str, _, _ = get_datetime_from_xml(xml_source_file)
     except:
-        printlog('No xml or cannot read.')
+        print('No xml or cannot read.')
         ##sys.stdout.flush()
         return
     date = datetime_str.split('-')[0]
@@ -472,17 +474,17 @@ def create_imaging_json(xml_source_file, printlog):
     # except:
     #     source_data['laser_power_min'] = laser_power_overall
     #     source_data['laser_power_max'] = laser_power_overall
-    #     #printlog('Used overall laser power.')
+    #     #print('Used overall laser power.')
     #     # try:
     #     #     first_frame = sequence.findall('Frame')[2]
     #     #     source_data['laser_power_min'] = int(first_frame.findall('PVStateShard')[0].findall('PVStateValue')[1].findall('IndexedValue')[0].get('value'))
-    #     #     printlog('Took min laser data from frame 3, not frame 1, due to bruker metadata error.')
+    #     #     print('Took min laser data from frame 3, not frame 1, due to bruker metadata error.')
     #     # # Apparently sometimes the metadata will only include the
     #     # # laser value at the very beginning
     #     # except:
     #     #     source_data['laser_power_min'] = laser_power_overall
     #     #     source_data['laser_power_max'] = laser_power_overall
-    #     #     printlog('Used overall laser power.')
+    #     #     print('Used overall laser power.')
 
     # Save data
     with open(os.path.join(os.path.split(xml_source_file)[0], 'scan.json'), 'w') as f:
@@ -634,7 +636,7 @@ def add_times_to_jsons(destination_fly):
     for func_folder in func_folders:
         pass
 
-def add_fly_to_xlsx(fly_folder, printlog):
+def add_fly_to_xlsx(fly_folder, print):
 
     ### TRY TO LOAD ELSX ###
     try:
@@ -642,7 +644,7 @@ def add_fly_to_xlsx(fly_folder, printlog):
         wb = load_workbook(filename=xlsx_path, read_only=False)
         ws = wb.active
     except:
-        printlog("FYI you have no excel metadata sheet found, so unable to append metadata for this fly.")
+        print("FYI you have no excel metadata sheet found, so unable to append metadata for this fly.")
         return
 
     ### TRY TO LOAD FLY METADATA ###
@@ -650,7 +652,7 @@ def add_fly_to_xlsx(fly_folder, printlog):
         fly_file = os.path.join(fly_folder, 'fly.json')
         fly_data = load_json(fly_file)
     except:
-        printlog("FYI no *fly.json* found; this will not be logged in your excel sheet.")
+        print("FYI no *fly.json* found; this will not be logged in your excel sheet.")
         fly_data = {}
         fly_data['circadian_on'] = None
         fly_data['circadian_off'] = None
@@ -671,7 +673,7 @@ def add_fly_to_xlsx(fly_folder, printlog):
             expt_file = os.path.join(expt_folder, 'expt.json')
             expt_data = load_json(expt_file)
         except:
-            printlog("FYI no *expt.json* found; this will not be logged in your excel sheet.")
+            print("FYI no *expt.json* found; this will not be logged in your excel sheet.")
             expt_data = {}
             expt_data['brain_area'] = None
             expt_data['notes'] = None
@@ -743,4 +745,4 @@ def add_fly_to_xlsx(fly_folder, printlog):
     wb.save(xlsx_path)
 
 if __name__ == '__main__':
-    main(json.loads(sys.argv[1]))
+    main() #json.loads(sys.argv[1]))
