@@ -11,6 +11,8 @@ setup(
     It also has full logging of job progress, output, and errors.
     """,
     packages=['brainsss'],
+    scripts=['scripts/preprocess.py',
+        'scripts/fictrac_qc.py'],
     include_package_data=True,
     install_requires=[
         'pyfiglet',
