@@ -18,13 +18,7 @@ Navigate to where you would like to install this package, then:
 > pip3 install -e . --user
 ```
 
-Install required python packages:
-```shell
-  > pip3 install pyfiglet
-  > pip3 install psutil
-  > pip3 install lxml
-  > pip3 install openpyxl
-```
+This should also automatically install the required python packages.
 
 Create your user preferences:  
 - Navigate to /brainsss/users
