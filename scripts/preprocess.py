@@ -1,432 +1,566 @@
+#!/usr/bin/env python3
+
 import time
 import sys
 import os
-import re
 import json
-import textwrap
 import brainsss
+import logging
 import argparse
-
-def main(args):
-
-    modules = 'gcc/6.3.0 python/3.6 py-numpy/1.14.3_py36 py-pandas/0.23.0_py36 viz py-scikit-learn/0.19.1_py36 antspy/0.2.2'
-
-    #########################
-    ### Setup preferences ###
-    #########################
-
-    width = 120 # width of print log
-    nodes = 2 # 1 or 2
-    nice = True # true to lower priority of jobs. ie, other users jobs go first
-
-    #####################
-    ### Setup logging ###
-    #####################
-
-    logfile = './logs/' + time.strftime("%Y%m%d-%H%M%S") + '.txt'
-    printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
-    sys.stderr = brainsss.Logger_stderr_sherlock(logfile)
-    brainsss.print_title(logfile, width)
-
-    #############################
-    ### Parse input arguments ###
-    #############################
-
-    ### Get user settings
-    #printlog("PWD: {}".format(args['PWD']))
-    scripts_path = args['PWD']
-    com_path = os.path.join(scripts_path, 'com')
-    user = scripts_path.split('/')[3]
-    settings = brainsss.load_user_settings(user, scripts_path)
-
-    ### Grab buildflies from command line args first since it will impact parsing
-    if args['BUILDFLIES'] == '':
-        #printlog('not building flies')
-        build_flies = False
-    else:
-        #printlog('building flies')
-        build_flies = True
-        dir_to_build = args['BUILDFLIES']
-
-    ### Parse user settings
-    imports_path = settings['imports_path']
-    dataset_path = settings['dataset_path']
-    if build_flies:
-        fictrac_qc = brainsss.parse_true_false(settings.get('fictrac_qc',False))
-        stim_triggered_beh = brainsss.parse_true_false(settings.get('stim_triggered_beh',False))
-        bleaching_qc = brainsss.parse_true_false(settings.get('bleaching_qc',False))
-        temporal_mean_brain_pre = brainsss.parse_true_false(settings.get('temporal_mean_brain_pre',False))
-        motion_correction = brainsss.parse_true_false(settings.get('motion_correction',False))
-        temporal_mean_brain_post = brainsss.parse_true_false(settings.get('temporal_mean_brain_post',False))
-        zscore = brainsss.parse_true_false(settings.get('zscore',False))
-        highpass = brainsss.parse_true_false(settings.get('highpass',False))
-        correlation = brainsss.parse_true_false(settings.get('correlation', False))
-        STA = brainsss.parse_true_false(settings.get('STA', False))
-        h5_to_nii = brainsss.parse_true_false(settings.get('h5_to_nii', False))
-    else:
-        fictrac_qc = False
-        stim_triggered_beh = False
-        bleaching_qc = False
-        temporal_mean_brain_pre = False
-        motion_correction = False
-        temporal_mean_brain_post = False
-        zscore = False
-        highpass = False
-        correlation = False
-        STA = False
-        h5_to_nii = False
+import pyfiglet
+from pathlib import Path
 
 
-    ### Parse remaining command line args
-    if args['FLIES'] == '':
-        #printlog('no flies specified')
-        fly_dirs = None
-    else:
-        fly_dirs = args['FLIES'].split(',')
+def parse_args(input_args):
+    """parse command line arguments
+    - this also includes settings that were previously in the user.json file
+    - some of these do not match the previous command line arguments, but match the user.json file settings"""
 
-        ### add 'fly_' to beginning if it isn't there
-        for i in range(len(fly_dirs)):
-            if not fly_dirs[i].startswith('fly_'):
-                fly_dirs[i] = 'fly_' + fly_dirs[i]
+    parser = argparse.ArgumentParser(description='Preprocess fly data')
+    # build_flies and flies are exclusive   
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-b', '--build_flies', help='directory to build flies from', nargs='+')
+    group.add_argument('-f', '--process_flydirs', help='fly directories to process', nargs='+')
 
-    if args['DIRTYPE'] == '':
-        #printlog('no dirtype specified')
-        dirtype = None
-    else:
-        dirtype = args['DIRTYPE'].lower()
-        #printlog('dirtype is {}'.format(dirtype))
+    parser.add_argument('--build-only', action='store_true', help="don't process after building")
+    parser.add_argument('-i', '--imports_path', type=str, help='path to imports directory')
+    parser.add_argument('-d', '--dataset_path', type=str, help='path to processed datasets')
 
-    # These command line arguments will be empty unless the flag is called from the command line
-    if args['FICTRAC_QC'] != '':
-        fictrac_qc = True
-    if args['STB'] != '':
-        stim_triggered_beh = True
-    if args['BLEACHING_QC'] != '':
-        bleaching_qc = True
-    if args['TEMPORAL_MEAN_BRAIN_PRE'] != '':
-        temporal_mean_brain_pre = True
-    if args['MOCO'] != '':
-        motion_correction = True
-    if args['TEMPORAL_MEAN_BRAIN_POST'] != '':
-        temporal_mean_brain_post = True
-    if args['ZSCORE'] != '':
-        zscore = True
-    if args['HIGHPASS'] != '':
-        highpass = True
-    if args['CORRELATION'] != '':
-        correlation = True
-    if args ['STA'] != '':
-        STA = True
-    if args ['H5_TO_NII'] != '':
-        h5_to_nii = True
+    parser.add_argument('-n', '--nodes', help='number of nodes to use', type=int, default=1)
+    parser.add_argument('--dirtype', help='directory type (func or anat)',
+        choices=['func', 'anat'])
 
-    ### catch errors with incorrect argument combos
-    # if fly builder is false, fly dirs must be provided
-    if not build_flies and fly_dirs is None:
-        printlog("ERROR: you did not provide a directory to build flies from, nor a fly directory to process.")
-        printlog("Aborting.")
-        return
+    parser.add_argument('-m', '--motion_correction', action='store_true', help='run motion correction')
+    # TODO: zscore what?
+    parser.add_argument('-z', '--zscore', action='store_true', help='zscore')
+    # TODO: should it take a highpass cutoff?
+    # can't use '-h' because it's a reserved word
+    parser.add_argument('--highpass', action='store_true', help='highpass filter')
+    # TODO: clarify this
+    parser.add_argument('-c', '--correlation', action='store_true', help='???')
+    parser.add_argument('--fictrac_qc', action='store_true', help='run fictrac QC')
+    parser.add_argument('--bleaching_qc', action='store_true', help='run bleaching QC')
 
-    # quickly testing using global sherlock resources
-    # if user == 'brezovec':
-    #     global_resources = True
-    # else:
-    #     global_resources = False
+    parser.add_argument('--STA', action='store_true', help='run STA')
+    parser.add_argument('--STB', action='store_true', help='run STB')
+    # should these be a single argument that takes "pre" or "post" as arguments?
+    parser.add_argument('--temporal_mean_brain_pre', action='store_true', help='run temporal mean pre')
+    parser.add_argument('--temporal_mean_brain_post', action='store_true', help='run temporal mean post')
+    parser.add_argument('--h5_to_nii', action='store_true', help='run h52nii')
 
-    #################################
-    ############# BEGIN #############
-    #################################
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
+    parser.add_argument('-w', '--width', type=int, default=120, help='width')
+    parser.add_argument('--nice', action='store_true', help='nice')
+    parser.add_argument('-t', '--test', action='store_true', help='test mode (set up and exit')
+    parser.add_argument('--no_require_settings', action='store_true', help="don't require settings file")
+    parser.add_argument('--ignore_settings', action='store_true', help="ignore settings file")
 
-    if build_flies:
+    parser.add_argument('-l', '--logdir', type=str, help='log directory', default='./logs')
+    #  get user from unix rather than inferring from directory path, or allow specification
+    parser.add_argument('-u', '--user', help='user', type=str, default=os.getlogin())
+    parser.add_argument('-s', '--settings', help='user settings file (JSON) - will default to users/<user>.json')
 
-        ######################
-        ### CHECK FOR FLAG ###
-        ######################
+    # setup for building flies
+    parser.add_argument('--stim_triggered_beh', action='store_true', help='run stim_triggered_beh')
 
-        # args = {'logfile': logfile, 'imports_path': imports_path}
-        # script = 'check_for_flag.py'
-        # job_id = brainsss.sbatch(jobname='flagchk',
-        #                      script=os.path.join(scripts_path, script),
-        #                      modules=modules,
-        #                      args=args,
-        #                      logfile=logfile, time=1, mem=1, nice=nice, nodes=nodes)
-        # flagged_dir = brainsss.wait_for_job(job_id, logfile, com_path)
+    parser.add_argument('-o', '--output', type=str, help='output directory')
 
-        ###################
-        ### Build flies ###
-        ###################
+    args = parser.parse_args(input_args)
+    return(args)
 
-        flagged_dir = os.path.join(imports_path, dir_to_build)
-        args = {'logfile': logfile, 'flagged_dir': flagged_dir, 'dataset_path': dataset_path, 'fly_dirs': fly_dirs, 'user': user}
-        script = 'fly_builder.py'
-        job_id = brainsss.sbatch(jobname='bldfly',
-                             script=os.path.join(scripts_path, script),
-                             modules=modules,
-                             args=args,
-                             logfile=logfile, time=1, mem=1, nice=nice, nodes=nodes)
-        func_and_anats = brainsss.wait_for_job(job_id, logfile, com_path)
-        func_and_anats = func_and_anats.split('\n')[:-1]
-        funcs = [x.split(':')[1] for x in func_and_anats if 'func:' in x] # will be full paths to fly/expt
-        anats = [x.split(':')[1] for x in func_and_anats if 'anat:' in x]
 
-    else:
-        funcs = []
-        anats = []
-        for fly_dir in fly_dirs:
-            fly_directory = os.path.join(dataset_path, fly_dir)
-            if dirtype == 'func' or dirtype == None:
-                funcs.extend([os.path.join(fly_directory, x) for x in os.listdir(fly_directory) if 'func' in x])
-            if dirtype == 'anat'or dirtype == None:
-                anats.extend([os.path.join(fly_directory, x) for x in os.listdir(fly_directory) if 'anat' in x])
+def setup_logging(args):
+    assert args.logdir is not None  # this shouldn't happen, but check just in case
 
-    brainsss.sort_nicely(funcs)
-    brainsss.sort_nicely(anats)
-    funcanats = funcs + anats
-    dirtypes = ['func']*len(funcs) + ['anat']*len(anats)
+    args.logdir = os.path.realpath(args.logdir)
 
-    if fictrac_qc:
+    if not os.path.exists(args.logdir):
+        os.makedirs(args.logdir)
 
-        ##################
-        ### Fictrac QC ###
-        ##################
+    #  RP: use os.path.join rather than combining strings
+    setattr(args, 'logfile', os.path.join(args.logdir, time.strftime("preprocess_%Y%m%d-%H%M%S.txt")))
 
-        job_ids = []
-        for func in funcs:
-            directory = os.path.join(func, 'fictrac')
-            if os.path.exists(directory):
-                args = {'logfile': logfile, 'directory': directory, 'fps': 100}
-                script = 'fictrac_qc.py'
-                job_id = brainsss.sbatch(jobname='fictracqc',
-                                     script=os.path.join(scripts_path, script),
-                                     modules=modules,
-                                     args=args,
-                                     logfile=logfile, time=1, mem=1, nice=nice, nodes=nodes)
-                job_ids.append(job_id)
-        for job_id in job_ids:
-            brainsss.wait_for_job(job_id, logfile, com_path)
+    #  RP: replace custom code with logging.basicConfig
+    logging_handlers = [logging.FileHandler(args.logfile)]
+    if args.verbose:
+        #  use logging.StreamHandler to echo log messages to stdout
+        logging_handlers.append(logging.StreamHandler())
 
-    if stim_triggered_beh:
+    logging.basicConfig(handlers=logging_handlers, level=logging.INFO,
+        format='%(asctime)s\n%(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+    title = pyfiglet.figlet_format("Brainsss", font="doom")
+    title_shifted = ('\n').join([' ' * 42 + line for line in title.split('\n')][:-2])
+    logging.info(title_shifted)
+    if args.verbose:
+        logging.info(f'logging enabled: {args.logfile}')
 
-        ##########################
-        ### Stim Triggered Beh ###
-        ##########################
+    #  NOTE: removed the printing of datetime since it's included in the logging format
+    #  if you prefer without it then you could remove asctime from the format
+    #  message and then print the date as before
+    return(args)
 
-        for func in funcs:
-            args = {'logfile': logfile, 'func_path': func}
-            script = 'stim_triggered_avg_beh.py'
-            job_id = brainsss.sbatch(jobname='stim',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=1, mem=2, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
 
-    if bleaching_qc:
+def get_users_dir():
+    """get the users directory
+    - assumes that users directory is in main repo, one level up from scripts directory where this script should live
+    """
+    brainsss_basedir = Path(os.path.realpath(__file__)).parents[1].as_posix()
+    return(os.path.join(brainsss_basedir, 'users'))
 
-        ####################
-        ### Bleaching QC ###
-        ####################
 
-        #job_ids = []
-        for funcanat, dirtype in zip(funcanats, dirtypes):
-            directory = os.path.join(funcanat, 'imaging')
-            args = {'logfile': logfile, 'directory': directory, 'dirtype': dirtype}
-            script = 'bleaching_qc.py'
-            job_id = brainsss.sbatch(jobname='bleachqc',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=1, mem=2, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
+def load_user_settings_from_json(args):
+    """load user settings from JSON file, overriding command line arguments
+    - first try ~/.brainsss/settings.json, then try users/<user>.json"""
 
-    if temporal_mean_brain_pre:
+    try:
+        settings_file = os.path.join(os.path.expanduser('~'), '.brainsss', 'settings.json')
+        with open(settings_file) as f:
+            settings = json.load(f)
+        logging.info('loaded settings from %s', settings_file)
+    except FileNotFoundError:
+        users_dir = get_users_dir()
 
-        #######################################
-        ### Create temporal mean brains PRE ###
-        #######################################
+        if args.settings is None:
+            args.settings = os.path.join(
+                users_dir,
+                args.user + '.json'
+            )
+        logging.info('using settings file %s', args.settings)
 
-        for funcanat, dirtype in zip(funcanats, dirtypes):
-            directory = os.path.join(funcanat, 'imaging')
+    if args.no_require_settings and not os.path.exists(args.settings):
+        if args.verbose:
+            logging.info('settings file not found, using default settings')
+        return(args)
 
-            if dirtype == 'func':
-                files = ['functional_channel_1.nii', 'functional_channel_2.nii']
-            if dirtype == 'anat':
-                files = ['anatomy_channel_1.nii', 'anatomy_channel_2.nii']
+    # if user file doesn't exist and no_require_settings not enabled, exit and give some info
+    assert os.path.exists(args.settings), f'''
+settings file {args.settings} does not exist
 
-            args = {'logfile': logfile, 'directory': directory, 'files': files}
-            script = 'make_mean_brain.py'
-            job_id = brainsss.sbatch(jobname='meanbrn',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=1, mem=2, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
+To fix this, copy {os.path.realpath(__file__)}/user.json.example to users/{args.user}.json and update the values
+OR turn settings file off with --no_require_settings'''
 
-    if motion_correction:
+    with open(args.settings) as f:
+        user_settings = json.load(f)
+    for k, v in user_settings.items():
+        setattr(args, k, v)
+    logging.info(f'loaded settings from {args.settings}')
+    return(args)
 
-        #########################
-        ### Motion Correction ###
-        #########################
 
-        for funcanat, dirtype in zip(funcanats, dirtypes):
+def fix_flydir_names(dirname):
+    """ensure that flydir names start with fly_"""
+    if not dirname.startswith('fly_'):
+        dirname = 'fly_' + dirname
+    return(dirname)
 
-            directory = os.path.join(funcanat, 'imaging')
-            if dirtype == 'func':
-                brain_master = 'functional_channel_1.nii'
-                brain_mirror = 'functional_channel_2.nii'
-            if dirtype == 'anat':
-                brain_master = 'anatomy_channel_1.nii'
-                brain_mirror = 'anatomy_channel_2.nii'
 
-            args = {'logfile': logfile,
-                    'directory': directory,
-                    'brain_master': brain_master,
-                    'brain_mirror': brain_mirror,
-                    'scantype': dirtype}
+def build_all_flies(args):
+    """build flies"""
+    built_dirs = []
 
-            script = 'motion_correction.py'
-            # if global_resources:
-            #     dur = 48
-            #     mem = 8
-            # else:
-            #     dur = 96
-            #     mem = 4
-            global_resources = True
-            dur = 48
-            mem = 8
-            job_id = brainsss.sbatch(jobname='moco',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=dur, mem=mem, nice=nice, nodes=nodes, global_resources=global_resources)
-        ### currently submitting these jobs simultaneously since using global resources
+    for build_dir in args.build_flies:
+        logging.info(f'building fly from {build_dir}')
+        if args.test:
+            print('test mode, not actually building flies')
+            built_dirs.append(build_dir)
+            continue
+        build_result = build_fly(build_dir, args)
+
+    return(built_dirs)  # should return built dirs
+
+
+def build_fly(dir_to_build, args):
+    """build a single fly"""
+    flagged_dir = os.path.join(imports_path, dir_to_build)
+    args = {'logfile': logfile, 'flagged_dir': flagged_dir, 'dataset_path': dataset_path,
+        'fly_dirs': fly_dirs, 'user': user}
+    script = 'fly_builder.py'
+    job_id = brainsss.sbatch(jobname='bldfly',
+                            script=os.path.join(scripts_path, script),
+                            modules=modules,
+                            args=args,
+                            logfile=logfile, time=1, mem=1, nice=nice, nodes=nodes)
+    func_and_anats = brainsss.wait_for_job(job_id, logfile, com_path)
+    func_and_anats = func_and_anats.split('\n')[:-1]
+    funcs = [x.split(':')[1] for x in func_and_anats if 'func:' in x] # will be full paths to fly/expt
+    anats = [x.split(':')[1] for x in func_and_anats if 'anat:' in x]
+    return(None)
+
+
+def process_all_flies(args):
+    """process flies"""
+    processed_dirs = []
+
+    for fly_dir in args.process_flydirs:
+        logging.info(f'processing fly from {fly_dir}')
+        process_result = process_fly(fly_dir, args)
+
+    return(processed_dirs)  # should return built dirs
+
+
+# generate a more generic runner for func processing
+
+def run_func_job(funcfiles, args, batch_dict)
+    job_ids = []
+    if args.verbose:
+        print(funcfiles)
+
+    for funcfile in funcfiles:
+        funcdir = os.path.dirname(funcfile)
+        directory = os.path.join(func, 'fictrac')
+        if os.path.exists(directory):
+            args_dict = {'logfile': args.logfile, 'directory': directory, 'fps': 100}
+            script = 'fictrac_qc.py'
+            job_id = brainsss.sbatch(jobname='fictracqc',
+                                    script=os.path.join(scripts_path, script),
+                                    modules=modules,
+                                    args=args_dict,
+                                    logfile=logfile, time=1, mem=1, nice=nice, nodes=nodes)
+            job_ids.append(job_id)
+        else:
+            logging.info(f'{directory} not found, skipping fictrac_qc')
+    for job_id in job_ids:
         brainsss.wait_for_job(job_id, logfile, com_path)
 
-    if zscore:
 
-        ##############
-        ### ZSCORE ###
-        ##############
+def run_fictrac_qc(funcfiles, args):
 
-        for func in funcs:
-            load_directory = os.path.join(func, 'moco')
-            save_directory = os.path.join(func)
-            brain_file = 'functional_channel_2_moco.h5'
+    ##################
+    ### Fictrac QC ###
+    ##################
 
-            args = {'logfile': logfile, 'load_directory': load_directory, 'save_directory': save_directory, 'brain_file': brain_file}
-            script = 'zscore.py'
-            job_id = brainsss.sbatch(jobname='zscore',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=1, mem=2, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
+    job_ids = []
+    print(funcfiles)
+    for funcfile in funcfiles:
+        func = os.path.dirname(funcfile)
+        directory = os.path.join(func, 'fictrac')
+        if os.path.exists(directory):
+            args_dict = {'logfile': args.logfile, 'directory': directory, 'fps': 100}
+            script = 'fictrac_qc.py'
+            job_id = brainsss.sbatch(jobname='fictracqc',
+                                    script=os.path.join(scripts_path, script),
+                                    modules=modules,
+                                    args=args_dict,
+                                    logfile=logfile, time=1, mem=1, nice=nice, nodes=nodes)
+            job_ids.append(job_id)
+        else:
+            logging.info(f'{directory} not found, skipping fictrac_qc')
+    for job_id in job_ids:
+        brainsss.wait_for_job(job_id, logfile, com_path)
 
-    if highpass:
+def run_stim_triggered_beh():
 
-        ################
-        ### HIGHPASS ###
-        ################
+    ##########################
+    ### Stim Triggered Beh ###
+    ##########################
 
-        for func in funcs:
-            load_directory = os.path.join(func)
-            save_directory = os.path.join(func)
-            brain_file = 'functional_channel_2_moco_zscore.h5'
+    for func in funcs:
+        args = {'logfile': logfile, 'func_path': func}
+        script = 'stim_triggered_avg_beh.py'
+        job_id = brainsss.sbatch(jobname='stim',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=1, mem=2, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
 
-            args = {'logfile': logfile, 'load_directory': load_directory, 'save_directory': save_directory, 'brain_file': brain_file}
-            script = 'temporal_high_pass_filter.py'
-            job_id = brainsss.sbatch(jobname='highpass',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=4, mem=2, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
+def run_bleaching_qc():
 
-    if correlation:
+    ####################
+    ### Bleaching QC ###
+    ####################
 
-        ###################
-        ### CORRELATION ###
-        ###################
+    #job_ids = []
+    for funcanat, dirtype in zip(funcanats, dirtypes):
+        directory = os.path.join(funcanat, 'imaging')
+        args = {'logfile': logfile, 'directory': directory, 'dirtype': dirtype}
+        script = 'bleaching_qc.py'
+        job_id = brainsss.sbatch(jobname='bleachqc',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=1, mem=2, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
 
-        for func in funcs:
-            load_directory = os.path.join(func)
-            save_directory = os.path.join(func, 'corr')
-            brain_file = 'functional_channel_2_moco_zscore_highpass.h5'
-            behavior = 'dRotLabY'
+def run_temporal_mean_brain_pre():
 
-            args = {'logfile': logfile, 'load_directory': load_directory, 'save_directory': save_directory, 'brain_file': brain_file, 'behavior': behavior}
-            script = 'correlation.py'
-            job_id = brainsss.sbatch(jobname='corr',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=2, mem=4, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
+    #######################################
+    ### Create temporal mean brains PRE ###
+    #######################################
 
-    if STA:
+    for funcanat, dirtype in zip(funcanats, dirtypes):
+        directory = os.path.join(funcanat, 'imaging')
 
-        #########################################
-        ### STIMULUS TRIGGERED NEURAL AVERAGE ###
-        #########################################
+        if dirtype == 'func':
+            files = ['functional_channel_1.nii', 'functional_channel_2.nii']
+        if dirtype == 'anat':
+            files = ['anatomy_channel_1.nii', 'anatomy_channel_2.nii']
 
-        for func in funcs:
-            args = {'logfile': logfile, 'func_path': func}
-            script = 'stim_triggered_avg_neu.py'
-            job_id = brainsss.sbatch(jobname='STA',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=4, mem=4, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
+        args = {'logfile': logfile, 'directory': directory, 'files': files}
+        script = 'make_mean_brain.py'
+        job_id = brainsss.sbatch(jobname='meanbrn',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=1, mem=2, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
 
-    if h5_to_nii:
+def run_motion_correction():
 
-        #################
-        ### H5 TO NII ###
-        #################
+    #########################
+    ### Motion Correction ###
+    #########################
 
-        for func in funcs:
-            args = {'logfile': logfile, 'h5_path': os.path.join(func, 'functional_channel_2_moco_zscore_highpass.h5')}
-            script = 'h5_to_nii.py'
-            job_id = brainsss.sbatch(jobname='h5tonii',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=2, mem=10, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
+    for funcanat, dirtype in zip(funcanats, dirtypes):
 
-    if temporal_mean_brain_post:
+        directory = os.path.join(funcanat, 'imaging')
+        if dirtype == 'func':
+            brain_master = 'functional_channel_1.nii'
+            brain_mirror = 'functional_channel_2.nii'
+        if dirtype == 'anat':
+            brain_master = 'anatomy_channel_1.nii'
+            brain_mirror = 'anatomy_channel_2.nii'
 
-        #########################################
-        ### Create temporal mean brains, POST ###
-        #########################################
+        args = {'logfile': logfile,
+                'directory': directory,
+                'brain_master': brain_master,
+                'brain_mirror': brain_mirror,
+                'scantype': dirtype}
 
-        for funcanat, dirtype in zip(funcanats, dirtypes):
-            directory = os.path.join(funcanat, 'moco')
+        script = 'motion_correction.py'
+        # if global_resources:
+        #     dur = 48
+        #     mem = 8
+        # else:
+        #     dur = 96
+        #     mem = 4
+        global_resources = True
+        dur = 48
+        mem = 8
+        job_id = brainsss.sbatch(jobname='moco',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=dur, mem=mem, nice=nice, nodes=nodes, global_resources=global_resources)
+    ### currently submitting these jobs simultaneously since using global resources
+    brainsss.wait_for_job(job_id, logfile, com_path)
 
-            if dirtype == 'func':
-                files = ['functional_channel_1_moco.h5', 'functional_channel_2_moco.h5']
-            if dirtype == 'anat':
-                files = ['anatomy_channel_1_moco.h5', 'anatomy_channel_2_moco.h5']
+def run_zscore():
 
-            args = {'logfile': logfile, 'directory': directory, 'files': files}
-            script = 'make_mean_brain.py'
-            job_id = brainsss.sbatch(jobname='meanbrn',
-                                 script=os.path.join(scripts_path, script),
-                                 modules=modules,
-                                 args=args,
-                                 logfile=logfile, time=2, mem=10, nice=nice, nodes=nodes)
-            brainsss.wait_for_job(job_id, logfile, com_path)
+    ##############
+    ### ZSCORE ###
+    ##############
+
+    for func in funcs:
+        load_directory = os.path.join(func, 'moco')
+        save_directory = os.path.join(func)
+        brain_file = 'functional_channel_2_moco.h5'
+
+        args = {'logfile': logfile, 'load_directory': load_directory, 'save_directory': save_directory, 'brain_file': brain_file}
+        script = 'zscore.py'
+        job_id = brainsss.sbatch(jobname='zscore',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=1, mem=2, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
+
+def run_highpass():
+
+    ################
+    ### HIGHPASS ###
+    ################
+
+    for func in funcs:
+        load_directory = os.path.join(func)
+        save_directory = os.path.join(func)
+        brain_file = 'functional_channel_2_moco_zscore.h5'
+
+        args = {'logfile': logfile, 'load_directory': load_directory, 'save_directory': save_directory, 'brain_file': brain_file}
+        script = 'temporal_high_pass_filter.py'
+        job_id = brainsss.sbatch(jobname='highpass',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=4, mem=2, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
+
+def run_correlation():
+
+    ###################
+    ### CORRELATION ###
+    ###################
+
+    for func in funcs:
+        load_directory = os.path.join(func)
+        save_directory = os.path.join(func, 'corr')
+        brain_file = 'functional_channel_2_moco_zscore_highpass.h5'
+        behavior = 'dRotLabY'
+
+        args = {'logfile': logfile, 'load_directory': load_directory, 'save_directory': save_directory, 'brain_file': brain_file, 'behavior': behavior}
+        script = 'correlation.py'
+        job_id = brainsss.sbatch(jobname='corr',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=2, mem=4, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
+
+def run_STA():
+
+    #########################################
+    ### STIMULUS TRIGGERED NEURAL AVERAGE ###
+    #########################################
+
+    for func in funcs:
+        args = {'logfile': logfile, 'func_path': func}
+        script = 'stim_triggered_avg_neu.py'
+        job_id = brainsss.sbatch(jobname='STA',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=4, mem=4, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
+
+def run_h5_to_nii():
+
+    #################
+    ### H5 TO NII ###
+    #################
+
+    for func in funcs:
+        args = {'logfile': logfile, 'h5_path': os.path.join(func, 'functional_channel_2_moco_zscore_highpass.h5')}
+        script = 'h5_to_nii.py'
+        job_id = brainsss.sbatch(jobname='h5tonii',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=2, mem=10, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
+
+def temporal_mean_brain_post():
+
+    #########################################
+    ### Create temporal mean brains, POST ###
+    #########################################
+
+    for funcanat, dirtype in zip(funcanats, dirtypes):
+        directory = os.path.join(funcanat, 'moco')
+
+        if dirtype == 'func':
+            files = ['functional_channel_1_moco.h5', 'functional_channel_2_moco.h5']
+        if dirtype == 'anat':
+            files = ['anatomy_channel_1_moco.h5', 'anatomy_channel_2_moco.h5']
+
+        args = {'logfile': logfile, 'directory': directory, 'files': files}
+        script = 'make_mean_brain.py'
+        job_id = brainsss.sbatch(jobname='meanbrn',
+                                script=os.path.join(scripts_path, script),
+                                modules=modules,
+                                args=args,
+                                logfile=logfile, time=2, mem=10, nice=nice, nodes=nodes)
+        brainsss.wait_for_job(job_id, logfile, com_path)
+
+ 
+def process_fly(fly_dir, args):
+    """process a single fly"""
+    funcs = []
+    anats = []
+    if args.test:
+        print('test mode, not actually processing flies')
+        return(fly_dir)
+    logging.info(f'processing fly dir: {fly_dir}')
+    fly_directory = os.path.join(args.dataset_path, fly_dir)
+    if args.dirtype == 'func' or args.dirtype is None:
+        funcs.extend([os.path.join(fly_directory, x) for x in os.listdir(fly_directory) if 'func' in x])
+    if args.dirtype == 'anat'or args.dirtype is None:
+        anats.extend([os.path.join(fly_directory, x) for x in os.listdir(fly_directory) if 'anat' in x])
+    logging.info(f'found {len(funcs)} functional files and {len(anats)} anatomical files')
+
+    brainsss.utils.sort_nicely(funcs)
+    brainsss.utils.sort_nicely(anats)
+    funcanats = funcs + anats
+    dirtypes = ['func']*len(funcs) + ['anat']*len(anats)
+    
+    if args.fictrac_qc:
+        fictrac_output = run_fictrac_qc(funcs, args)
+
+    if args.stim_triggered_beh:
+        stb_output = run_stim_triggered_beh()
+
+    if args.bleaching_qc:
+        bleaching_output = run_bleaching_qc()
+
+    if args.temporal_mean_brain_pre:
+        mean_brain_pre_output = run_temporal_mean_brain_pre()
+
+    if args.motion_correction:
+        motion_correction_output = run_motion_correction()
+
+    if args.zscore:
+        zscore_output = run_zscore()
+
+    if args.highpass:
+        highpass_output = run_highpass()
+
+    if args.correlation:
+        correlation_output = run_correlation()
+
+    if args.STA:
+        STA_output = run_STA()
+
+    if args.h5_to_nii:
+        h5_to_nii_output = run_h5_to_nii()
+
+    if args.temporal_mean_brain_post:
+        mean_brain_post_output = run_temporal_mean_brain_post()
 
     ############
     ### Done ###
     ############
 
     brainsss.print_footer(logfile, width)
+    return(None)
 
+
+def setup_modules(args):
+    # change modules from a list to a single string
+    if args.modules is None:
+        module_list = ['gcc/6.3.0',
+            'python/3.6', 'py-numpy/1.14.3_py36',
+            'py-pandas/0.23.0_py36', 'viz',
+            'py-scikit-learn/0.19.1_py36', 'antspy/0.2.2']
+    else:
+        module_list = args.modules
+    setattr(args, 'modules', ' '.join(module_list))
+
+
+# NOTE: moving the main() function contents out of main() function to make debugging easier
 if __name__ == '__main__':
-    main(json.loads(sys.argv[1]))
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("PWD") 
-    # args = parser.parse_args()
-    # main(args)
+
+    args = parse_args(sys.argv[1:])
+
+    args = setup_modules(args)
+
+    args = setup_logging(args)
+
+    if not args.ignore_settings:
+        args = load_user_settings_from_json(args)
+
+    print(args)
+
+    assert args.dataset_path is not None, 'dataset_path is required'
+
+    if args.build_flies is not None:
+        assert args.imports_path is not None, 'imports_path is required'
+        built_flies = build_all_flies(args)
+        args.process_flydirs = built_flies
+
+    # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
+
+    if args.process_flydirs is not None:
+        processed_flies = process_all_flies(args)
+    
+    
+
+
