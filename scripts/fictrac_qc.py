@@ -4,35 +4,20 @@ import os
 import json
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import brainsss
+from brainsss import smooth_and_interp_fictrac, load_fictrac
+import argparse
 
-def main(args):
 
-    logfile = args['logfile']
-    directory = args['directory'] # directory will be a full path to a func/fictrac folder
-    fps = args['fps'] #of fictrac camera
-    width = 120
-    printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
+def parse_args(input):
+    parser = argparse.ArgumentParser(description='process fictrac qc')
+    parser.add_argument('-d', '--fictrac_dir', type=str, 
+        help='directory containing fictrac data', required=True)
+    parser.add_argument('--fps', type=float, default=100, help='frame rate of fictrac camera')
+    # TODO: What is this? not clear from smooth_and_interp_fictrac
+    parser.add_argument('--resolution', type=float, help='resolution of fictrac data')
+    args = parser.parse_args(input)
+    return(args)
 
-    fictrac_raw = brainsss.load_fictrac(directory)
-
-    #fly = os.path.split(os.path.split(directory)[0])[1]
-    #expt = os.path.split(directory)[1]
-    full_id = ', '.join(directory.split('/')[-3:-1])
-
-    resolution = 10 #desired resolution in ms
-    expt_len = fictrac_raw.shape[0]/fps*1000
-    behaviors = ['dRotLabY', 'dRotLabZ']
-    fictrac = {}
-    for behavior in behaviors:
-        if behavior == 'dRotLabY': short = 'Y'
-        elif behavior == 'dRotLabZ': short = 'Z'
-        fictrac[short] = brainsss.smooth_and_interp_fictrac(fictrac_raw, fps, resolution, expt_len, behavior)
-    xnew = np.arange(0,expt_len,resolution)
-
-    make_2d_hist(fictrac, directory, full_id, save=True, fixed_crop=True)
-    make_2d_hist(fictrac, directory, full_id, save=True, fixed_crop=False)
-    make_velocity_trace(fictrac, directory, full_id, xnew, save=True)
 
 def make_2d_hist(fictrac, fictrac_folder, full_id, save=True, fixed_crop=True):
         plt.figure(figsize=(10,10))
@@ -62,4 +47,25 @@ def make_velocity_trace(fictrac, fictrac_folder, full_id, xnew, save=True):
         plt.savefig(fname,dpi=100,bbox_inches='tight')
 
 if __name__ == '__main__':
-    main(json.loads(sys.argv[1]))
+    args = parse_args(sys.argv[1:])
+
+    fictrac_raw = load_fictrac(args.fictrac_dir)
+
+    #fly = os.path.split(os.path.split(directory)[0])[1]
+    #expt = os.path.split(directory)[1]
+    # TODO: This is making some assumptions about the naming convention...
+    full_id = ', '.join(args.fictrac_dir.split('/')[-3:-1])
+
+    expt_len = (fictrac_raw.shape[0] / args.fps) * 1000
+    behaviors = ['dRotLabY', 'dRotLabZ']
+    fictrac = {}
+    for behavior in behaviors:
+        if behavior == 'dRotLabY': short = 'Y'
+        elif behavior == 'dRotLabZ': short = 'Z'
+        fictrac[short] = smooth_and_interp_fictrac(fictrac_raw, 
+            args.fps, args.resolution, expt_len, behavior)
+    xnew = np.arange(0, expt_len, args.resolution)
+
+    make_2d_hist(fictrac, args.fictrac_dir, full_id, save=True, fixed_crop=True)
+    make_2d_hist(fictrac, args.fictrac_dir, full_id, save=True, fixed_crop=False)
+    make_velocity_trace(fictrac, args.fictrac_dir, full_id, xnew, save=True)
