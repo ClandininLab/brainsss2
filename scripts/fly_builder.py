@@ -13,17 +13,27 @@ import brainsss
 #import bigbadbrain as bbb
 #import dataflow as flow
 
-def main():
+def build_fly(basedir=None, import_date=None):
     ### Move folders from imports to fly dataset - need to restructure folders ###
 
-    basedir = '/data/brainsss'
-    logfile = os.path.join(basedir, 'log.txt') # args['logfile']
-    flagged_dir = os.path.join(basedir, 'imports') # args['flagged_dir']
+    basedir = '/Users/poldrack/data_unsynced/brainsss/flydata'
+    logdir = os.path.join(basedir, 'build_logs')  # write build logs to a separate folder
+    if not os.path.exists(logdir):
+        os.mkdir(logdir)
+
+    imports_dir = os.path.join(basedir, 'imports')
+    import_date = '20220329'
+    import_path = os.path.join(imports_dir, import_date)
+    assert os.path.exists(import_path), f'Import path does not exist: {import_path}'
+
     target_path = os.path.join(basedir, 'processed') # args['dataset_path']
-    fly_dirs = None # ['20223029'] #args['fly_dirs']
+    if not os.path.exists(target_path):
+        os.mkdir(target_path)
+
+    fly_dirs = None #args['fly_dirs']
     user = 'poldack' # args['user']
     #print = getattr(brainsss.print(logfile=logfile), 'print_to_log')
-    print('\nBuilding flies from directory {}'.format(flagged_dir))
+    print('\nBuilding flies from directory {}'.format(import_path))
     width = 120
     #print(F"\n{'#' * width}\n"
     #         F"{'   Building flies from directory ' + os.path.split(flagged_dir)[-1] + '   ':#^{width}}\n"
@@ -36,8 +46,8 @@ def main():
     # Need to move into fly_X folder that reflects it's date
 
     # get fly folders in flagged directory and sort to ensure correct fly order
-    print("Building flies from {}".format(flagged_dir))
-    likely_fly_folders = os.listdir(flagged_dir)
+    print("Building flies from {}".format(import_path))
+    likely_fly_folders = os.listdir(import_path)
     brainsss.sort_nicely(likely_fly_folders)
     likely_fly_folders = [i for i in likely_fly_folders if 'fly' in i]
     print(F"Found fly folders{str(likely_fly_folders):.>{width-17}}")
@@ -48,13 +58,14 @@ def main():
 
     for likely_fly_folder in likely_fly_folders:
         if 'fly' in likely_fly_folder:
+            logfile = os.path.join(logdir, 'log.txt') # use separate build log for each fly
 
             new_fly_number = get_new_fly_number(target_path)
             #print(f'\n*Building {likely_fly_folder} as fly number {new_fly_number}*')
             print(f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   ':-^{width}}")
 
             # Define source fly directory
-            source_fly = os.path.join(flagged_dir, likely_fly_folder)
+            source_fly = os.path.join(import_path, likely_fly_folder)
 
             # Define destination fly directory
             #fly_time = get_fly_time(source_fly)
@@ -252,6 +263,7 @@ def copy_file(source, target, print):
     ##sys.stdout.flush()
     copyfile(source, target)
 
+# DEPRECATED - this happens within copy_bruker_data
 def copy_visual(destination_region, print):
     width=120
     print(F"Copying visual stimulus data{'':.^{width-28}}")
@@ -745,4 +757,4 @@ def add_fly_to_xlsx(fly_folder, print):
     wb.save(xlsx_path)
 
 if __name__ == '__main__':
-    main() #json.loads(sys.argv[1]))
+    build_fly() #json.loads(sys.argv[1]))
