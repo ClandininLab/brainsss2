@@ -15,13 +15,16 @@ from time import time
 from time import strftime
 from time import sleep
 
-def main(args):
-
-	dataset_path = args['directory']
-	brain_master = args['brain_master']
+def main():
+	args = {}
+	
+	dataset_path = '/Users/poldrack/data_unsynced/brainsss/flydata/processed/fly_008/func_0/imaging' # args['directory']
+	brain_master = 'functional_channel_1.nii'
+	brain_mirror = 'functional_channel_2.nii'
+ 	#	brain_master = args['brain_master']
 
 	# OPTIONAL brain_mirror
-	brain_mirror = args.get('brain_mirror', None)
+	# brain_mirror = args.get('brain_mirror', None)
 
 	# OPTIONAL PARAMETERS
 	type_of_transform = args.get('type_of_transform', 'SyN')  # For ants.registration(), see ANTsPy docs | Default 'SyN'
@@ -422,4 +425,4 @@ def h5_to_nii(h5_path):
 	return nii_savefile
 
 if __name__ == '__main__':
-	main(json.loads(sys.argv[1]))
+	main() #json.loads(sys.argv[1]))
