@@ -1,4 +1,6 @@
+from ast import arg
 import os
+import re
 import sys
 import json
 import numpy as np
@@ -12,26 +14,79 @@ from openpyxl import load_workbook
 import brainsss
 #import bigbadbrain as bbb
 #import dataflow as flow
+import argparse
 
-def build_fly(basedir=None, import_date=None):
+
+def parse_args(input):
+    parser = argparse.ArgumentParser(description='build fly dir from imports')
+    parser.add_argument('-b', '--basedir', type=str, help='base directory for fly data', required=True)
+    parser.add_argument('-d', '--import_date', type=str, help='date of import (YYYYMMDD')
+    parser.add_argument('-f', '--fly_dirs', type=str, help='specific fly dirs to process for date')
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
+    parser.add_argument('-l', '--logdir', type=str, help='log directory')
+    parser.add_argument('--fictrac_import_dir', type=str, help='fictrac import directory')
+    parser.add_argument('--visual_import_dir', type=str, help='visual stim import directory')
+    parser.add_argument('--no_visual', action='store_true', help='do not copy visual data')
+    args = parser.parse_args(input)
+    return(args)
+
+
+# TODO: this is modified from preprocess.py - should be refactored to create a common function
+def setup_logging(args, logtype='builder'):
+    if args.logdir is None:  # this shouldn't happen, but check just in case
+        args.logdir = '/Users/poldrack/data_unsynced/brainsss/flydata/build_logs'
+    args.logdir = os.path.realpath(args.logdir)
+
+    if not os.path.exists(args.logdir):
+        os.makedirs(args.logdir)
+
+    #  RP: use os.path.join rather than combining strings
+    setattr(args, 'logfile', os.path.join(args.logdir, time.strftime(f"{logtype}_%Y%m%d-%H%M%S.txt")))
+
+    #  RP: replace custom code with logging.basicConfig
+    logging_handlers = [logging.FileHandler(args.logfile)]
+    if args.verbose:
+        #  use logging.StreamHandler to echo log messages to stdout
+        logging_handlers.append(logging.StreamHandler())
+
+    logging.basicConfig(handlers=logging_handlers, level=logging.INFO,
+        format='%(asctime)s\n%(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+    title = pyfiglet.figlet_format("Brainsss", font="doom")
+    title_shifted = ('\n').join([' ' * 42 + line for line in title.split('\n')][:-2])
+    logging.info(title_shifted)
+    if args.verbose:
+        logging.info(f'logging enabled: {args.logfile}')
+
+    #  NOTE: removed the printing of datetime since it's included in the logging format
+    #  if you prefer without it then you could remove asctime from the format
+    #  message and then print the date as before
+    return(args)
+
+
+def build_fly(args):
     ### Move folders from imports to fly dataset - need to restructure folders ###
 
-    basedir = '/Users/poldrack/data_unsynced/brainsss/flydata'
-    logdir = os.path.join(basedir, 'build_logs')  # write build logs to a separate folder
+    logdir = os.path.join(args.basedir, 'build_logs')  # write build logs to a separate folder
     if not os.path.exists(logdir):
         os.mkdir(logdir)
 
-    imports_dir = os.path.join(basedir, 'imports')
-    import_date = '20220329'
-    import_path = os.path.join(imports_dir, import_date)
+    if args.visual_import_dir is None:
+        args.visual_import_dir = os.path.join(args.basedir, 'visual')
+    assert os.path.exists(args.visual_import_dir), f'visual import dir {args.visual_import_dir} does not exist'
+
+    if args.fictrac_import_dir is None:
+        args.fictrac_import_dir = os.path.join(args.basedir, 'fictrac')
+    assert os.path.exists(args.fictrac_import_dir), f'fictrac import dir {args.fictrac_import_dir} does not exist'
+    
+    imports_dir = os.path.join(args.basedir, 'imports')
+    import_path = os.path.join(imports_dir, args.import_date)
     assert os.path.exists(import_path), f'Import path does not exist: {import_path}'
 
-    target_path = os.path.join(basedir, 'processed') # args['dataset_path']
+    target_path = os.path.join(args.basedir, 'processed') # args['dataset_path']
     if not os.path.exists(target_path):
         os.mkdir(target_path)
 
-    fly_dirs = None #args['fly_dirs']
-    user = 'poldack' # args['user']
+    #fly_dirs = None #args['fly_dirs']
     #print = getattr(brainsss.print(logfile=logfile), 'print_to_log')
     print('\nBuilding flies from directory {}'.format(import_path))
     width = 120
@@ -52,14 +107,16 @@ def build_fly(basedir=None, import_date=None):
     likely_fly_folders = [i for i in likely_fly_folders if 'fly' in i]
     print(F"Found fly folders{str(likely_fly_folders):.>{width-17}}")
 
-    if fly_dirs is not None:
-        likely_fly_folders = fly_dirs
+    if args.fly_dirs is not None:
+        likely_fly_folders = args.fly_dirs
         print(F"Continuing with only{str(likely_fly_folders):.>{width-20}}")
 
     for likely_fly_folder in likely_fly_folders:
         if 'fly' in likely_fly_folder:
             logfile = os.path.join(logdir, 'log.txt') # use separate build log for each fly
 
+            # TODO: currently this just gets the next number. should generate in a way
+            # that ensures that a single fly is not duplicated
             new_fly_number = get_new_fly_number(target_path)
             #print(f'\n*Building {likely_fly_folder} as fly number {new_fly_number}*')
             print(f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   ':-^{width}}")
@@ -69,15 +126,17 @@ def build_fly(basedir=None, import_date=None):
 
             # Define destination fly directory
             #fly_time = get_fly_time(source_fly)
-            new_fly_folder = 'fly_' + str(new_fly_number)
+            new_fly_name = 'fly_' + str(new_fly_number)
 
-            destination_fly = os.path.join(target_path, new_fly_folder)
+            destination_fly = os.path.join(target_path, new_fly_name)
+            assert not os.path.exists(destination_fly), f'Fly directory already exists: {destination_fly}'
             os.mkdir(destination_fly)
             print(F'Created fly directory:{destination_fly:.>{width-22}}')
 
+
             # Copy fly data
             print('Copying fly data')
-            copy_fly(source_fly, destination_fly, print, user)
+            copy_fly(source_fly, destination_fly, args)
 
             # Add date to fly.json file
             try:
@@ -121,7 +180,7 @@ def add_date_to_fly(destination_fly):
         json.dump(metadata, f, indent=4)
         f.truncate()
 
-def copy_fly(source_fly, destination_fly, print, user):
+def copy_fly(source_fly, destination_fly, args):
 
     ''' There will be two types of folders in a fly folder.
     1) func_x folder
@@ -132,7 +191,8 @@ def copy_fly(source_fly, destination_fly, print, user):
 
     # look at every item in source fly folder
     for item in os.listdir(source_fly):
-        ##print('Currently looking at item: {}'.format(item))
+        if args.verbose:
+            print('Currently looking at item: {}'.format(item))
         ##sys.stdout.flush()
 
         # Handle folders
@@ -142,7 +202,8 @@ def copy_fly(source_fly, destination_fly, print, user):
             # Make the same folder in destination fly folder
             expt_folder = os.path.join(destination_fly, item)
             os.mkdir(expt_folder)
-            ##print('Created directory: {}'.format(expt_folder))
+            if args.verbose:
+                print('Created directory: {}'.format(expt_folder))
             ##sys.stdout.flush()
 
             # Is this folder an anatomy or functional folder?
@@ -150,7 +211,8 @@ def copy_fly(source_fly, destination_fly, print, user):
                 # If anatomy folder, just copy everything
                 # Make imaging folder and copy
                 imaging_destination = os.path.join(expt_folder, 'imaging')
-                os.mkdir(imaging_destination)
+                if not os.path.exists(imaging_destination):
+                    os.mkdir(imaging_destination)
                 copy_bruker_data(source_expt_folder, imaging_destination, 'anat', print)
                 ######################################################################
                 print(f"anat:{expt_folder}") # IMPORTANT - FOR COMMUNICATING WITH MAIN
@@ -158,12 +220,14 @@ def copy_fly(source_fly, destination_fly, print, user):
             elif 'func' in item:
                 # Make imaging folder and copy
                 imaging_destination = os.path.join(expt_folder, 'imaging')
-                os.mkdir(imaging_destination)
+                if not os.path.exists(imaging_destination):
+                    os.mkdir(imaging_destination)
                 copy_bruker_data(source_expt_folder, imaging_destination, 'func', print)
                 # Copt fictrac data based on timestamps
-                copy_fictrac(expt_folder, print, user)
+                copy_fictrac(expt_folder, args)
                 # Copy visual data based on timestamps, and create visual.json
-                copy_visual(expt_folder, print)
+                if not args.no_visual:
+                    copy_visual(expt_folder, args)
 
                 ######################################################################
                 print(f"func:{expt_folder}") # IMPORTANT - FOR COMMUNICATING WITH MAIN
@@ -215,8 +279,8 @@ def copy_bruker_data(source, destination, folder_type, print):
             if '.csv' in item:
                 item = 'photodiode.csv'
                 try:
-                    visual_folder = os.path.join(os.path.split(destination)[0], 'visual')
-                    os.mkdir(visual_folder)
+                    args.visual_import_dir = os.path.join(os.path.split(destination)[0], 'visual')
+                    os.mkdir(args.visual_import_dir)
                 except:
                     pass
                 target_item = os.path.join(os.path.split(destination)[0], 'visual', item)
@@ -225,8 +289,8 @@ def copy_bruker_data(source, destination, folder_type, print):
             # Special copy for visprotocol metadata since it goes in visual folder
             if '.hdf5' in item:
                 try:
-                    visual_folder = os.path.join(os.path.split(destination)[0], 'visual')
-                    os.mkdir(visual_folder)
+                    args.visual_import_dir = os.path.join(os.path.split(destination)[0], 'visual')
+                    os.mkdir(args.visual_import_dir)
                 except:
                     pass
                 target_item = os.path.join(os.path.split(destination)[0], 'visual', item)
@@ -263,22 +327,94 @@ def copy_file(source, target, print):
     ##sys.stdout.flush()
     copyfile(source, target)
 
-
-def copy_fictrac(destination_region, print, user):
-    #fictrac_folder = '/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports/fictrac'
-
-    if user == 'brezovec':
-        user = 'luke'
-    fictrac_folder = os.path.join("/oak/stanford/groups/trc/data/fictrac",user)
-    fictrac_destination = os.path.join(destination_region, 'fictrac')
+def copy_visual(destination_region, args):
+    width=120
+    print(F"Copying visual stimulus data{'':.^{width-28}}")
+    visual_destination = os.path.join(destination_region, 'visual')
 
     # Find time of experiment based on functional.xml
     true_ymd, true_total_seconds = get_expt_time(os.path.join(destination_region,'imaging'))
-    #print(f'true_ymd: {true_ymd}; true_total_seconds: {true_total_seconds}')
+
+    # Find visual folder that has the closest datetime
+    # First find all folders with correct date, and about the correct time
+    folders = []
+    for folder in os.listdir(args.visual_import_dir):
+        print(folder)
+        test_ymd = folder.split('-')[1]
+        test_time = folder.split('-')[2]
+        test_hour = test_time[0:2]
+        test_minute = test_time[2:4]
+        test_second = test_time[4:6]
+        test_total_seconds = int(test_hour) * 60 * 60 + \
+                             int(test_minute) * 60 + \
+                             int(test_second)
+
+        if test_ymd == true_ymd:
+            time_difference = np.abs(true_total_seconds - test_total_seconds)
+            if time_difference < 3 * 60:
+                folders.append([folder, test_total_seconds])
+                print('Found reasonable visual folder: {}'.format(folder))
+
+    #if more than 1 folder, use the oldest folder
+    if len(folders) == 1:
+        correct_folder = folders[0]
+    #if no matching folder,
+    elif len(folders) == 0:
+        print(F"{'No matching visual folders found; continuing without visual data':.<{width}}")
+        return
+    else:
+        print('Found more than 1 visual stimulus folder within 3min of expt. Picking oldest.')
+        correct_folder = folders[0] # set default to first folder
+        for folder in folders:
+            # look at test_total_seconds entry. If larger, call this the correct folder.
+            if folder[-1] > correct_folder[-1]:
+                correct_folder = folder
+
+    # now that we have the correct folder, copy it's contents
+    print('Found correct visual stimulus folder: {}'.format(correct_folder[0]))
+    try:
+        os.mkdir(visual_destination)
+    except:
+        pass
+        ##print('{} already exists'.format(visual_destination))
+    source_folder = os.path.join(args.visual_import_dir, correct_folder[0])
+    print('Copying from: {}'.format(source_folder))
+    for file in os.listdir(source_folder):
+        target_path = os.path.join(visual_destination, file)
+        source_path = os.path.join(source_folder, file)
+        ##print('Transfering from {} to {}'.format(source_path, target_path))
+        ##sys.stdout.flush()
+        copyfile(source_path, target_path)
+
+    # Create visual.json metadata
+    # Try block to prevent quiting if visual stimuli timing is wonky (likely went too long)
+    try:
+        unique_stimuli = brainsss.get_stimuli(visual_destination)
+    except:
+        unique_stimuli = 'brainsss.get_stimuli failed'
+    with open(os.path.join(visual_destination, 'visual.json'), 'w') as f:
+        json.dump(unique_stimuli, f, indent=4)
+
+def copy_fictrac(func_dir, args):
+    """find matching fictrac dataset and copy info fictract folder"""
+
+    #fictrac_folder = '/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports/fictrac'
+    if args.fictrac_import_dir is None:
+        args.fictrac_import_dir = os.path.join(args.basedir, 'fictrac')
+    assert os.path.exists(args.fictrac_import_dir), f'fictrac import directory does not exist ({args.fictrac_import_dir})'
+
+    fictrac_destination = os.path.join(func_dir, 'fictrac')
+    if not os.path.exists(fictrac_destination):
+        os.mkdir(fictrac_destination)
+
+    # Find time of experiment based on functional.xml
+    true_ymd, true_total_seconds = get_expt_time(os.path.join(func_dir,'imaging'))
+    if args.verbose:
+        print(f'true_ymd: {true_ymd}; true_total_seconds: {true_total_seconds}')
 
     # Find .dat file of 1) correct-ish time, 2) correct-ish size
     datetime_correct = None
-    for file in os.listdir(fictrac_folder):
+    for file in os.listdir(args.fictrac_import_dir):
 
         # must be .dat file
         if '.dat' not in file:
@@ -298,16 +434,18 @@ def copy_fictrac(destination_region, print, user):
         # Year/month/day must be exact
         if true_ymd != test_ymd:
             continue
-        #print('Found file from same day: {}'.format(file))
+        if args.verbose:
+            print('Found file from same day: {}'.format(file))
 
         # Time must be within 10min
         time_difference = np.abs(true_total_seconds - test_total_seconds)
         if time_difference > 10 * 60:
             continue
-        #print('Found fictrac file that matches time.')
+        if args.verbose:
+            print('Found fictrac file that matches time.')
 
         # Must be correct size
-        fp = os.path.join(fictrac_folder, file)
+        fp = os.path.join(args.fictrac_import_dir, file)
         file_size = os.path.getsize(fp)
         if file_size > 30000000: #30MB
             width = 120
@@ -321,7 +459,7 @@ def copy_fictrac(destination_region, print, user):
         return
 
     # Collect all fictrac files with correct datetime
-    correct_time_files = [file for file in os.listdir(fictrac_folder) if datetime_correct in file]
+    correct_time_files = [file for file in os.listdir(args.fictrac_import_dir) if datetime_correct in file]
 
     # correct_time_files = []
     # for file in os.listdir(fictrac_folder):
@@ -333,10 +471,9 @@ def copy_fictrac(destination_region, print, user):
     ##sys.stdout.flush()
 
     # Now transfer these 4 files to the fly
-    os.mkdir(fictrac_destination)
     for file in correct_time_files:
         target_path = os.path.join(fictrac_destination, file)
-        source_path = os.path.join(fictrac_folder, file)
+        source_path = os.path.join(args.fictrac_import_dir, file)
         to_print = ('/').join(target_path.split('/')[-4:])
         print(f'Transfering file{to_print:.>{width-16}}')
         #print('Transfering {}'.format(target_path))
@@ -583,6 +720,7 @@ def add_times_to_jsons(destination_fly):
 def add_fly_to_xlsx(fly_folder, print):
 
     ### TRY TO LOAD ELSX ###
+    # TODO: should use a standard format like TSV instead of xlsx
     try:
         xlsx_path = '/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/20190101_walking_dataset/master_2P.xlsx'
         wb = load_workbook(filename=xlsx_path, read_only=False)
@@ -600,7 +738,7 @@ def add_fly_to_xlsx(fly_folder, print):
         fly_data = {}
         fly_data['circadian_on'] = None
         fly_data['circadian_off'] = None
-        fly_data['gender'] = None
+        fly_data['sex'] = None  # biological sex rather than gender
         fly_data['age'] = None
         fly_data['temp'] = None
         fly_data['notes'] = None
@@ -670,7 +808,7 @@ def add_fly_to_xlsx(fly_folder, print):
                    expt_data['time'],
                    fly_data['circadian_on'],
                    fly_data['circadian_off'],
-                   fly_data['gender'],
+                   fly_data['sex'],
                    fly_data['age'],
                    fly_data['temp'],
                    scan_data['laser_power'],
@@ -688,5 +826,14 @@ def add_fly_to_xlsx(fly_folder, print):
     # Save the file
     wb.save(xlsx_path)
 
+ 
 if __name__ == '__main__':
-    build_fly() #json.loads(sys.argv[1]))
+    args = parse_args(sys.argv[1:])
+    assert os.path.exists(args.basedir), f'basedir {args.basedir} does not exist'
+
+    if args.basedir is None:
+        args.basedir = '/Users/poldrack/data_unsynced/brainsss/flydata'
+    if args.import_date is None:
+        args.import_date = '20220329'
+
+    build_fly(args) #json.loads(sys.argv[1]))
