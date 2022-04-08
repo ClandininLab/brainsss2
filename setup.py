@@ -23,6 +23,7 @@ setup(
         'numpy',
         'pandas',
         'pytest',
+        'skimage',
         'scipy',
         'h5py'
     ],
