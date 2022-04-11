@@ -33,8 +33,10 @@ def parse_args(input):
 
 
 def plot_avg_trace(
-    fictrac, starts_angle_0, starts_angle_180, vision_path, printlog=None
-):
+    fictrac, starts_angle_0, starts_angle_180, vision_path):
+    """
+    Plot the average fictrac trace for the stimulus-triggered average
+    """
     pre_window = 200  # in units of 10ms
     post_window = 300
 
@@ -74,7 +76,7 @@ def plot_avg_trace(
     name = "stim_triggered_turning.png"
     fname = os.path.join(vision_path, name)
     plt.savefig(fname, dpi=100, bbox_inches="tight")
-    printlog(f"saved {fname}")
+    print(f"saved {fname}")
 
 
 if __name__ == "__main__":
