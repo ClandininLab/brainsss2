@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Top-level script to build and/or process a single fly
+# will be wrapped by another script to allow processing of multiple flies
 
 import time
 import sys
@@ -19,8 +21,8 @@ def parse_args(input_args):
     parser = argparse.ArgumentParser(description='Preprocess fly data')
     # build_flies and flies are exclusive   
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('-b', '--build_flies', help='directory to build flies from', nargs='+')
-    group.add_argument('-f', '--process_flydirs', help='fly directories to process', nargs='+')
+    group.add_argument('-b', '--build_fly', help='directory to build fly from')
+    group.add_argument('-f', '--process_flydir', help='fly directory to process')
 
     parser.add_argument('--build-only', action='store_true', help="don't process after building")
     parser.add_argument('-i', '--imports_path', type=str, help='path to imports directory')
@@ -31,11 +33,12 @@ def parse_args(input_args):
         choices=['func', 'anat'])
 
     parser.add_argument('-m', '--motion_correction', action='store_true', help='run motion correction')
-    # TODO: zscore what?
-    parser.add_argument('-z', '--zscore', action='store_true', help='zscore')
-    # TODO: should it take a highpass cutoff?
+    parser.add_argument('-z', '--zscore', action='store_true', help='temporal zscore')
     # can't use '-h' because it's a reserved word
     parser.add_argument('--highpass', action='store_true', help='highpass filter')
+    # TODO: check how filter cutoff is specified...
+    parser.add_argument('--highpass_cutoff', type=float, help='highpass filter cutoff')
+
     # TODO: clarify this
     parser.add_argument('-c', '--correlation', action='store_true', help='???')
     parser.add_argument('--fictrac_qc', action='store_true', help='run fictrac QC')
@@ -55,7 +58,8 @@ def parse_args(input_args):
     parser.add_argument('--no_require_settings', action='store_true', help="don't require settings file")
     parser.add_argument('--ignore_settings', action='store_true', help="ignore settings file")
 
-    parser.add_argument('-l', '--logdir', type=str, help='log directory', default='./logs')
+    # TODO: default log dir should be within fly dir
+    parser.add_argument('-l', '--logdir', type=str, help='log directory')
     #  get user from unix rather than inferring from directory path, or allow specification
     parser.add_argument('-u', '--user', help='user', type=str, default=os.getlogin())
     parser.add_argument('-s', '--settings', help='user settings file (JSON) - will default to users/<user>.json')
@@ -154,23 +158,10 @@ def fix_flydir_names(dirname):
     return(dirname)
 
 
-def build_all_flies(args):
-    """build flies"""
-    built_dirs = []
-
-    for build_dir in args.build_flies:
-        logging.info(f'building fly from {build_dir}')
-        if args.test:
-            print('test mode, not actually building flies')
-            built_dirs.append(build_dir)
-            continue
-        build_result = build_fly(build_dir, args)
-
-    return(built_dirs)  # should return built dirs
-
-
 def build_fly(dir_to_build, args):
     """build a single fly"""
+    logging.info(f'building fly from {dir_to_build}')
+
     flagged_dir = os.path.join(imports_path, dir_to_build)
     args = {'logfile': logfile, 'flagged_dir': flagged_dir, 'dataset_path': dataset_path,
         'fly_dirs': fly_dirs, 'user': user}
@@ -185,17 +176,6 @@ def build_fly(dir_to_build, args):
     funcs = [x.split(':')[1] for x in func_and_anats if 'func:' in x] # will be full paths to fly/expt
     anats = [x.split(':')[1] for x in func_and_anats if 'anat:' in x]
     return(None)
-
-
-def process_all_flies(args):
-    """process flies"""
-    processed_dirs = []
-
-    for fly_dir in args.process_flydirs:
-        logging.info(f'processing fly from {fly_dir}')
-        process_result = process_fly(fly_dir, args)
-
-    return(processed_dirs)  # should return built dirs
 
 
 # generate a more generic runner for func processing
@@ -314,6 +294,7 @@ def run_motion_correction():
     for funcanat, dirtype in zip(funcanats, dirtypes):
 
         directory = os.path.join(funcanat, 'imaging')
+        # NB: 1/2 are actually anatomy/functional
         if dirtype == 'func':
             brain_master = 'functional_channel_1.nii'
             brain_mirror = 'functional_channel_2.nii'
@@ -346,7 +327,7 @@ def run_motion_correction():
     brainsss.wait_for_job(job_id, logfile, com_path)
 
 def run_zscore():
-
+    # TODO: check that moco file exists
     ##############
     ### ZSCORE ###
     ##############
@@ -366,12 +347,13 @@ def run_zscore():
         brainsss.wait_for_job(job_id, logfile, com_path)
 
 def run_highpass():
-
+    # TODO: check for file existence
     ################
     ### HIGHPASS ###
     ################
 
     for func in funcs:
+
         load_directory = os.path.join(func)
         save_directory = os.path.join(func)
         brain_file = 'functional_channel_2_moco_zscore.h5'
@@ -384,6 +366,7 @@ def run_highpass():
                                 args=args,
                                 logfile=logfile, time=4, mem=2, nice=nice, nodes=nodes)
         brainsss.wait_for_job(job_id, logfile, com_path)
+
 
 def run_correlation():
 
@@ -423,7 +406,7 @@ def run_STA():
         brainsss.wait_for_job(job_id, logfile, com_path)
 
 def run_h5_to_nii():
-
+    # TODO: check for file existence
     #################
     ### H5 TO NII ###
     #################
@@ -439,7 +422,7 @@ def run_h5_to_nii():
         brainsss.wait_for_job(job_id, logfile, com_path)
 
 def temporal_mean_brain_post():
-
+    # TODO: check that moco files exist
     #########################################
     ### Create temporal mean brains, POST ###
     #########################################
@@ -464,6 +447,8 @@ def temporal_mean_brain_post():
  
 def process_fly(fly_dir, args):
     """process a single fly"""
+    logging.info(f'processing fly from {fly_dir}')
+
     funcs = []
     anats = []
     if args.test:
@@ -551,14 +536,14 @@ if __name__ == '__main__':
 
     assert args.dataset_path is not None, 'dataset_path is required'
 
-    if args.build_flies is not None:
+    if args.build_fly is not None:
         assert args.imports_path is not None, 'imports_path is required'
-        built_flies = build_all_flies(args)
-        args.process_flydirs = built_flies
+        built_flydir = build_all_flies(args)
+        args.process_flydir = built_flydir
 
     # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
 
-    if args.process_flydirs is not None:
+    if args.process_flydir is not None:
         processed_flies = process_all_flies(args)
     
     
