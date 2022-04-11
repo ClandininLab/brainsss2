@@ -27,3 +27,12 @@ def make_empty_h5(directory, file, brain_dims,
         _ = f.create_dataset('data', brain_dims,
             dtype='float32', chunks=chunks)
     return moco_dir, savefile
+
+
+def get_chunk_boundaries(args, n_timepoints):
+    """get chunk boundaries"""
+    chunk_starts = list(range(0, n_timepoints, args.stepsize))
+    chunk_ends = list(range(
+        args.stepsize, n_timepoints + args.stepsize, args.stepsize))
+    chunk_ends = [x if x < n_timepoints else n_timepoints for x in chunk_ends]
+    return(list(zip(chunk_starts, chunk_ends)))
