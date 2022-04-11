@@ -23,8 +23,10 @@ setup(
         'numpy',
         'pandas',
         'pytest',
-        'skimage',
+        'scikit-image',
         'scipy',
-        'h5py'
+        'h5py',
+        'matplotlib',
+        'antspyx'
     ],
 )
