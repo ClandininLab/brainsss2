@@ -8,7 +8,7 @@ from git_utils import get_current_git_hash
 
 
 def setup_logging(args, logtype='moco'):
-    if args.logdir is None:  # this shouldn't happen, but check just in case
+    if args.logdir is None:  
         args.logdir = os.path.join(args.dir, 'logs')
     args.logdir = os.path.realpath(args.logdir)
 
