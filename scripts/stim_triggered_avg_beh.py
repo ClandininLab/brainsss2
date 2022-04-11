@@ -5,7 +5,18 @@ import os
 import json
 import sys
 
-def main(args):
+def parse_args(input):
+    parser = argparse.ArgumentParser(description='process fictrac qc')
+    parser.add_argument('-d', '--fictrac_dir', type=str, 
+        help='directory containing fictrac data', required=True)
+    parser.add_argument('--fps', type=float, default=100, help='frame rate of fictrac camera')
+    # TODO: What is this? not clear from smooth_and_interp_fictrac
+    parser.add_argument('--resolution', type=float, help='resolution of fictrac data')
+    args = parser.parse_args(input)
+    return(args)
+
+if __name__ == '__main__':
+	args = parse_args(sys.argv[1:])
 	
 	logfile = args['logfile']
 	func_path = args['func_path']
@@ -88,5 +99,3 @@ def plot_avg_trace(fictrac, starts_angle_0, starts_angle_180, vision_path, print
 	plt.savefig(fname,dpi=100,bbox_inches='tight')
 	printlog(F"saved {fname}")
 
-if __name__ == '__main__':
-	main(json.loads(sys.argv[1]))
