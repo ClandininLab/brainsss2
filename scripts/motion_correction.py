@@ -20,8 +20,6 @@ import datetime
 import git
 from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
 from hdf5_utils import make_empty_h5
-# TODO - fix this
-width = 120
 
 
 def parse_args(input):
