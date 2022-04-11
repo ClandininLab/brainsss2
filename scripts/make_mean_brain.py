@@ -30,11 +30,13 @@ def make_mean_brain(args):
             ### make mean ###
             full_path = os.path.join(args.dir, file)
             if full_path.endswith('.nii'):
-                brain = np.asarray(nib.load(full_path).get_fdata(), dtype='uint16')
+                brain = nib.load(full_path).get_fdata()
             elif full_path.endswith('.h5'):
                 with h5py.File(full_path, 'r') as hf:
                     brain = np.asarray(hf['data'][:], dtype='uint16')
             meanbrain = np.mean(brain, axis=-1)
+            brainshape = brain.shape
+            del brain
 
             ### Save ###
             save_file = os.path.join(args.dir, file[:-4] + '_mean.nii')
@@ -49,8 +51,8 @@ def make_mean_brain(args):
             fly_print = args.dir.split('/')[-3]
             func_print = args.dir.split('/')[-2]
             #printlog(f"COMPLETE | {fly_func_str} | {file} | {brain.shape} --> {meanbrain.shape}")
-            print(F"meanbrn | COMPLETED | {fly_print} | {func_print} | {file} | {brain.shape} ===> {meanbrain.shape}")
-            print(brain.shape[-1]) ### IMPORTANT: for communication to main
+            print(F"meanbrn | COMPLETED | {fly_print} | {func_print} | {file} | {brainshape} ===> {meanbrain.shape}")
+            print(brainshape[-1]) ### IMPORTANT: for communication to main
         except FileNotFoundError:
             print(F"Not found (skipping){file:.>{width-20}}")
             #printlog(f'{file} not found.')
