@@ -25,7 +25,6 @@ def parse_args(input):
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument('-l', '--logdir', type=str, help='log directory')
     parser.add_argument('--fictrac_import_dir', type=str, help='fictrac import directory')
-    parser.add_argument('--visual_import_dir', type=str, help='visual stim import directory')
     parser.add_argument('--no_visual', action='store_true', help='do not copy visual data')
     args = parser.parse_args(input)
     return(args)
@@ -69,10 +68,6 @@ def build_fly(args):
     logdir = os.path.join(args.basedir, 'build_logs')  # write build logs to a separate folder
     if not os.path.exists(logdir):
         os.mkdir(logdir)
-
-    if args.visual_import_dir is None:
-        args.visual_import_dir = os.path.join(args.basedir, 'visual')
-    assert os.path.exists(args.visual_import_dir), f'visual import dir {args.visual_import_dir} does not exist'
 
     if args.fictrac_import_dir is None:
         args.fictrac_import_dir = os.path.join(args.basedir, 'fictrac')
@@ -226,8 +221,8 @@ def copy_fly(source_fly, destination_fly, args):
                 # Copt fictrac data based on timestamps
                 copy_fictrac(expt_folder, args)
                 # Copy visual data based on timestamps, and create visual.json
-                if not args.no_visual:
-                    copy_visual(expt_folder, args)
+                #if not args.no_visual:
+                #    copy_visual(expt_folder, args)
 
                 ######################################################################
                 print(f"func:{expt_folder}") # IMPORTANT - FOR COMMUNICATING WITH MAIN
@@ -288,12 +283,10 @@ def copy_bruker_data(source, destination, folder_type, print):
                 continue
             # Special copy for visprotocol metadata since it goes in visual folder
             if '.hdf5' in item:
-                try:
-                    args.visual_import_dir = os.path.join(os.path.split(destination)[0], 'visual')
-                    os.mkdir(args.visual_import_dir)
-                except:
-                    pass
-                target_item = os.path.join(os.path.split(destination)[0], 'visual', item)
+                visual_dir = os.path.join(os.path.split(destination)[0], 'visual')
+                if not os.path.exists(visual_dir):
+                    os.mkdir(visual_dir)
+                target_item = os.path.join(visual_dir, item)
                 copyfile(source_item, target_item)
                 continue
             # Rename to anatomy.xml if appropriate
