@@ -2,93 +2,80 @@ import os
 import sys
 import numpy as np
 import argparse
-import subprocess
-import json
-import nibabel as nib
-import brainsss
 import h5py
-import datetime
-import matplotlib.pyplot as plt
 from time import time
-from time import strftime
-from time import sleep
+from hdf5_utils import get_chunk_boundaries
+from logging_utils import setup_logging
+import logging
 
-def main(args):
+def parse_args(input):
+    parser = argparse.ArgumentParser(description='zscore an hdf5 file')
+    parser.add_argument('-f', '--file', type=str,
+        help='hdf5 file to zscore', required=True)
+    parser.add_argument('-s', '--stepsize', default=100, type=int, help='stepsize for zscoring')
+    parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
+
+    args = parser.parse_args(input)
+    return(args)
+
+
+if __name__ == "__main__":
+    args = parse_args(sys.argv[1:])
+    setattr(args, 'dir', os.path.dirname(args.file))
+
+    assert os.path.exists(args.file), 'file does not exist'
+    file_extension = args.file.split('.')[-1]
+    assert file_extension in ['h5', 'hdf5'], 'file must be hdf5'
     
-    load_directory = args['load_directory']
-    save_directory = args['save_directory']
-    brain_file = args['brain_file']
-    stepsize = 100
+    setup_logging(args, logtype='zscore')
 
-    full_load_path = os.path.join(load_directory, brain_file)
-    save_file = os.path.join(save_directory, brain_file.split('.')[0] + '_zscore.h5')
-
-    #####################
-    ### SETUP LOGGING ###
-    #####################
-
-    width = 120
-    logfile = args['logfile']
-    printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
-
-    ##############
-    ### ZSCORE ###
-    ##############
-
-    printlog("Beginning ZSCORE")
-    with h5py.File(full_load_path, 'r') as hf:
-        data = hf['data'] # this doesn't actually LOAD the data - it is just a proxy
+    save_file = args.file.replace(f'.{file_extension}', f'_zscore.{file_extension}')
+    assert save_file != args.file, 'save file cannot be the same as the input file'
+    
+    with h5py.File(args.file, 'r') as hf:
+        data = hf['data']  # this doesn't actually LOAD the data - it is just a proxy
         dims = np.shape(data)
+        chunk_boundaries = get_chunk_boundaries(args, dims[-1])
 
-        printlog("Data shape is {}".format(dims))
+        logging.info("Data shape is {}".format(dims))
 
         running_sum = np.zeros(dims[:3])
         running_sumofsq = np.zeros(dims[:3])
-        
-        steps = list(range(0,dims[-1],stepsize))
-        steps.append(dims[-1])
 
-        ### Calculate meanbrain ###
-
-        for chunk_num in range(len(steps)):
+        logging.info('Calculating meanbrain')
+        for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
             t0 = time()
-            if chunk_num + 1 <= len(steps) - 1:
-                chunkstart = steps[chunk_num]
-                chunkend = steps[chunk_num + 1]
-                chunk = data[:,:,:,chunkstart:chunkend]
-                running_sum += np.sum(chunk, axis=3)
-                #printlog(F"vol: {chunkstart} to {chunkend} time: {time()-t0}")
+            chunk = data[:,:,:,chunk_start:chunk_end]
+            running_sum += np.sum(chunk, axis=3)
+            logging.info(F"vol: {chunk_start} to {chunk_end} time: {time()-t0}")
         meanbrain = running_sum / dims[-1]
 
         ### Calculate std ###
-
-        for chunk_num in range(len(steps)):
+        logging.info('Calculating std')
+        for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
             t0 = time()
-            if chunk_num + 1 <= len(steps) - 1:
-                chunkstart = steps[chunk_num]
-                chunkend = steps[chunk_num + 1]
-                chunk = data[:,:,:,chunkstart:chunkend]
-                running_sumofsq += np.sum((chunk-meanbrain[...,None])**2, axis=3)
-                #printlog(F"vol: {chunkstart} to {chunkend} time: {time()-t0}")
+            chunk = data[:,:,:,chunk_start:chunk_end]
+            running_sumofsq += np.sum((chunk-meanbrain[...,None])**2, axis=3)
+            logging.info(F"vol: {chunk_start} to {chunk_end} time: {time()-t0}")
         final_std = np.sqrt(running_sumofsq/dims[-1])
 
         ### Calculate zscore and save ###
+        # optimize the step size
+        if args.stepsize is None:
+            chunks = True
+        else:
+            chunks = (dims[0], dims[1], dims[2], args.stepsize)
 
         with h5py.File(save_file, 'w') as f:
-            dset = f.create_dataset('data', dims, dtype='float32', chunks=True) 
+            dset = f.create_dataset('data', dims, dtype='float32', chunks=chunks) 
             
-            for chunk_num in range(len(steps)):
+            for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
                 t0 = time()
-                if chunk_num + 1 <= len(steps)-1:
-                    chunkstart = steps[chunk_num]
-                    chunkend = steps[chunk_num + 1]
-                    chunk = data[:,:,:,chunkstart:chunkend]
-                    running_sumofsq += np.sum((chunk-meanbrain[...,None])**2, axis=3)
-                    zscored = (chunk - meanbrain[...,None]) / final_std[...,None]
-                    f['data'][:,:,:,chunkstart:chunkend] = np.nan_to_num(zscored) ### Added nan to num because if a pixel is a constant value (over saturated) will divide by 0
-                    #printlog(F"vol: {chunkstart} to {chunkend} time: {time()-t0}")
+                chunk = data[:,:,:,chunk_start:chunk_end]
+                running_sumofsq += np.sum((chunk-meanbrain[...,None])**2, axis=3)
+                zscored = (chunk - meanbrain[...,None]) / final_std[...,None]
+                f['data'][:,:,:,chunk_start:chunk_end] = np.nan_to_num(zscored) ### Added nan to num because if a pixel is a constant value (over saturated) will divide by 0
+                logging.info(F"vol: {chunk_start} to {chunk_end} time: {time()-t0}")
 
-    printlog("zscore done")
-
-if __name__ == '__main__':
-    main(json.loads(sys.argv[1]))
+    logging.info("zscore completed successfully")
