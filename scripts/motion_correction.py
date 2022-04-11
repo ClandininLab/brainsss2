@@ -1,428 +1,413 @@
 import os
 import sys
 import numpy as np
+import pandas as pd
 import argparse
-import subprocess
-import json
 import nibabel as nib
-import brainsss
 import h5py
+import json
 import ants
-import datetime
 import pyfiglet
 import matplotlib.pyplot as plt
 from time import time
 from time import strftime
-from time import sleep
-
-def main():
-	args = {}
-	
-	dataset_path = '/Users/poldrack/data_unsynced/brainsss/flydata/processed/fly_008/func_0/imaging' # args['directory']
-	brain_master = 'functional_channel_1.nii'
-	brain_mirror = 'functional_channel_2.nii'
- 	#	brain_master = args['brain_master']
-
-	# OPTIONAL brain_mirror
-	# brain_mirror = args.get('brain_mirror', None)
-
-	# OPTIONAL PARAMETERS
-	type_of_transform = args.get('type_of_transform', 'SyN')  # For ants.registration(), see ANTsPy docs | Default 'SyN'
-	output_format = args.get('output_format', 'h5')  #  Save format for registered image data | Default h5. Also allowed: 'nii'
-	assert output_format in ['h5', 'nii'], 'OPTIONAL PARAM output_format MUST BE ONE OF: "h5", "nii"'
-	flow_sigma = int(args.get('flow_sigma', 3))  # For ants.registration(), higher sigma focuses on coarser features | Default 3
-	total_sigma = int(args.get('total_sigma', 0))  # For ants.registration(), higher values will restrict the amount of deformation allowed | Default 0
-	meanbrain_n_frames = args.get('meanbrain_n_frames', None)  # First n frames to average over when computing mean/fixed brain | Default None (average over all frames)
-
-	#####################
-	### SETUP LOGGING ###
-	#####################
-
-	width = 120
-
-	try:
-		logfile = args['logfile']
-		printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
-		save_type = 'parent_dir'
-	except:
-		# no logfile provided; create one
-		# this will be the case if this script was directly run from a .sh file
-		logfile = './logs/' + strftime("%Y%m%d-%H%M%S") + '.txt'
-		printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
-		sys.stderr = brainsss.Logger_stderr_sherlock(logfile)
-		save_type = 'curr_dir'
-
-		title = pyfiglet.figlet_format("Brainsss", font="cyberlarge" ) #28 #shimrod
-		title_shifted = ('\n').join([' '*28+line for line in title.split('\n')][:-2])
-		printlog(title_shifted)
-		day_now = datetime.datetime.now().strftime("%B %d, %Y")
-		time_now = datetime.datetime.now().strftime("%I:%M:%S %p")
-		printlog(F"{day_now+' | '+time_now:^{width}}")
-		printlog("")
-
-	brainsss.print_datetime(logfile, width)
-	printlog(F"Dataset path{dataset_path:.>{width-12}}")
-	printlog(F"Brain master{brain_master:.>{width-12}}")
-	printlog(F"Brain mirror{str(brain_mirror):.>{width-12}}")
-
-	printlog(F"type_of_transform{type_of_transform:.>{width-17}}")
-	printlog(F"output_format{output_format:.>{width-13}}")
-	printlog(F"flow_sigma{flow_sigma:.>{width-10}}")
-	printlog(F"total_sigma{total_sigma:.>{width-11}}")
-	printlog(F"meanbrain_n_frames{str(meanbrain_n_frames):.>{width-18}}")
-
-	######################
-	### PARSE SCANTYPE ###
-	######################
-
-	try:
-		scantype = args['scantype']
-		if scantype == 'func':
-			stepsize = 100 # if this is too high if may crash from memory error. If too low it will be slow.
-		if scantype == 'anat':
-			stepsize = 5
-	except:
-		# try to extract from file name
-		if 'func' in brain_master:
-			scantype = 'func'
-			stepsize = 100
-		elif 'anat' in brain_master:
-			scantype = 'anat'
-			stepsize = 5
-		else:
-			scantype = 'func'
-			stepsize = 100
-			printlog(F"{'   Could not determine scantype. Using default stepsize of 100   ':*^{width}}")
-	printlog(F"Scantype{scantype:.>{width-8}}")
-	printlog(F"Stepsize{stepsize:.>{width-8}}")
-
-	##############################
-	### Check that files exist ###
-	##############################
-
-	filepath_brain_master = os.path.join(dataset_path, brain_master)
-
-	### Quit if no master brain
-	if not brain_master.endswith('.nii'):
-		printlog("Brain master does not end with .nii")
-		printlog(F"{'   Aborting Moco   ':*^{width}}")
-		return
-	if not os.path.exists(filepath_brain_master):
-		printlog("Could not find {}".format(filepath_brain_master))
-		printlog(F"{'   Aborting Moco   ':*^{width}}")
-		return
-
-	### Brain mirror is optional
-	if brain_mirror is not None:
-		filepath_brain_mirror = os.path.join(dataset_path, brain_mirror)
-		if not brain_mirror.endswith('.nii'):
-			printlog("Brain mirror does not end with .nii. Continuing without a mirror brain.")
-			# filepath_brain_mirror = None
-			brain_mirror = None
-		if not os.path.exists(filepath_brain_mirror):
-			printlog(F"Could not find{filepath_brain_mirror:.>{width-8}}")
-			printlog("Will continue without a mirror brain.")
-			# filepath_brain_mirror = None
-			brain_mirror = None
-
-	########################################
-	### Calculate Meanbrain of Channel 1 ###
-	########################################
-
-	### Get Brain Shape ###
-	img_ch1 = nib.load(filepath_brain_master) # this loads a proxy
-	ch1_shape = img_ch1.header.get_data_shape()
-	brain_dims = ch1_shape
-	printlog(F"Master brain shape{str(brain_dims):.>{width-18}}")
-
-	### Try to load meanbrain
-	existing_meanbrain_file = brain_master[:-4] + '_mean.nii'
-	existing_meanbrain_path = os.path.join(dataset_path, existing_meanbrain_file)
-	if os.path.exists(existing_meanbrain_path):
-		meanbrain = np.asarray(nib.load(existing_meanbrain_path).get_data(), dtype='uint16')
-		fixed = ants.from_numpy(np.asarray(meanbrain, dtype='float32'))
-		printlog(F"Loaded meanbrain{existing_meanbrain_file:.>{width-16}}")
-
-	### Create if can't load
-	else:
-		printlog(F"Could not find{existing_meanbrain_file:.>{width-14}}")
-		printlog(F"Creating meanbrain{'':.>{width-18}}")
-
-		### Make meanbrain ###
-		t0 = time()
-		if meanbrain_n_frames is None:
-			meanbrain_n_frames = brain_dims[-1]  # All frames
-		else:
-			meanbrain_n_frames = int(meanbrain_n_frames)
-
-		meanbrain = np.zeros(brain_dims[:3]) # create empty meanbrain from the first 3 axes, x/y/z
-		for i in range(meanbrain_n_frames):
-			if i%1000 == 0:
-				printlog(brainsss.progress_bar(i, meanbrain_n_frames, width))
-			meanbrain += img_ch1.dataobj[...,i]
-		meanbrain = meanbrain/meanbrain_n_frames # divide by number of volumes
-		fixed = ants.from_numpy(np.asarray(meanbrain, dtype='float32'))
-		printlog(F"Meanbrain created. Duration{str(int(time()-t0))+'s':.>{width-27}}")
-
-	#########################
-	### Load Mirror Brain ###
-	#########################
-
-	if brain_mirror is not None:
-		img_ch2 = nib.load(filepath_brain_mirror) # this loads a proxy
-		# make sure channel 1 and 2 have same shape
-		ch2_shape = img_ch2.header.get_data_shape()
-		if ch1_shape != ch2_shape:
-			printlog(F"{'   WARNING Channel 1 and 2 do not have the same shape!   ':*^{width}}")
-			printlog("{} and {}".format(ch1_shape, ch2_shape))
-
-	############################################################
-	### Make Empty MOCO files that will be filled vol by vol ###
-	############################################################
-
-	h5_file_name = f"{brain_master.split('.')[0]}_moco.h5"
-	moco_dir, savefile_master = make_empty_h5(dataset_path, h5_file_name, brain_dims, save_type)
-	printlog(F"Created empty hdf5 file{h5_file_name:.>{width-23}}")
-
-	if brain_mirror is not None:
-		h5_file_name = f"{brain_mirror.split('.')[0]}_moco.h5"
-		_ ,savefile_mirror = make_empty_h5(dataset_path, h5_file_name, brain_dims, save_type)
-		printlog(F"Created empty hdf5 file{h5_file_name:.>{width-23}}")
-
-	#################################
-	### Perform Motion Correction ###
-	#################################
-	printlog(F"{'   STARTING MOCO   ':-^{width}}")
-	transform_matrix = []
-
-	### prepare chunks to loop over ###
-	# the chunks defines how many vols to moco before saving them to h5 (this save is slow, so we want to do it less often)
-	steps = list(range(0,brain_dims[-1],stepsize))
-	# add the last few volumes that are not divisible by stepsize
-	if brain_dims[-1] > steps[-1]:
-		steps.append(brain_dims[-1])
-
-	# loop over all brain vols, motion correcting each and insert into hdf5 file on disk
-	#for i in range(brain_dims[-1]):
-	start_time = time()
-	print_timer = time()
-	for j in range(len(steps)-1):
-		#printlog(F"j: {j}")
-
-		### LOAD A SINGLE BRAIN VOL ###
-		moco_ch1_chunk = []
-		moco_ch2_chunk = []
-		for i in range(stepsize):
-			t0 = time()
-			index = steps[j] + i
-			# for the very last j, adding the step size will go over the dim, so need to stop here
-			if index == brain_dims[-1]:
-				break
-
-			vol = img_ch1.dataobj[...,index]
-			moving = ants.from_numpy(np.asarray(vol, dtype='float32'))
-
-			### MOTION CORRECT ###
-			moco = ants.registration(fixed, moving,
-									 type_of_transform=type_of_transform,
-									 flow_sigma=flow_sigma,
-                                	 total_sigma=total_sigma)
-			moco_ch1 = moco['warpedmovout'].numpy()
-			moco_ch1_chunk.append(moco_ch1)
-			transformlist = moco['fwdtransforms']
-			#printlog(F'vol, ch1 moco: {index}, time: {time()-t0}')
-
-			### APPLY TRANSFORMS TO CHANNEL 2 ###
-			#t0 = time()
-			if brain_mirror is not None:
-				vol = img_ch2.dataobj[...,index]
-				ch2_moving = ants.from_numpy(np.asarray(vol, dtype='float32'))
-				moco_ch2 = ants.apply_transforms(fixed, ch2_moving, transformlist)
-				moco_ch2 = moco_ch2.numpy()
-				moco_ch2_chunk.append(moco_ch2)
-				#printlog(F'moco vol done: {index}, time: {time()-t0}')
-
-			### SAVE AFFINE TRANSFORM PARAMETERS FOR PLOTTING MOTION ###
-			transformlist = moco['fwdtransforms']
-			for x in transformlist:
-				if '.mat' in x:
-					temp = ants.read_transform(x)
-					transform_matrix.append(temp.parameters)
-
-			### DELETE FORWARD TRANSFORMS ###
-			transformlist = moco['fwdtransforms']
-			for x in transformlist:
-				if '.mat' not in x:
-					os.remove(x)
-
-			### DELETE INVERSE TRANSFORMS ###
-			transformlist = moco['invtransforms']
-			for x in transformlist:
-				if '.mat' not in x:
-					os.remove(x)
-
-			### Print progress ###
-			elapsed_time = time() - start_time
-			if elapsed_time < 1*60: # if less than 1 min has elapsed
-				print_frequency = 1 # print every sec if possible, but will be every vol
-			elif elapsed_time < 5*60:
-				print_frequency = 1*60
-			elif elapsed_time < 30*60:
-				print_frequency = 5*60
-			else:
-				print_frequency = 60*60
-			if time() - print_timer > print_frequency:
-				print_timer = time()
-				print_progress_table(total_vol=brain_dims[-1], complete_vol=index, printlog=printlog, start_time=start_time, width=width)
-
-		moco_ch1_chunk = np.moveaxis(np.asarray(moco_ch1_chunk),0,-1)
-		if brain_mirror is not None:
-			moco_ch2_chunk = np.moveaxis(np.asarray(moco_ch2_chunk),0,-1)
-		#printlog("chunk shape: {}. Time: {}".format(moco_ch1_chunk.shape, time()-t0))
-
-		### APPEND WARPED VOL TO HD5F FILE - CHANNEL 1 ###
-		t0 = time()
-		with h5py.File(savefile_master, 'a') as f:
-			f['data'][...,steps[j]:steps[j+1]] = moco_ch1_chunk
-		#printlog(F'Ch_1 append time: {time()-t0}')
-
-		### APPEND WARPED VOL TO HD5F FILE - CHANNEL 2 ###
-		t0 = time()
-		if brain_mirror is not None:
-			with h5py.File(savefile_mirror, 'a') as f:
-				f['data'][...,steps[j]:steps[j+1]] = moco_ch2_chunk
-			#printlog(F'Ch_2 append time: {time()-t0}')
-
-	### SAVE TRANSFORMS ###
-	printlog("saving transforms")
-	printlog(F"savefile_master: {savefile_master}")
-	transform_matrix = np.array(transform_matrix)
-	save_file = os.path.join(moco_dir, 'motcorr_params')
-	np.save(save_file,transform_matrix)
-
-	### MAKE MOCO PLOT ###
-	printlog("making moco plot")
-	printlog(F"moco_dir: {moco_dir}")
-	save_motion_figure(transform_matrix, dataset_path, moco_dir, scantype, printlog)
-
-	### OPTIONAL: SAVE REGISTERED IMAGES AS NII ###
-	if output_format == 'nii':
-		printlog('saving .nii images')
-
-		# Save master:
-		nii_savefile_master = h5_to_nii(savefile_master)
-		printlog(F"nii_savefile_master: {str(nii_savefile_master)}")
-		if nii_savefile_master is not None: # If .nii conversion went OK, delete h5 file
-			printlog('deleting .h5 file at {}'.format(savefile_master))
-			os.remove(savefile_master)
-		else:
-			printlog('nii conversion failed for {}'.format(savefile_master))
-
-		# Save mirror:
-		if brain_mirror is not None:
-			nii_savefile_mirror = h5_to_nii(savefile_mirror)
-			printlog(F"nii_savefile_mirror: {str(nii_savefile_mirror)}")
-			if nii_savefile_mirror is not None: # If .nii conversion went OK, delete h5 file
-				printlog('deleting .h5 file at {}'.format(savefile_mirror))
-				os.remove(savefile_mirror)
-			else:
-				printlog('nii conversion failed for {}'.format(savefile_mirror))
+from pathlib import Path
+import logging
+import brainsss
+import shutil
+from make_mean_brain import make_mean_brain
+import datetime
+import git
+from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
+from hdf5_utils import make_empty_h5
+# TODO - fix this
+width = 120
 
 
-def make_empty_h5(directory, file, brain_dims, save_type):
-	if save_type == 'curr_dir':
-		moco_dir = os.path.join(directory,'moco')
-		if not os.path.exists(moco_dir):
-			os.mkdir(moco_dir)
-	elif save_type == 'parent_dir':
-		directory = os.path.dirname(directory) # go back one directory
-		moco_dir = os.path.join(directory,'moco')
-		if not os.path.exists(moco_dir):
-			os.mkdir(moco_dir)
+def parse_args(input):
+    parser = argparse.ArgumentParser(description='run motion correction')
+    parser.add_argument('-d', '--dir', type=str, 
+        help='directory containing func or anat data', required=True)
+    parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
+    parser.add_argument('-t', '--type_of_transform', type=str, default='SyN', 
+        help='type of transform to use')
+    parser.add_argument('-i', '--interpolation_method', type=str, default='linear')
+    parser.add_argument('--output_format', type=str, choices=['h5', 'nii'], 
+        default='h5', help='output format for registered image data')
+    parser.add_argument('--flow_sigma', type=int, default=3, 
+        help='flow sigma for registration - higher sigma focuses on coarser features')
+    parser.add_argument('--total_sigma', type=int, default=0, 
+        help='total sigma for registration - higher values will restrict the amount of deformation allowed')
+    parser.add_argument('--meanbrain_n_frames', type=int, default=None, 
+        help='number of frames to average over when computing mean/fixed brain')
+    parser.add_argument('-o', '--overwrite', action='store_true', help='overwrite existing files')
+    parser.add_argument('--save_nii', action='store_true', help='save nifti files')
 
-	savefile = os.path.join(moco_dir, file)
-	with h5py.File(savefile, 'w') as f:
-		dset = f.create_dataset('data', brain_dims, dtype='float32', chunks=True)
-	return moco_dir, savefile
+    args = parser.parse_args(input)
+    return(args)
 
-def check_for_file(file, directory):
-	filepath = os.path.join(directory, file)
-	if os.path.exists(filepath):
-		return filepath
-	else:
-		return None
 
-def save_motion_figure(transform_matrix, dataset_path, moco_dir, scantype, printlog):
+def load_data(args):
+    """determine directory type and load data"""
+    files = [f.as_posix() for f in Path(args.dir).glob('*_channel*.nii') if 'mean' not in f.stem]
+    files.sort()
+    if args.verbose:
+        logging.info(f'Data files: {files}')
+    assert len(files) in [1, 2], 'Must have exactly one or two data files in directory'
+    assert 'channel_1' in files[0], 'data for first channel must be named channel_1'
+    if len(files) == 1:
+        logging.info('Only one channel found, no mirror will be used')
+    if len(files) == 2:
+        assert 'channel_2' in files[1], 'data for second channel must be named channel_2'
 
-	# Get voxel resolution for figure
-	if scantype == 'func':
-		xml_name = 'functional.xml'
-	elif scantype == 'anat':
-		xml_name = 'anatomy.xml'
+    # NOTE: should probably be using "scantype" thbroughout instead of "datatype" 
+    # since the latter is quite confusing as each scan includes both func and anat data
+    if 'functional' in files[0]:
+        scantype = 'func'
+    elif 'anatomy' in files[0]:
+        scantype = 'anat'
+    else:
+        raise ValueError('Could not determine scan type')
+    if args.verbose:
+        logging.info(f'Scan type: {scantype}')
 
-	xml_file = os.path.join(dataset_path, xml_name)
-	printlog(F'xml_file: {xml_file}')
-	if not os.path.exists(xml_file):
-		printlog('Could not find xml file for scan dimensions. Skipping plot.')
-		return
+    setattr(args, 'scantype', scantype) 
 
-	printlog(F'Found xml file.')
-	x_res, y_res, z_res = brainsss.get_resolution(xml_file)
+    files_dict = {}
+    files_dict['channel_1'] = files[0]
+    files_dict['channel_2'] = files[1] if len(files) == 2 else None
+    return(files_dict, args)
 
-	# Save figure of motion over time
-	save_file = os.path.join(moco_dir, 'motion_correction.png')
-	plt.figure(figsize=(10,10))
-	plt.plot(transform_matrix[:,9]*x_res, label = 'y') # note, resolutions are switched since axes are switched
-	plt.plot(transform_matrix[:,10]*y_res, label = 'x')
-	plt.plot(transform_matrix[:,11]*z_res, label = 'z')
-	plt.ylabel('Motion Correction, um')
-	plt.xlabel('Time')
-	plt.title(moco_dir)
-	plt.legend()
-	plt.savefig(save_file, bbox_inches='tight', dpi=300)
 
-def print_progress_table(total_vol, complete_vol, printlog, start_time, width):
-	fraction_complete = complete_vol/total_vol
+def get_current_git_hash(return_length=8):
+    script = os.path.realpath(__file__)
+    repo = git.Repo(path=script, search_parent_directories=True)
+    return(repo.head.object.hexsha[:return_length])
 
-	### Get elapsed time ###
-	elapsed = time()-start_time
-	elapsed_hms = sec_to_hms(elapsed)
 
-	### Get estimate of remaining time ###
-	try:
-		remaining = elapsed/fraction_complete - elapsed
-	except ZeroDivisionError:
-		remaining = 0
-	remaining_hms = sec_to_hms(remaining)
+# TODO: this is modified from preprocess.py - should be refactored to create a common function
+def setup_logging(args, logtype='moco'):
+    if args.logdir is None:  # this shouldn't happen, but check just in case
+        args.logdir = os.path.join(args.dir, 'logs')
+    args.logdir = os.path.realpath(args.logdir)
 
-	### Get progress bar ###
-	complete_vol_str = f"{complete_vol:04d}"
-	total_vol_str = f"{total_vol:04d}"
-	length = len(elapsed_hms) + len(remaining_hms) + len(complete_vol_str) + len(total_vol_str)
-	bar_string = brainsss.progress_bar(complete_vol, total_vol, width-length-10)
+    if not os.path.exists(args.logdir):
+        os.makedirs(args.logdir)
 
-	full_line = '| ' + elapsed_hms + '/' + remaining_hms + ' | ' + complete_vol_str + '/' + total_vol_str + ' |' + bar_string + '|'
-	printlog(full_line)
+    #  RP: use os.path.join rather than combining strings
+    setattr(args, 'logfile', os.path.join(args.logdir, strftime(f"{logtype}_%Y%m%d-%H%M%S.txt")))
 
-def sec_to_hms(t):
-	secs=F"{np.floor(t%60):02.0f}"
-	mins=F"{np.floor((t/60)%60):02.0f}"
-	hrs=F"{np.floor((t/3600)%60):02.0f}"
-	return ':'.join([hrs, mins, secs])
+    #  RP: replace custom code with logging.basicConfig
+    logging_handlers = [logging.FileHandler(args.logfile)]
+    if args.verbose:
+        #  use logging.StreamHandler to echo log messages to stdout
+        logging_handlers.append(logging.StreamHandler())
+
+    logging.basicConfig(handlers=logging_handlers, level=logging.INFO,
+        format='%(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+    title = pyfiglet.figlet_format("Brainsss", font="doom")
+    title_shifted = ('\n').join([' ' * 42 + line for line in title.split('\n')][:-2])
+    logging.info(title_shifted)
+    logging.info(f'jobs started: {datetime.datetime.now()}')
+    setattr(args, 'git_hash', get_current_git_hash())
+    logging.info(f'git commit: {args.git_hash}')
+    if args.verbose:
+        logging.info(f'logging enabled: {args.logfile}')
+
+    logging.info('\n\nArguments:')
+    args_dict = vars(args)
+    for key, value in args_dict.items():
+        logging.info(f'{key}: {value}')
+    logging.info('\n')
+    return(args)
+
+
+def set_stepsize(args, scantype_stepsize_dict=None):
+    if scantype_stepsize_dict is None:
+        scantype_stepsize_dict = {'func': 100, 'anat': 5}
+    setattr(args, 'stepsize', scantype_stepsize_dict[args.scantype])
+    return(args)
+
+
+def get_mean_brain(args, file):
+    """get mean brain for channel 1"""
+    if args.verbose:
+        print('Getting mean brain')
+    assert 'channel_1' in file, 'file must be channel_1'
+    meanbrain_file = file.replace('.nii', '_mean.nii')
+    if not os.path.exists(meanbrain_file):
+        if args.verbose:
+            print(f'making mean brain for {meanbrain_file}')
+        make_mean_brain(args)
+    img = nib.load(meanbrain_file)
+    meanbrain = img.get_fdata(dtype='float32')
+    meanbrain_ants = ants.from_numpy(meanbrain)
+    return(meanbrain_ants)
+
+
+def setup_h5_datasets(args, files):
+    """Make Empty MOCO files that will be filled chunk by chunk"""
+
+    h5_file_names = {
+        'channel_1': os.path.basename(files['channel_1']).replace(
+            '.nii', '_moco.h5'),
+        'channel_2': None}
+    if args.verbose:
+        logging.info(f'Creating channel_1 h5 file: {h5_file_names["channel_1"]}')
+
+    # full paths to file names
+    h5_files = {
+        'channel_1': None,
+        'channel_2': None}
+
+    brain_dims = nib.load(files['channel_1']).shape
+    moco_dir, h5_files['channel_1'] = make_empty_h5(
+        args.dir, h5_file_names['channel_1'], brain_dims, stepsize=args.stepsize)
+    logging.info(f"Created empty hdf5 file: {h5_file_names['channel_1']}")
+
+    if 'channel_2' in files:
+        h5_file_names['channel_2'] = os.path.basename(files['channel_2']).replace(
+            '.nii', '_moco.h5')
+        moco_dir, h5_files['channel_2'] = make_empty_h5(
+            args.dir, h5_file_names['channel_2'], brain_dims, stepsize=args.stepsize)
+        logging.info(f"Created empty hdf5 file: {h5_file_names['channel_2']}")
+    return h5_files
+
+
+def create_moco_output_dir(args):
+    setattr(args, 'moco_output_dir', os.path.join(args.dir, 'moco'))
+
+    if os.path.exists(args.moco_output_dir) and args.overwrite:
+        if args.verbose:
+            print('removing existing moco output directory')
+        shutil.rmtree(args.moco_output_dir)
+    elif os.path.exists(args.moco_output_dir) and not args.overwrite:
+        raise ValueError(f'{args.moco_output_dir} already exists, use --overwrite to overwrite')
+
+    if not os.path.exists(args.moco_output_dir):
+        os.mkdir(args.moco_output_dir)
+    if args.verbose:
+        logging.info(f'Moco output directory: {args.moco_output_dir}')
+    return(args)
+
+
+def get_chunk_boundaries(args, n_timepoints):
+    """get chunk boundaries"""
+    chunk_starts = list(range(0, n_timepoints, args.stepsize))
+    chunk_ends = list(range(
+        args.stepsize, n_timepoints + args.stepsize, args.stepsize))
+    chunk_ends = [x if x < n_timepoints else n_timepoints for x in chunk_ends]
+    return(list(zip(chunk_starts, chunk_ends)))
+
+
+def apply_moco_parameters_to_channel_2(args, files,
+                                       h5_files, transform_files):
+    """Apply moco parameters to channel 2"""
+    if args.verbose:
+        logging.info('Applying moco parameters to channel 2')
+    assert 'channel_2' in files, 'files must include channel_2'
+
+    # load ch1 image to get dimensions for chunking
+    ch2_img = nib.load(files['channel_2'])
+    n_timepoints = ch2_img.shape[-1]
+    # assert n_timepoints == len(transform_files), 'number of transform files must match number of timepoints'
+
+    ch1_meanbrain = get_mean_brain(args, files['channel_1'])
+
+    # load full data
+    ch2_data = ch2_img.get_fdata(dtype='float32')
+    print('ch1_data.shape:', ch2_data.shape)
+
+    # overwrite existing data in place to prevent need for additional memory
+    for timepoint in range(n_timepoints):
+        # load transform
+        try:
+            transform = transform_files[timepoint]
+        except IndexError:
+            logging.warning(f'No transform file for timepoint {timepoint}')
+            continue
+        # apply transform
+        result = ants.apply_transforms(
+            fixed=ch1_meanbrain,
+            moving=ants.from_numpy(ch2_data[..., timepoint]), 
+            transformlist=transform,
+            interpolator=args.interpolation_method)
+        ch2_data[..., timepoint] = result.numpy()
+    # save data
+    if args.verbose:
+        logging.info('Saving channel 2 data')
+
+    # setup chunking into smaller parts (for memory)
+    chunk_boundaries = get_chunk_boundaries(args, n_timepoints)
+    for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+        with h5py.File(h5_files['channel_2'], 'a') as f:
+            f['data'][..., chunk_start:chunk_end] = ch2_data[..., chunk_start:chunk_end]
+
+
+def run_motion_correction(args, files, h5_files):
+    """Run motion correction on tdTomato channel (1)"""
+
+    if args.verbose:
+        logging.info('Running motion correction')
+    
+    # load ch1 image to get dimensions for chunking
+    ch1_img = nib.load(files['channel_1'])
+    n_timepoints = ch1_img.shape[-1]
+
+    # setup chunking into smaller parts (for memory)
+    chunk_boundaries = get_chunk_boundaries(args, n_timepoints)
+
+    # load full data
+    ch1_data = ch1_img.get_fdata(dtype='float32')
+    print('ch1_data.shape:', ch1_data.shape)
+
+    # NB: need to make sure that the data is in the correct orientation
+    # (i.e. direction of mean brain and chunkdata must be identical)
+    ch1_meanbrain = get_mean_brain(args, files['channel_1'])
+    print('made meanbrain')
+
+    motion_parameters = None
+    transform_files = []
+    # loop through chunks
+    for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+        if args.verbose:
+            logging.info('processing chunk {} of {}'.format(i + 1, len(chunk_boundaries)))
+        # get chunk data
+        chunkdata = ch1_data[..., chunk_start:chunk_end]
+        chunkdata_ants = ants.from_numpy(chunkdata)
+
+        # run moco on chunk
+        mytx = ants.motion_correction(image=chunkdata_ants, fixed=ch1_meanbrain,
+            verbose=args.verbose, type_of_transform=args.type_of_transform, 
+            total_sigma=args.total_sigma, flow_sigma=args.flow_sigma)
+        transform_files = transform_files + mytx['motion_parameters']
+
+        # extract rigid body transform parameters (translation/rotation)
+        if motion_parameters is None:
+            motion_parameters = get_motion_parameters_from_transforms(
+                mytx['motion_parameters'],
+                get_dataset_resolution(args.dir))[1]
+        else:
+            motion_parameters = np.vstack((motion_parameters,
+                get_motion_parameters_from_transforms(
+                    mytx['motion_parameters'],
+                    get_dataset_resolution(args.dir))[1]))
+
+        # save results from chunk
+        if args.verbose:
+            logging.info('saving chunk {} of {}'.format(i + 1, len(chunk_boundaries)))
+        with h5py.File(h5_files['channel_1'], 'a') as f:
+            f['data'][..., chunk_start:chunk_end] = mytx['motion_corrected'].numpy()
+
+    return(transform_files, motion_parameters)
+
+
+def save_motion_parameters(args, motion_parameters):
+    moco_dir = os.path.join(args.dir, 'moco')
+    assert os.path.exists(moco_dir), 'something went terribly wrong, moco dir does not exist'
+    motion_df = pd.DataFrame(motion_parameters, columns=['tx', 'ty', 'tz', 'rx', 'ry', 'rz'])
+    motion_file = os.path.join(moco_dir, 'motion_parameters.csv')
+    motion_df.to_csv(motion_file, index=False)
+    return(motion_file)
+
+
+def save_motcorr_settings_to_json(args, files, h5_files, nii_files=None):
+    moco_dir = os.path.join(args.dir, 'moco')
+    assert os.path.exists(moco_dir), 'something went terribly wrong, moco dir does not exist'
+    args_dict = vars(args)
+    args_dict['files'] = files
+    args_dict['h5_files'] = h5_files
+    if args.save_nii:
+        args_dict['nii_files'] = nii_files
+    with open(os.path.join(moco_dir, 'moco_settings.json'), 'w') as f:
+        json.dump(vars(args), f, indent=4)
+
+
+def moco_plot(args, motion_file):
+    """Make motion correction plot"""
+
+    motion_parameters = pd.read_csv(motion_file)
+
+    # Get voxel resolution for figure
+    x_res, y_res, z_res = get_dataset_resolution(args.dir)
+
+    moco_dir = os.path.join(args.dir, 'moco')
+    assert os.path.exists(moco_dir), 'something went terribly wrong, moco dir does not exist'
+
+    # Save figure of motion over time
+    save_file = os.path.join(moco_dir, 'motion_correction.png')
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.plot(motion_parameters.iloc[:, :3])
+    plt.legend(labels=list(motion_parameters.columns[:3]), loc='upper right')
+    plt.title(f"{'/'.join(args.dir.split('/')[-3:])}: Translation")
+    plt.xlabel('Timepoint')
+    plt.ylabel('Translation (microns)')
+    plt.subplot(1, 2, 2)
+    plt.plot(motion_parameters.iloc[:, 3:])
+    plt.legend(labels=list(motion_parameters.columns[ 3:]), loc='upper right')
+    plt.title(f"{'/'.join(args.dir.split('/')[-3:])}: Rotation")
+    plt.xlabel('Timepoint')
+    plt.ylabel('Rotation (degrees)')
+
+    plt.savefig(save_file, bbox_inches='tight', dpi=300)
+    return(None)
 
 
 def h5_to_nii(h5_path):
-	nii_savefile = h5_path.split('.')[0] + '.nii'
-	with h5py.File(h5_path, 'r+') as h5_file:
-		image_array = h5_file.get("data")[:].astype('uint16')
+    nii_savefile = h5_path.replace('h5', 'nii')
+    with h5py.File(h5_path, 'r+') as h5_file:
+        image_array = h5_file.get("data")[:].astype('uint16')
 
-	nifti1_limit = (2**16 / 2)
-	if np.any(np.array(image_array.shape) >= nifti1_limit):  # Need to save as nifti2
-		nib.save(nib.Nifti2Image(image_array, np.eye(4)), nii_savefile)
-	else:  # Nifti1 is OK
-		nib.save(nib.Nifti1Image(image_array, np.eye(4)), nii_savefile)
+    nifti1_limit = (2**16 / 2)
+    if np.any(np.array(image_array.shape) >= nifti1_limit):  # Need to save as nifti2
+        nib.save(nib.Nifti2Image(image_array, np.eye(4)), nii_savefile)
+    else:  # Nifti1 is OK
+        nib.save(nib.Nifti1Image(image_array, np.eye(4)), nii_savefile)
 
-	return nii_savefile
+    return nii_savefile
+
+
+def save_nii(args, h5_files):
+    """save moco data to nifti
+    - reuse header info from existing nifti files"""
+    for channel, h5_file in h5_files.items():
+        if args.verbose:
+            logging.info(f'converting {h5_file} to nifti')
+        _ = h5_to_nii(h5_file)
+    return(None)
+
 
 if __name__ == '__main__':
-	main() #json.loads(sys.argv[1]))
+
+    args = parse_args(sys.argv[1:])
+
+    args = setup_logging(args)
+
+    files, args = load_data(args)
+
+    if args.verbose:
+        logging.info(files)
+
+    args = create_moco_output_dir(args)
+
+    args = set_stepsize(args)
+
+    h5_files = setup_h5_datasets(args, files)
+
+    transform_files, motion_parameters = run_motion_correction(args, files, h5_files)
+
+    if 'channel_2' in files:
+        apply_moco_parameters_to_channel_2(args, files, h5_files, transform_files)
+    
+    save_motcorr_settings_to_json(args)
+
+    motion_file = save_motion_parameters(args, motion_parameters)
+
+    make_moco_plot(args, motion_file)
+
+    if args.save_nii:
+        save_nii(args, h5_files)
+
+    logging.info(f'Motion correction complete: {datetime.datetime.now()}')
