@@ -2,73 +2,60 @@ import os
 import sys
 import numpy as np
 import argparse
-import subprocess
 import json
-import nibabel as nib
-import brainsss
 import h5py
-import datetime
-import matplotlib.pyplot as plt
-from time import time
-from time import strftime
-from time import sleep
 from scipy.ndimage import gaussian_filter1d
+from hdf5_utils import get_chunk_boundaries
+from logging_utils import setup_logging
 
-def main(args):
+import logging
+
+def parse_args(input):
+    parser = argparse.ArgumentParser(description='temporally highpass filter an hdf5 file')
+    parser.add_argument('-f', '--file', type=str,
+        help='hdf5 file to zscore', required=True)
+    parser.add_argument('--sigma', default=200, type=float, help='sigma for gaussian filter')
+    parser.add_argument('-s', '--stepsize', default=2, type=int, help='stepsize for zscoring')
+    parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
+
+    args = parser.parse_args(input)
+    return(args)
+
+
+if __name__ == "__main__":
+    args = parse_args(sys.argv[1:])
+    setattr(args, 'dir', os.path.dirname(args.file))
+
+    assert os.path.exists(args.file), 'file does not exist'
+    file_extension = args.file.split('.')[-1]
+    assert file_extension in ['h5', 'hdf5'], 'file must be hdf5'
     
-    load_directory = args['load_directory']
-    save_directory = args['save_directory']
-    brain_file = args['brain_file']
-    stepsize = 2
+    setup_logging(args, logtype='highpass')
 
-    full_load_path = os.path.join(load_directory, brain_file)
-    save_file = os.path.join(save_directory, brain_file.split('.')[0] + '_highpass.h5')
+    save_file = args.file.replace(f'.{file_extension}', f'_highpass.{file_extension}')
+    assert save_file != args.file, 'save file cannot be the same as the input file'
 
-    #####################
-    ### SETUP LOGGING ###
-    #####################
-
-    width = 120
-    logfile = args['logfile']
-    printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
-
-    #################
-    ### HIGH PASS ###
-    #################
-
-    printlog("Beginning high pass")
-    with h5py.File(full_load_path, 'r') as hf:
+    with h5py.File(args.file, 'r') as hf:
         data = hf['data'] # this doesn't actually LOAD the data - it is just a proxy
         dims = np.shape(data)
-        printlog("Data shape is {}".format(dims))
+        chunk_boundaries = get_chunk_boundaries(args, dims[-2])
+        logging.info("Data shape is {}".format(dims))
         
-        steps = list(range(0,dims[-1],stepsize))
-        steps.append(dims[-1])
-
         with h5py.File(save_file, 'w') as f:
             dset = f.create_dataset('data', dims, dtype='float32', chunks=True) 
             
-            for chunk_num in range(len(steps)):
-                t0 = time()
-                if chunk_num + 1 <= len(steps)-1:
-                    chunkstart = steps[chunk_num]
-                    chunkend = steps[chunk_num + 1]
-                    chunk = data[:,:,chunkstart:chunkend,:]
-                    chunk_mean = np.mean(chunk,axis=-1)
+            for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+                chunk = data[:,:,chunk_start:chunk_end,:]
+                chunk_mean = np.mean(chunk,axis=-1)
 
-                    ### SMOOTH ###
-                    t0 = time()
-                    smoothed_chunk = gaussian_filter1d(chunk,sigma=200,axis=-1,truncate=1)
+                ### SMOOTH ###
+                smoothed_chunk = gaussian_filter1d(chunk,sigma=args.sigma,axis=-1,truncate=1)
 
-                    ### Apply Smooth Correction ###
-                    t0 = time()
-                    chunk_high_pass = chunk - smoothed_chunk + chunk_mean[:,:,:,None] #need to add back in mean to preserve offset
+                ### Apply Smooth Correction ###
+                chunk_high_pass = chunk - smoothed_chunk + chunk_mean[:,:,:,None] #need to add back in mean to preserve offset
 
-                    ### Save ###
-                    t0 = time()
-                    f['data'][:,:,chunkstart:chunkend,:] = chunk_high_pass
+                ### Save ###
+                f['data'][:,:,chunk_start:chunk_end,:] = chunk_high_pass
 
-    printlog("high pass done")
-
-if __name__ == '__main__':
-    main(json.loads(sys.argv[1]))
+    logging.info("high pass done")
