@@ -14,7 +14,7 @@ import shutil
 from make_mean_brain import make_mean_brain
 import datetime
 from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
-from hdf5_utils import make_empty_h5
+from hdf5_utils import make_empty_h5, get_chunk_boundaries
 from logging_utils import setup_logging
 
 
@@ -141,15 +141,6 @@ def create_moco_output_dir(args):
     if args.verbose:
         logging.info(f'Moco output directory: {args.moco_output_dir}')
     return(args)
-
-
-def get_chunk_boundaries(args, n_timepoints):
-    """get chunk boundaries"""
-    chunk_starts = list(range(0, n_timepoints, args.stepsize))
-    chunk_ends = list(range(
-        args.stepsize, n_timepoints + args.stepsize, args.stepsize))
-    chunk_ends = [x if x < n_timepoints else n_timepoints for x in chunk_ends]
-    return(list(zip(chunk_starts, chunk_ends)))
 
 
 def apply_moco_parameters_to_channel_2(args, files,
