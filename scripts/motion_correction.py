@@ -7,37 +7,33 @@ import nibabel as nib
 import h5py
 import json
 import ants
-import pyfiglet
 import matplotlib.pyplot as plt
-from time import time
-from time import strftime
 from pathlib import Path
 import logging
-import brainsss
 import shutil
 from make_mean_brain import make_mean_brain
 import datetime
-import git
 from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
 from hdf5_utils import make_empty_h5
+from logging_utils import setup_logging
 
 
 def parse_args(input):
     parser = argparse.ArgumentParser(description='run motion correction')
-    parser.add_argument('-d', '--dir', type=str, 
+    parser.add_argument('-d', '--dir', type=str,
         help='directory containing func or anat data', required=True)
     parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
-    parser.add_argument('-t', '--type_of_transform', type=str, default='SyN', 
+    parser.add_argument('-t', '--type_of_transform', type=str, default='SyN',
         help='type of transform to use')
     parser.add_argument('-i', '--interpolation_method', type=str, default='linear')
-    parser.add_argument('--output_format', type=str, choices=['h5', 'nii'], 
+    parser.add_argument('--output_format', type=str, choices=['h5', 'nii'],
         default='h5', help='output format for registered image data')
-    parser.add_argument('--flow_sigma', type=int, default=3, 
+    parser.add_argument('--flow_sigma', type=int, default=3,
         help='flow sigma for registration - higher sigma focuses on coarser features')
-    parser.add_argument('--total_sigma', type=int, default=0, 
+    parser.add_argument('--total_sigma', type=int, default=0,
         help='total sigma for registration - higher values will restrict the amount of deformation allowed')
-    parser.add_argument('--meanbrain_n_frames', type=int, default=None, 
+    parser.add_argument('--meanbrain_n_frames', type=int, default=None,
         help='number of frames to average over when computing mean/fixed brain')
     parser.add_argument('-o', '--overwrite', action='store_true', help='overwrite existing files')
     parser.add_argument('--save_nii', action='store_true', help='save nifti files')
@@ -59,7 +55,7 @@ def load_data(args):
     if len(files) == 2:
         assert 'channel_2' in files[1], 'data for second channel must be named channel_2'
 
-    # NOTE: should probably be using "scantype" thbroughout instead of "datatype" 
+    # NOTE: should probably be using "scantype" thbroughout instead of "datatype"
     # since the latter is quite confusing as each scan includes both func and anat data
     if 'functional' in files[0]:
         scantype = 'func'
@@ -70,55 +66,12 @@ def load_data(args):
     if args.verbose:
         logging.info(f'Scan type: {scantype}')
 
-    setattr(args, 'scantype', scantype) 
+    setattr(args, 'scantype', scantype)
 
     files_dict = {}
     files_dict['channel_1'] = files[0]
     files_dict['channel_2'] = files[1] if len(files) == 2 else None
     return(files_dict, args)
-
-
-def get_current_git_hash(return_length=8):
-    script = os.path.realpath(__file__)
-    repo = git.Repo(path=script, search_parent_directories=True)
-    return(repo.head.object.hexsha[:return_length])
-
-
-# TODO: this is modified from preprocess.py - should be refactored to create a common function
-def setup_logging(args, logtype='moco'):
-    if args.logdir is None:  # this shouldn't happen, but check just in case
-        args.logdir = os.path.join(args.dir, 'logs')
-    args.logdir = os.path.realpath(args.logdir)
-
-    if not os.path.exists(args.logdir):
-        os.makedirs(args.logdir)
-
-    #  RP: use os.path.join rather than combining strings
-    setattr(args, 'logfile', os.path.join(args.logdir, strftime(f"{logtype}_%Y%m%d-%H%M%S.txt")))
-
-    #  RP: replace custom code with logging.basicConfig
-    logging_handlers = [logging.FileHandler(args.logfile)]
-    if args.verbose:
-        #  use logging.StreamHandler to echo log messages to stdout
-        logging_handlers.append(logging.StreamHandler())
-
-    logging.basicConfig(handlers=logging_handlers, level=logging.INFO,
-        format='%(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-    title = pyfiglet.figlet_format("Brainsss", font="doom")
-    title_shifted = ('\n').join([' ' * 42 + line for line in title.split('\n')][:-2])
-    logging.info(title_shifted)
-    logging.info(f'jobs started: {datetime.datetime.now()}')
-    setattr(args, 'git_hash', get_current_git_hash())
-    logging.info(f'git commit: {args.git_hash}')
-    if args.verbose:
-        logging.info(f'logging enabled: {args.logfile}')
-
-    logging.info('\n\nArguments:')
-    args_dict = vars(args)
-    for key, value in args_dict.items():
-        logging.info(f'{key}: {value}')
-    logging.info('\n')
-    return(args)
 
 
 def set_stepsize(args, scantype_stepsize_dict=None):
@@ -228,7 +181,7 @@ def apply_moco_parameters_to_channel_2(args, files,
         # apply transform
         result = ants.apply_transforms(
             fixed=ch1_meanbrain,
-            moving=ants.from_numpy(ch2_data[..., timepoint]), 
+            moving=ants.from_numpy(ch2_data[..., timepoint]),
             transformlist=transform,
             interpolator=args.interpolation_method)
         ch2_data[..., timepoint] = result.numpy()
@@ -248,7 +201,7 @@ def run_motion_correction(args, files, h5_files):
 
     if args.verbose:
         logging.info('Running motion correction')
-    
+
     # load ch1 image to get dimensions for chunking
     ch1_img = nib.load(files['channel_1'])
     n_timepoints = ch1_img.shape[-1]
@@ -277,7 +230,7 @@ def run_motion_correction(args, files, h5_files):
 
         # run moco on chunk
         mytx = ants.motion_correction(image=chunkdata_ants, fixed=ch1_meanbrain,
-            verbose=args.verbose, type_of_transform=args.type_of_transform, 
+            verbose=args.verbose, type_of_transform=args.type_of_transform,
             total_sigma=args.total_sigma, flow_sigma=args.flow_sigma)
         transform_files = transform_files + mytx['motion_parameters']
 
@@ -333,7 +286,7 @@ def moco_plot(args, motion_file):
     moco_dir = os.path.join(args.dir, 'moco')
     assert os.path.exists(moco_dir), 'something went terribly wrong, moco dir does not exist'
 
-    # Save figure of motion over time
+    # Save figure of motion over time - separate columns for translation and rotation
     save_file = os.path.join(moco_dir, 'motion_correction.png')
     plt.figure(figsize=(12, 6))
     plt.subplot(1, 2, 1)
@@ -344,7 +297,7 @@ def moco_plot(args, motion_file):
     plt.ylabel('Translation (microns)')
     plt.subplot(1, 2, 2)
     plt.plot(motion_parameters.iloc[:, 3:])
-    plt.legend(labels=list(motion_parameters.columns[ 3:]), loc='upper right')
+    plt.legend(labels=list(motion_parameters.columns[3:]), loc='upper right')
     plt.title(f"{'/'.join(args.dir.split('/')[-3:])}: Rotation")
     plt.xlabel('Timepoint')
     plt.ylabel('Rotation (degrees)')
@@ -398,12 +351,12 @@ if __name__ == '__main__':
 
     if 'channel_2' in files:
         apply_moco_parameters_to_channel_2(args, files, h5_files, transform_files)
-    
+
     save_motcorr_settings_to_json(args)
 
     motion_file = save_motion_parameters(args, motion_parameters)
 
-    make_moco_plot(args, motion_file)
+    moco_plot(args, motion_file)
 
     if args.save_nii:
         save_nii(args, h5_files)
