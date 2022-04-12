@@ -27,6 +27,7 @@ setup(
         'scipy',
         'h5py',
         'matplotlib',
-        'antspyx'
+        'antspyx',
+        'GitPython'
     ],
 )
