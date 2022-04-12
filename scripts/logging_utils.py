@@ -7,13 +7,18 @@ import datetime
 from git_utils import get_current_git_hash
 
 
-def setup_logging(args, logtype='moco'):
-    if 'logdir' not in args:
+def setup_logging(args, logtype='moco', logdir=None):
+    if logdir is None and 'logdir' in args:
+        logdir = args.logdir
+    elif logdir is not None:
+        setattr(args, 'logdir', logdir)
+    else:
         setattr(args, 'logdir', None)
+
     if 'verbose' not in args:
         setattr(args, 'verbose', False)
 
-    if args.logdir is None:  
+    if args.logdir is None:
         args.logdir = os.path.join(args.dir, 'logs')
     args.logdir = os.path.realpath(args.logdir)
 
