@@ -8,7 +8,6 @@ from lxml import etree, objectify
 from openpyxl import load_workbook
 import brainsss
 import argparse
-import time
 import logging
 from logging_utils import setup_logging
 
@@ -123,6 +122,8 @@ def build_fly(args):
             add_fly_to_xlsx(destination_fly, print)
 
 
+# TODO: this seems to have some dangerous assumptions
+# and uses bare excepts
 def add_date_to_fly(destination_fly):
     """ get date from xml file and add to fly.json"""
 
