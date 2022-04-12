@@ -11,10 +11,10 @@ import argparse
 from pathlib import Path
 
 def parse_args(input):
-    parser = argparse.ArgumentParser(description='run bleaching qc')
+    parser = argparse.ArgumentParser(description='make mean brain')
     parser.add_argument('-d', '--dir', type=str, 
-        help='directory containing func or anat data', required=True)
-    parser.add_argument('--verbose', action='store_true', help='verbose output')
+        help='imaging directory containing func or anat data', required=True)
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
     args = parser.parse_args(input)
     return(args)
 
