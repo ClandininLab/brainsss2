@@ -343,7 +343,7 @@ if __name__ == '__main__':
     if 'channel_2' in files:
         apply_moco_parameters_to_channel_2(args, files, h5_files, transform_files)
 
-    save_motcorr_settings_to_json(args)
+    save_motcorr_settings_to_json(args, files, h5_files)
 
     motion_file = save_motion_parameters(args, motion_parameters)
 
