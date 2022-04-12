@@ -20,6 +20,7 @@ def parse_args(input):
     )
     # TODO: What is this? not clear from smooth_and_interp_fictrac
     parser.add_argument("--resolution", type=float, help="resolution of fictrac data")
+    parser.add_argument('-v', "--verbose", action="store_true", help="verbose output")
     args = parser.parse_args(input)
     return args
 
