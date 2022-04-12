@@ -13,46 +13,58 @@ import scipy
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
-def main(args):
+from logging_utils import setup_logging
+import logging
 
-    load_directory = args['load_directory']
-    save_directory = args['save_directory']
-    brain_file = args['brain_file']
+def parse_args(input):
+    parser = argparse.ArgumentParser(description='temporally highpass filter an hdf5 file')
+    parser.add_argument('-d', '--dir', type=str,
+        help='func directory to be analyzed', required=True)
+    parser.add_argument('-f', '--file', type=str, help='file to process',
+        default='moco/functional_channel_2_moco_zscore_highpass.h5')
+    parser.add_argument('-b', '--behavior', default=2, type=int, help='behavior to analyze',
+        choices=['dRotLabY', 'dRotLabZ'])
+    parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
+    parser.add_argument('--fps', type=float, default=100, help='frame rate of fictrac camera')
+    parser.add_argument('--resolution', type=float, default=10, help='resolution of fictrac data')
 
-    behavior = args['behavior']
+    args = parser.parse_args(input)
+    return(args)
 
-    logfile = args['logfile']
-    printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
 
-    printlog(load_directory)
+if __name__ == "__main__":
+    args = parse_args(sys.argv[1:])
+    setattr(args, 'dir', os.path.dirname(args.file))
 
-    fps = 100 # of fictrac camera
+    setup_logging(args, logtype='correlation')
 
     ### load brain timestamps ###
-    timestamps = brainsss.load_timestamps(os.path.join(load_directory, 'imaging'))
+    timestamps = brainsss.load_timestamps(os.path.join(args.dir, 'imaging'))
 
     ### Load fictrac ###
-    fictrac_raw = brainsss.load_fictrac(os.path.join(load_directory, 'fictrac'))
-    resolution = 10 #desired resolution in ms
-    expt_len = fictrac_raw.shape[0]/fps*1000    
-    if behavior == 'dRotLabY': short = 'Y'
-    elif behavior == 'dRotLabZ': short = 'Z'
+    fictrac_raw = brainsss.load_fictrac(os.path.join(args.dir, 'fictrac'))
+    expt_len = fictrac_raw.shape[0] / (fps * 1000) 
+    
+    behavior = args.behavior.replace('dRotLab', '')
+    assert behavior in ['Y', 'Z'], 'behavior must be either Y or Z'
 
     ### Load brain ###
-    printlog('loading brain')
-    full_load_path = os.path.join(load_directory, brain_file)
+    full_load_path = os.path.join(args.dir, args.file)
     with h5py.File(full_load_path, 'r') as hf:
         brain = hf['data'][:] 
-    printlog('done')
     
     ### Correlate ###
-    printlog("Performing Correlation on {}; behavior: {}".format(brain_file, behavior))
-    corr_brain = np.zeros((256,128,49))
-    for z in range(49):
+    logging.info("Performing Correlation on {}; behavior: {}".format(args.file, behavior))
+
+    corr_brain = np.zeros((brain.dims[:3]))
+
+    for z in range(brain.dims[2]):
         
         ### interpolate fictrac to match the timestamps of this slice
         printlog(F"{z}")
-        fictrac_interp = brainsss.smooth_and_interp_fictrac(fictrac_raw, fps, resolution, expt_len, behavior, timestamps=timestamps, z=z)
+        fictrac_interp = brainsss.smooth_and_interp_fictrac(
+            fictrac_raw, args.fps, args.resolution, expt_len, behavior, timestamps=timestamps, z=z)
 
         for i in range(256):
             for j in range(128):
