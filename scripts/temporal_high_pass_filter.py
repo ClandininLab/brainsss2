@@ -25,8 +25,7 @@ def parse_args(input):
     parser.add_argument("-l", "--logdir", type=str, help="directory to save log file")
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
 
-    args = parser.parse_args(input)
-    return args
+    return parser.parse_args(input)
 
 
 if __name__ == "__main__":
@@ -46,7 +45,7 @@ if __name__ == "__main__":
         data = hf["data"]  # this doesn't actually LOAD the data - it is just a proxy
         dims = np.shape(data)
         chunk_boundaries = get_chunk_boundaries(args, dims[-2])
-        logging.info("Data shape is {}".format(dims))
+        logging.info(f"Data shape is {dims}")
 
         with h5py.File(save_file, "w") as f:
             dset = f.create_dataset("data", dims, dtype="float32", chunks=True)
@@ -56,17 +55,15 @@ if __name__ == "__main__":
                 chunk = data[:, :, chunk_start:chunk_end, :]
                 chunk_mean = np.mean(chunk, axis=-1)
 
-                ### SMOOTH ###
                 smoothed_chunk = gaussian_filter1d(
                     chunk, sigma=args.sigma, axis=-1, truncate=1
                 )
 
-                ### Apply Smooth Correction ###
+                # Apply Smooth Correction
                 chunk_high_pass = (
                     chunk - smoothed_chunk + chunk_mean[:, :, :, None]
                 )  # need to add back in mean to preserve offset
 
-                ### Save ###
                 f["data"][:, :, chunk_start:chunk_end, :] = chunk_high_pass
 
     logging.info("high pass done")
