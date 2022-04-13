@@ -325,7 +325,7 @@ if __name__ == '__main__':
 
     args = parse_args(sys.argv[1:])
 
-    args = setup_logging(args)
+    args = setup_logging(args, logtype='moco')
 
     files, args = load_data(args)
 
