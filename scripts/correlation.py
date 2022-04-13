@@ -2,100 +2,151 @@ import os
 import sys
 import numpy as np
 import argparse
-import subprocess
-import json
 import h5py
-import time
-from scipy.ndimage import gaussian_filter1d
 import nibabel as nib
 import brainsss
 import scipy
-from scipy.interpolate import interp1d
-import matplotlib.pyplot as plt
-
+import datetime
+from columnwise_corrcoef_perf import AlmightyCorrcoefEinsumOptimized
 from logging_utils import setup_logging
 import logging
+from nilearn.plotting import plot_stat_map
+
 
 def parse_args(input):
     parser = argparse.ArgumentParser(description='temporally highpass filter an hdf5 file')
     parser.add_argument('-d', '--dir', type=str,
         help='func directory to be analyzed', required=True)
     parser.add_argument('-f', '--file', type=str, help='file to process',
-        default='moco/functional_channel_2_moco_zscore_highpass.h5')
-    parser.add_argument('-b', '--behavior', default=2, type=int, help='behavior to analyze',
-        choices=['dRotLabY', 'dRotLabZ'])
+        default='moco/functional_channel_2_moco_highpass.h5')
+    parser.add_argument('--bg_img', type=str, help='background image for plotting',
+        default='imaging/functional_channel_1_mean.nii')
+    parser.add_argument('-b', '--behavior', type=str, 
+        help='behavior(s) to analyze (add + or - as suffix to limit values',
+        required=True, nargs='+')
+    # TODO: also allow mask image or threshold value
+    parser.add_argument('-m', '--maskpct', default=None, type=float,
+        help='percentage (1-100) of image to include in mask')
     parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument('--fps', type=float, default=100, help='frame rate of fictrac camera')
     parser.add_argument('--resolution', type=float, default=10, help='resolution of fictrac data')
+    parser.add_argument('-o', '--outdir', type=str, help='directory to save output')
+    parser.add_argument('--corrthresh', type=float, default=0.1, help='correlation threshold for plotting')
+    return(parser.parse_args(input))
 
-    args = parser.parse_args(input)
-    return(args)
+
+def setup_mask(args, brain):
+    if args.maskpct is not None:
+        meanbrain = np.mean(brain, axis=3)
+        maskthresh = scipy.stats.scoreatpercentile(meanbrain, args.maskpct)
+        mask = meanbrain > maskthresh
+        logging.info(f'Mask threshold for {args.maskpct} percent:: {maskthresh}')
+    else:
+        mask = np.ones(brain.shape[:3], dtype=bool)
+    return(mask)
+
+
+def load_fictrac_data(args):
+    fictrac_raw = brainsss.load_fictrac(os.path.join(args.dir, 'fictrac'))
+    expt_len = (fictrac_raw.shape[0] / args.fps) * 1000
+    return(fictrac_raw, expt_len)
+
+
+def load_brain(args):
+    full_load_path = os.path.join(args.dir, args.file)
+    logging.info(f'loading brain file: {full_load_path}')
+    with h5py.File(full_load_path, 'r') as hf:
+        brain = hf['data'][:]
+    logging.info(f'brain shape: {brain.shape}')
+    return(brain)
+
+
+def get_transformed_data_slice(args, brain, mask, z):
+    zdata = brain[:, :, z, :]
+    zmask = mask[:, :, z].reshape(np.prod(brain.shape[:2]))
+    if zmask.sum() == 0:
+        return(None, zmask)
+    return(zdata.transpose(2, 0, 1).reshape(brain.shape[3], -1), zmask)
+
+
+def save_corrdata(args, corr_brain, behavior):
+    save_file = os.path.join(args.outdir, f'corr_{behavior}.nii')
+    nib.Nifti1Image(corr_brain, np.eye(4)).to_filename(save_file)
+    logging.info(f"Saved {save_file}")
+    return(save_file)
+
+
+def transform_behavior(behavior, transform):
+    assert transform in ['+', '-'], 'transform must be + or -'
+    if transform == '+':
+        behavior[behavior < 0] = 0
+    else:
+        behavior[behavior > 0] = 0
+    return(behavior)
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
-    setattr(args, 'dir', os.path.dirname(args.file))
+    if 'dir' not in args:
+        setattr(args, 'dir', os.path.dirname(args.file))
+
+    if args.outdir is None:
+        args.outdir = os.path.join(args.dir, 'corr')
+    if not os.path.exists(args.outdir):
+        os.mkdir(args.outdir)
 
     setup_logging(args, logtype='correlation')
 
-    ### load brain timestamps ###
     timestamps = brainsss.load_timestamps(os.path.join(args.dir, 'imaging'))
 
-    ### Load fictrac ###
-    fictrac_raw = brainsss.load_fictrac(os.path.join(args.dir, 'fictrac'))
-    expt_len = fictrac_raw.shape[0] / (fps * 1000) 
-    
-    behavior = args.behavior.replace('dRotLab', '')
-    assert behavior in ['Y', 'Z'], 'behavior must be either Y or Z'
+    fictrac_raw, expt_len = load_fictrac_data(args)
 
-    ### Load brain ###
-    full_load_path = os.path.join(args.dir, args.file)
-    with h5py.File(full_load_path, 'r') as hf:
-        brain = hf['data'][:] 
-    
-    ### Correlate ###
-    logging.info("Performing Correlation on {}; behavior: {}".format(args.file, behavior))
+    brain = load_brain(args)
 
-    corr_brain = np.zeros((brain.dims[:3]))
+    mask = setup_mask(args, brain)
 
-    for z in range(brain.dims[2]):
-        
-        ### interpolate fictrac to match the timestamps of this slice
-        printlog(F"{z}")
-        fictrac_interp = brainsss.smooth_and_interp_fictrac(
-            fictrac_raw, args.fps, args.resolution, expt_len, behavior, timestamps=timestamps, z=z)
+    for behavior in args.behavior:
 
-        for i in range(256):
-            for j in range(128):
-                # nan to num should be taken care of in zscore, but checking here for some already processed brains
-                if np.any(np.isnan(brain[i,j,z,:])):
-                    printlog(F'warning found nan at x = {i}; y = {j}; z = {z}')
-                    corr_brain[i,j,z] = 0
-                elif len(np.unique(brain[i,j,z,:])) == 1:
-                    printlog(F'warning found constant value at x = {i}; y = {j}; z = {z}')
-                    corr_brain[i,j,z] = 0
-                else:
-                    corr_brain[i,j,z] = scipy.stats.pearsonr(fictrac_interp, brain[i,j,z,:])[0]
+        logging.info(f"Performing Correlation on {args.file}; behavior: {behavior}")
 
-    if not os.path.exists(save_directory):
-        os.mkdir(save_directory)
+        if behavior[-1] in ['+', '-']:
+            behavior_name = behavior[:-1]  # name without sign, for use in loading fictrac data
+            behavior_transform = behavior[-1]
+            logging.info(f'Transforming behavior {behavior_name}: {behavior_transform} values only')
+        else:
+            behavior_transform = None
 
-    save_file = os.path.join(save_directory, 'corr_{}.nii'.format(behavior))
-    nib.Nifti1Image(corr_brain, np.eye(4)).to_filename(save_file)
-    printlog("Saved {}".format(save_file))
-    save_maxproj_img(save_file)
+        corr_brain = np.zeros((brain.shape[:3]))
 
-def save_maxproj_img(file):
-    brain = np.asarray(nib.load(file).get_data().squeeze(), dtype='float32')
+        for z in range(brain.shape[2]):
 
-    plt.figure(figsize=(10,4))
-    plt.imshow(np.max(brain,axis=-1).T,cmap='gray')
-    plt.axis('off')
-    plt.colorbar()
-    
-    save_file = file[:-3] + 'png'
-    plt.savefig(save_file, bbox_inches='tight', dpi=300)
+            zdata_trans, zmask = get_transformed_data_slice(args, brain, mask, z)
+            if zdata_trans is None:
+                logging.info(f'Skipping slice {z} because it has no brain')
+                continue
+            else:
+                logging.info(F"Processing slice {z}: {np.sum(zmask)} voxels")
 
-if __name__ == '__main__':
-    main(json.loads(sys.argv[1]))
+            # interpolate fictrac to match the timestamps of this slice
+            fictrac_interp = brainsss.smooth_and_interp_fictrac(
+                fictrac_raw, args.fps, args.resolution, expt_len, 
+                behavior_name, timestamps=timestamps, z=z)[:, np.newaxis]
+
+            if behavior_transform is not None:
+                fictract_interp = transform_behavior(fictrac_interp, behavior_transform)
+
+            # compute correlation using optimized method for large matrices
+            cc = AlmightyCorrcoefEinsumOptimized(
+                zdata_trans[:, zmask], fictrac_interp)[0, :]
+            cc_full = np.zeros(zdata_trans.shape[1])
+            cc_full[zmask == True] = cc
+            corr_brain[:, :, z] = cc_full.reshape(brain.shape[0], brain.shape[1])
+
+        save_file = save_corrdata(args, corr_brain, behavior)
+        logging.info(f'job completed: {datetime.datetime.now()}')
+
+        plot_stat_map(save_file, os.path.join(args.dir, args.bg_img), 
+            display_mode='z', threshold=args.corrthresh, draw_cross=False,
+            cut_coords=np.arange(8, 49, 8), title=f'Correlation: {behavior}',
+            output_file=os.path.join(args.outdir, f'corr_{behavior}.png'))
