@@ -7,7 +7,26 @@ import datetime
 from git_utils import get_current_git_hash
 
 
-def setup_logging(args, logtype="moco", logdir=None):
+def setup_logging(args, logtype, logdir=None, preamble=True):
+    """
+    Setup logging for the script.
+
+    Parameters:
+    -----------
+    args: argparse.Namespace
+        command line arguments
+    logtype: str
+        name of process to use for logfile naming
+    logdir: str
+        directory to save logfile in
+    preamble: bool
+        whether to print preamble to logfile
+
+    Returns:
+    --------
+    args: argparse.Namespace
+        command line arguments (updated with logging info)
+    """
     if logdir is None and "logdir" in args:
         logdir = args.logdir
     elif logdir is not None:
@@ -19,11 +38,12 @@ def setup_logging(args, logtype="moco", logdir=None):
         setattr(args, "verbose", False)
 
     if args.logdir is None:
+        assert args.dir is not None, "args.dir must be specified if args.logdir is not"
         args.logdir = os.path.join(args.dir, "logs")
     args.logdir = os.path.realpath(args.logdir)
 
     if not os.path.exists(args.logdir):
-        os.makedirs(args.logdir)
+        os.mkdir(args.logdir)
 
     #  RP: use os.path.join rather than combining strings
     setattr(
