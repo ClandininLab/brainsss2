@@ -1,15 +1,16 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import sys
+import argparse
+from logging_utils import setup_logging
+import logging
 from brainsss.visual import (
     load_photodiode,
     get_stimulus_metadata,
     extract_stim_times_from_pd,
 )
 from brainsss.fictrac import smooth_and_interp_fictrac, load_fictrac
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import json
-import sys
-import argparse
 
 
 def parse_args(input):
@@ -28,12 +29,19 @@ def parse_args(input):
     parser.add_argument(
         "--resolution", default=10, type=float, help="resolution of fictrac data"
     )
-    args = parser.parse_args(input)
-    return args
+    parser.add_argument(
+        '-v', '--verbose', action='store_true', help='verbose output'
+    )
+    parser.add_argument(
+        '--outfile',
+        default='stim_triggered_turning.png',
+        type=str,
+        help='output file name'
+    )
+    return parser.parse_args(input)
 
 
-def plot_avg_trace(
-    fictrac, starts_angle_0, starts_angle_180, vision_path):
+def plot_avg_trace(fictrac, starts_angle_0, starts_angle_180, vision_path, args):
     """
     Plot the average fictrac trace for the stimulus-triggered average
     """
@@ -43,7 +51,7 @@ def plot_avg_trace(
     traces = []
     for i in range(len(starts_angle_0)):
         trace = fictrac["Z"][
-            starts_angle_0[i] - pre_window : starts_angle_0[i] + post_window
+            starts_angle_0[i] - pre_window:starts_angle_0[i] + post_window
         ]
         if (
             len(trace) == pre_window + post_window
@@ -54,7 +62,7 @@ def plot_avg_trace(
     traces = []
     for i in range(len(starts_angle_180)):
         trace = fictrac["Z"][
-            starts_angle_180[i] - pre_window : starts_angle_180[i] + post_window
+            starts_angle_180[i] - pre_window:starts_angle_180[i] + post_window
         ]
         if (
             len(trace) == pre_window + post_window
@@ -65,40 +73,33 @@ def plot_avg_trace(
     plt.figure(figsize=(10, 10))
     xs = np.arange(-pre_window, post_window) * 10
     plt.plot(xs, mean_trace_0, color="r", linewidth=5)
-    plt.plot(xs, mean_trace_180, color="cyan", linewidth=5)
+    plt.plot(xs, mean_trace_180, color="green", linewidth=5)
     plt.axvline(0, color="grey", lw=3, linestyle="--")  # stim appears
     plt.axvline(1000, color="k", lw=3, linestyle="--")  # stim moves
     plt.axvline(1500, color="grey", lw=3, linestyle="--")  # grey
     plt.ylim(-50, 50)
+    plt.legend(['mean_trace_0', 'mean_trace_180'])
     plt.xlabel("Time, ms")
     plt.ylabel("Angular Velocity")
 
-    name = "stim_triggered_turning.png"
-    fname = os.path.join(vision_path, name)
+    fname = os.path.join(vision_path, args.outfile)
     plt.savefig(fname, dpi=100, bbox_inches="tight")
-    print(f"saved {fname}")
+    logging.info(f"saved average trace to {fname}")
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
-    # logfile = args['logfile']
-    # func_path = args['func_path']
-    # printlog = getattr(brainsss.Printlog(logfile=logfile), 'print_to_log')
-
-    ###########################
-    ### PREP VISUAL STIMULI ###
-    ###########################
+    setup_logging(args, logtype='stim_triggered_avg_beh')
 
     vision_path = os.path.join(args.dir, "visual")
+    assert os.path.exists(vision_path), f"vision_path {vision_path} does not exist"
 
-    ### Load Photodiode ###
     t, ft_triggers, pd1, pd2 = load_photodiode(vision_path)
     stimulus_start_times = extract_stim_times_from_pd(pd2, t)
 
-    ### Get Metadata ###
     stim_ids, angles = get_stimulus_metadata(vision_path)
-    # printlog(F"Found {len(stim_ids)} presented stimuli.")
+    logging.info(F"Found {len(stim_ids)} presented stimuli.")
 
     # *100 puts in units of 10ms, which will match fictrac
     starts_angle_0 = [
@@ -111,12 +112,9 @@ if __name__ == "__main__":
         for i in range(len(stimulus_start_times))
         if angles[i] == 180
     ]
-    # printlog(F"starts_angle_0: {len(starts_angle_0)}. starts_angle_180: {len(starts_angle_180)}")
+    logging.info(F"starts_angle_0: {len(starts_angle_0)}. starts_angle_180: {len(starts_angle_180)}")
 
-    ####################
-    ### PREP FICTRAC ###
-    ####################
-
+    # PREP FICTRAC
     fictrac_path = os.path.join(args.dir, "fictrac")
     fictrac_raw = load_fictrac(fictrac_path)
 
@@ -133,7 +131,5 @@ if __name__ == "__main__":
         )
     xnew = np.arange(0, expt_len, args.resolution)
 
-    ##################
-    ### MAKE PLOTS ###
-    ##################
-    plot_avg_trace(fictrac, starts_angle_0, starts_angle_180, vision_path)
+    plot_avg_trace(
+        fictrac, starts_angle_0, starts_angle_180, vision_path, args)
