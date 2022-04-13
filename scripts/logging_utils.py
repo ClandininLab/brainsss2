@@ -7,6 +7,34 @@ import datetime
 from git_utils import get_current_git_hash
 
 
+def get_flystring(args):
+    """
+    Get flystring from args.
+
+    Parameters:
+    -----------
+    args: argparse.Namespace
+        command line arguments
+
+    Returns:
+    --------
+    flystring: str
+        string to use for logfile naming
+    """
+    flystring = ""
+
+    if "flystring" in args and args.flystring is not None:
+        return(args.flystring)
+
+    if 'dir' in args:
+        dir_split = args.dir.split('/')
+        for part in dir_split:
+            if 'fly_' in part:
+                flystring = '_' + part.replace('_', '').replace('-', '')
+                break
+    return flystring
+
+
 def setup_logging(args, logtype, logdir=None, preamble=True):
     """
     Setup logging for the script.
@@ -45,11 +73,13 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
     if not os.path.exists(args.logdir):
         os.mkdir(args.logdir)
 
+    args.flystring = get_flystring(args)
+
     #  RP: use os.path.join rather than combining strings
     setattr(
         args,
         "logfile",
-        os.path.join(args.logdir, strftime(f"{logtype}_%Y%m%d-%H%M%S.txt")),
+        os.path.join(args.logdir, strftime(f"{logtype}{args.flystring}_%Y%m%d-%H%M%S.txt")),
     )
 
     #  RP: replace custom code with logging.basicConfig
