@@ -21,7 +21,7 @@ def parse_args(input):
         default='moco/functional_channel_2_moco_highpass.h5')
     parser.add_argument('--bg_img', type=str, help='background image for plotting',
         default='imaging/functional_channel_1_mean.nii')
-    parser.add_argument('-b', '--behavior', type=str, 
+    parser.add_argument('-b', '--behavior', type=str,
         help='behavior(s) to analyze (add + or - as suffix to limit values',
         required=True, nargs='+')
     # TODO: also allow mask image or threshold value
@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
             # interpolate fictrac to match the timestamps of this slice
             fictrac_interp = brainsss.smooth_and_interp_fictrac(
-                fictrac_raw, args.fps, args.resolution, expt_len, 
+                fictrac_raw, args.fps, args.resolution, expt_len,
                 behavior_name, timestamps=timestamps, z=z)[:, np.newaxis]
 
             if behavior_transform is not None:
@@ -140,13 +140,13 @@ if __name__ == "__main__":
             cc = AlmightyCorrcoefEinsumOptimized(
                 zdata_trans[:, zmask], fictrac_interp)[0, :]
             cc_full = np.zeros(zdata_trans.shape[1])
-            cc_full[zmask == True] = cc
+            cc_full[zmask == True] = cc  # noqa: E712
             corr_brain[:, :, z] = cc_full.reshape(brain.shape[0], brain.shape[1])
 
         save_file = save_corrdata(args, corr_brain, behavior)
         logging.info(f'job completed: {datetime.datetime.now()}')
 
-        plot_stat_map(save_file, os.path.join(args.dir, args.bg_img), 
+        plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
             display_mode='z', threshold=args.corrthresh, draw_cross=False,
             cut_coords=np.arange(8, 49, 8), title=f'Correlation: {behavior}',
             output_file=os.path.join(args.outdir, f'corr_{behavior}.png'))
