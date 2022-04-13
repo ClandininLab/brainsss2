@@ -11,6 +11,8 @@ import logging
 import argparse
 import pyfiglet
 from pathlib import Path
+from logging_utils import setup_logging
+import logging
 
 
 def parse_args(input_args):
@@ -72,36 +74,6 @@ def parse_args(input_args):
     args = parser.parse_args(input_args)
     return(args)
 
-
-def setup_logging(args):
-    assert args.logdir is not None  # this shouldn't happen, but check just in case
-
-    args.logdir = os.path.realpath(args.logdir)
-
-    if not os.path.exists(args.logdir):
-        os.makedirs(args.logdir)
-
-    #  RP: use os.path.join rather than combining strings
-    setattr(args, 'logfile', os.path.join(args.logdir, time.strftime("preprocess_%Y%m%d-%H%M%S.txt")))
-
-    #  RP: replace custom code with logging.basicConfig
-    logging_handlers = [logging.FileHandler(args.logfile)]
-    if args.verbose:
-        #  use logging.StreamHandler to echo log messages to stdout
-        logging_handlers.append(logging.StreamHandler())
-
-    logging.basicConfig(handlers=logging_handlers, level=logging.INFO,
-        format='%(asctime)s\n%(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-    title = pyfiglet.figlet_format("Brainsss", font="doom")
-    title_shifted = ('\n').join([' ' * 42 + line for line in title.split('\n')][:-2])
-    logging.info(title_shifted)
-    if args.verbose:
-        logging.info(f'logging enabled: {args.logfile}')
-
-    #  NOTE: removed the printing of datetime since it's included in the logging format
-    #  if you prefer without it then you could remove asctime from the format
-    #  message and then print the date as before
-    return(args)
 
 
 def get_users_dir():
@@ -180,7 +152,7 @@ def build_fly(dir_to_build, args):
 
 # generate a more generic runner for func processing
 
-def run_func_job(funcfiles, args, batch_dict)
+def run_job(funcdir, args, sbatch_dict):
     job_ids = []
     if args.verbose:
         print(funcfiles)
