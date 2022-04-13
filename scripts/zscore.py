@@ -20,8 +20,7 @@ def parse_args(input):
     parser.add_argument("-l", "--logdir", type=str, help="directory to save log file")
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
 
-    args = parser.parse_args(input)
-    return args
+    return parser.parse_args(input)
 
 
 if __name__ == "__main__":
@@ -42,29 +41,28 @@ if __name__ == "__main__":
         dims = np.shape(data)
         chunk_boundaries = get_chunk_boundaries(args, dims[-1])
 
-        logging.info("Data shape is {}".format(dims))
+        logging.info(f"Data shape is {dims}")
 
         running_sum = np.zeros(dims[:3])
         running_sumofsq = np.zeros(dims[:3])
 
         logging.info("Calculating meanbrain")
-        for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+        for chunk_start, chunk_end in chunk_boundaries:
             t0 = time()
             chunk = data[:, :, :, chunk_start:chunk_end]
             running_sum += np.sum(chunk, axis=3)
             logging.info(f"vol: {chunk_start} to {chunk_end} time: {time()-t0}")
         meanbrain = running_sum / dims[-1]
 
-        ### Calculate std ###
         logging.info("Calculating std")
-        for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+        for chunk_start, chunk_end in chunk_boundaries:
             t0 = time()
             chunk = data[:, :, :, chunk_start:chunk_end]
             running_sumofsq += np.sum((chunk - meanbrain[..., None]) ** 2, axis=3)
             logging.info(f"vol: {chunk_start} to {chunk_end} time: {time()-t0}")
         final_std = np.sqrt(running_sumofsq / dims[-1])
 
-        ### Calculate zscore and save ###
+        # Calculate zscore and save
         # optimize the step size
         if args.stepsize is None:
             chunks = True
@@ -74,14 +72,14 @@ if __name__ == "__main__":
         with h5py.File(save_file, "w") as f:
             dset = f.create_dataset("data", dims, dtype="float32", chunks=chunks)
 
-            for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+            for chunk_start, chunk_end in chunk_boundaries:
                 t0 = time()
                 chunk = data[:, :, :, chunk_start:chunk_end]
                 running_sumofsq += np.sum((chunk - meanbrain[..., None]) ** 2, axis=3)
                 zscored = (chunk - meanbrain[..., None]) / final_std[..., None]
                 f["data"][:, :, :, chunk_start:chunk_end] = np.nan_to_num(
                     zscored
-                )  ### Added nan to num because if a pixel is a constant value (over saturated) will divide by 0
+                )  # Added nan to num because if a pixel is a constant value (over saturated) will divide by 0
                 logging.info(f"vol: {chunk_start} to {chunk_end} time: {time()-t0}")
 
     logging.info("zscore completed successfully")
