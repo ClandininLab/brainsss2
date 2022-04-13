@@ -1,67 +1,84 @@
 import os
 import sys
-import json
-from time import sleep
-import datetime
-import brainsss
 import numpy as np
 import nibabel as nib
 import h5py
 import argparse
 from pathlib import Path
+from logging_utils import setup_logging
+import logging
+
 
 def parse_args(input):
-    parser = argparse.ArgumentParser(description='make mean brain')
-    parser.add_argument('-d', '--dir', type=str, 
-        help='imaging directory containing func or anat data', required=True)
-    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
-    args = parser.parse_args(input)
-    return(args)
+    parser = argparse.ArgumentParser(
+        description="make mean brain for all functional channels in dir"
+    )
+    parser.add_argument(
+        "-d",
+        "--dir",
+        type=str,
+        help="imaging directory containing func or anat data",
+        required=True,
+    )
+    parser.add_argument(
+        "--regexp",
+        type=str,
+        default="functional_channel_[1,2].nii",
+        help="regexp to match files to process",
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
+    return parser.parse_args(input)
 
 
-def make_mean_brain(args):
-    files = [f.as_posix() for f in Path(args.dir).glob('*_channel*.nii')]
-    if args.verbose:
-        print('found files:')
-        print(files)
+def make_mean_brain(args, file):
+    logging.info(f"loading {file}")
+    full_path = os.path.join(args.dir, file)
+    if full_path.endswith(".nii"):
+        brain = nib.load(full_path).get_fdata()
+    elif full_path.endswith(".h5"):
+        with h5py.File(full_path, "r") as hf:
+            brain = np.asarray(hf["data"][:], dtype="uint16")
+    else:
+        raise ValueError(f"Unknown file type: {full_path}")
 
-    for file in files:
-        try:
-            ### make mean ###
-            full_path = os.path.join(args.dir, file)
-            if full_path.endswith('.nii'):
-                brain = nib.load(full_path).get_fdata()
-            elif full_path.endswith('.h5'):
-                with h5py.File(full_path, 'r') as hf:
-                    brain = np.asarray(hf['data'][:], dtype='uint16')
-            meanbrain = np.mean(brain, axis=-1)
-            brainshape = brain.shape
-            del brain
+    return (np.mean(brain, axis=-1), brain.shape)
 
-            ### Save ###
-            save_file = os.path.join(args.dir, file[:-4] + '_mean.nii')
-            if args.verbose:
-                print(f'Saving to {save_file}')
-            aff = np.eye(4)
-            img = nib.Nifti1Image(meanbrain, aff)
-            img.to_filename(save_file)
 
-            # assumes specific file naming...
-            fly_func_str = ('|').join(args.dir.split('/')[-3:-1])
-            fly_print = args.dir.split('/')[-3]
-            func_print = args.dir.split('/')[-2]
-            #printlog(f"COMPLETE | {fly_func_str} | {file} | {brain.shape} --> {meanbrain.shape}")
-            print(F"meanbrn | COMPLETED | {fly_print} | {func_print} | {file} | {brainshape} ===> {meanbrain.shape}")
-            print(brainshape[-1]) ### IMPORTANT: for communication to main
-        except FileNotFoundError:
-            print(F"Not found (skipping){file:.>{width-20}}")
-            #printlog(f'{file} not found.')
+def save_mean_brain(args, file):
+    file_extension = os.path.splitext(file)[-1]
+    assert file_extension in [
+        ".nii",
+        ".h5",
+    ], f"Unknown file extension: {file_extension}"
+    save_file = file.replace(file_extension, "_mean.nii")
+    logging.info(f"Saving mean brain to: {save_file}")
 
-if __name__ == '__main__':
+    # NOTE: This seems dangerous!  could result in differences in qform/sform across files
+    aff = np.eye(4)
+    img = nib.Nifti1Image(meanbrain, aff)
+    img.to_filename(save_file)
+
+    # assumes specific file naming...
+    fly_print = args.dir.split("/")[-3]
+    func_print = args.dir.split("/")[-2]
+    logging.info(
+        f"meanbrn | COMPLETED | {fly_print} | {func_print} | {file} | {brainshape} ===> {meanbrain.shape}"
+    )
+
+
+if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
-    #TODO: Fix logging
-    # logfile = args['logfile']
-    width = 120
+    setup_logging(args, logtype="meanbrain")
 
-    make_mean_brain(args)
+    files = [f.as_posix() for f in Path(args.dir).glob("*_channel*.nii")]
+
+    logging.info(f"found files: {files}")
+
+    for file in files:
+
+        meanbrain, brainshape = make_mean_brain(args, file)
+        logging.info(
+            f"generated mean brain from {file} with original shape {brainshape}"
+        )
+        save_mean_brain(args, file)
