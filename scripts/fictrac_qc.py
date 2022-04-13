@@ -1,13 +1,11 @@
 import numpy as np
 import sys
 import os
-import json
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from brainsss import smooth_and_interp_fictrac, load_fictrac
 import argparse
 from logging_utils import setup_logging
-import logging
 
 
 def parse_args(input):
