@@ -1,5 +1,6 @@
 import argparse
-import os
+import getpass
+
 
 def get_base_parser(description):
     parser = argparse.ArgumentParser(description=description)
@@ -50,7 +51,7 @@ def add_preprocess_arguments(parser):
     parser.add_argument(
         "--ignore_settings", action="store_true", help="ignore settings file"
     )
-    parser.add_argument("-u", "--user", help="user", type=str, default=os.getlogin())
+    parser.add_argument("-u", "--user", help="user", type=str, default=getpass.getuser())
     parser.add_argument(
         "-s",
         "--settings_file",
