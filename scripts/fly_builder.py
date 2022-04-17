@@ -111,6 +111,8 @@ def build_fly(args):
 
             print(f'Using logger: {logging.getLogger()}')
             logging.info(f"Created fly directory:{args.destination_dir}")
+            # print to stdout so that preprocess.py can use this output
+            print(f'flydir: {args.destination_dir}')
             if overwrite_msg is not None:
                 logging.info(overwrite_msg)
 
