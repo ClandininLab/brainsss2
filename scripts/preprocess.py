@@ -67,8 +67,8 @@ def build_fly(args, use_sbatch=False):
         # run locally
         logging.info('running fly_builder.py locally')
         argstring = ' '.join(dict_to_args_list(args.__dict__))
-        run_shell_command(f'python fly_builder.py {argstring}')
-    return None
+        output = run_shell_command(f'python fly_builder.py {argstring}')
+    return output
 
 
 # generate a more generic runner for func processing
@@ -536,7 +536,13 @@ def setup_build_dirs(args):
     return args
 
 
-# NOTE: moving the main() function contents out of main() function to make debugging easier
+def get_flydir_from_output(output):
+    """get the fly directory from the output"""
+    for line in output.split("\n"):
+        if "flydir: " in line:
+            return line.split(" ")[1].strip()
+
+
 if __name__ == "__main__":
 
     args = parse_args(sys.argv[1:])
@@ -559,11 +565,12 @@ if __name__ == "__main__":
     if args.build:
         print('building fly')
         args = setup_build_dirs(args)
-        args.process = build_fly(args)
-        print('done:', args.process)
+        output = build_fly(args)
+        args.process = get_flydir_from_output(output)
+        print('Built to flydir:', args.process)
 
     # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
 
     if args.process is not None:
-        print('processing', args.process_flydir)
+        print('processing', args.process)
         processed_flies = process_fly(args)
