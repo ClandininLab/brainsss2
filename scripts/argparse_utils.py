@@ -34,12 +34,14 @@ def add_preprocess_arguments(parser):
     parser.add_argument("--correlation", action="store_true", help="???")
     parser.add_argument("--fictrac_qc", action="store_true", help="run fictrac QC")
     parser.add_argument("--bleaching_qc", action="store_true", help="run bleaching QC")
+    parser.add_argument("--zscore", action="store_true", help="zscore functional data")
+    parser.add_argument("--highpass", action="store_true", help="highpass filter functional data")
 
     parser.add_argument("--STA", action="store_true", help="run STA")
     parser.add_argument("--STB", action="store_true", help="run STB")
     # should these be a single argument that takes "pre" or "post" as arguments?
     parser.add_argument("--temporal_mean", type=str, help="run temporal mean (pre, post, both or None)",
-                        choices=['pre', 'post', 'both', 'None'])
+                        choices=['pre', 'post', 'both', 'None'], nargs='+', default=['None'])
     parser.add_argument("--h5_to_nii", action="store_true", help="run h52nii")
     parser.add_argument("--nice", action="store_true", help="nice")
     parser.add_argument(
@@ -96,3 +98,10 @@ def add_builder_arguments(parser):
     return parser
 
 
+def add_fictrac_qc_arguments(parser):
+    parser.add_argument('-d', '--dir', type=str, help='func directory')
+    parser.add_argument(
+        "--fps", type=float, default=100, help="frame rate of fictrac camera"
+    )
+    parser.add_argument("--resolution", type=float, help="resolution of fictrac data")
+    return(parser)
