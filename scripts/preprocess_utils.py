@@ -20,7 +20,7 @@ def run_shell_command(command_line):
 
         process_output, _ = command_line_process.communicate()
 
-        logging.info('got line from subprocess: {process_output.decode("utf-8")}')
+        logging.info(f'got line from subprocess: {process_output.decode("utf-8")}')
     except Exception as e:
         logging.info(f'Exception occured: {e}')
         logging.info('Subprocess failed')
@@ -42,7 +42,7 @@ def dict_to_args_list(d):
         elif isinstance(v, (int, float, str)):
             argslist.extend((f"--{k}", f"{v}"))
         elif isinstance(v, list):
-            argslist.extend(f"--{k}")
+            argslist.append(f"--{k}")
             argslist.extend(f"{vv}" for vv in v)
         elif v is not None:
             raise ValueError(f"unsupported type {type(v)}")
