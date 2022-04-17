@@ -2,41 +2,38 @@ import os
 import sys
 import json
 import numpy as np
-from shutil import copyfile
+import pandas as pd
+from shutil import copyfile, rmtree
 from xml.etree import ElementTree as ET
 from lxml import etree, objectify
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 import brainsss
-import argparse
 import logging
 from logging_utils import setup_logging
+import datetime
+from argparse_utils import get_base_parser, add_builder_arguments
+from preprocess_utils import dict_to_args_list
 
 
-def parse_args(input):
-    parser = argparse.ArgumentParser(description="build fly dir from imports")
-    parser.add_argument(
-        "-b", "--basedir", type=str, help="base directory for fly data", required=True
-    )
-    parser.add_argument(
-        "-d", "--import_date", type=str, help="date of import (YYYYMMDD"
-    )
-    parser.add_argument(
-        "-f", "--fly_dirs", type=str, help="specific fly dirs to process for date"
-    )
-    parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
-    parser.add_argument("-l", "--logdir", type=str, help="log directory")
-    parser.add_argument(
-        "--fictrac_import_dir", type=str, help="fictrac import directory"
-    )
-    parser.add_argument(
-        "--no_visual", action="store_true", help="do not copy visual data"
-    )
-    args = parser.parse_args(input)
+def parse_args(input, allow_unknown=True):
+    parser = get_base_parser('flybuilder')
+
+    parser = add_builder_arguments(parser)
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
     return args
 
 
-def build_fly(args):
-    ### Move folders from imports to fly dataset - need to restructure folders ###
+def setup_dirs(args):
+    if args.import_dir is None:
+        args.import_dir = os.path.join(args.basedir, "imports")
+    setattr(args, 'import_path', os.path.join(args.import_dir, args.import_date))
+    assert os.path.exists(args.import_path), f"Import path does not exist: {args.import_path}"
 
     if args.fictrac_import_dir is None:
         args.fictrac_import_dir = os.path.join(args.basedir, "fictrac")
@@ -44,120 +41,173 @@ def build_fly(args):
         args.fictrac_import_dir
     ), f"fictrac import dir {args.fictrac_import_dir} does not exist"
 
-    imports_dir = os.path.join(args.basedir, "imports")
-    import_path = os.path.join(imports_dir, args.import_date)
-    assert os.path.exists(import_path), f"Import path does not exist: {import_path}"
+    if args.target_dir is None:
+        args.target_dir = os.path.join(args.basedir, "processed")
+    if not os.path.exists(args.target_dir):
+        os.mkdir(args.target_dir)
+    return(args)
 
-    target_path = os.path.join(args.basedir, "processed")  # args['dataset_path']
-    if not os.path.exists(target_path):
-        os.mkdir(target_path)
 
-    # fly_dirs = None #args['fly_dirs']
-    # print = getattr(brainsss.print(logfile=logfile), 'print_to_log')
-    print("\nBuilding flies from directory {}".format(import_path))
-    width = 120
-    # print(F"\n{'#' * width}\n"
-    #         F"{'   Building flies from directory ' + os.path.split(flagged_dir)[-1] + '   ':#^{width}}\n"
-    #         F"{'#' * width}")
+def build_fly(args):
+
+    args = setup_dirs(args)
 
     # Assume this folder contains fly1 etc
-    # This folder may (or may not) contain separate areas # False, now enforcing experiment subfolders
     # Each area will have a T and a Z
     # Avoid grabbing other weird xml files, reference folder etc.
     # Need to move into fly_X folder that reflects it's date
 
     # get fly folders in flagged directory and sort to ensure correct fly order
-    print("Building flies from {}".format(import_path))
-    likely_fly_folders = os.listdir(import_path)
+    print(f"Building flies from {args.import_path}")
+    likely_fly_folders = os.listdir(args.import_path)
     brainsss.utils.sort_nicely(likely_fly_folders)
     likely_fly_folders = [i for i in likely_fly_folders if "fly" in i]
-    print(f"Found fly folders{str(likely_fly_folders):.>{width-17}}")
-
+    print(f"Found fly folders: {likely_fly_folders}")
     if args.fly_dirs is not None:
+        for fly_dir in args.fly_dirs:
+            if fly_dir not in likely_fly_folders:
+                raise FileNotFoundError(f"specified fly dir {fly_dir} not found in likely fly folders")
         likely_fly_folders = args.fly_dirs
-        print(f"Continuing with only{str(likely_fly_folders):.>{width-20}}")
+        print(f"Continuing with only{str(likely_fly_folders)}")
 
     for likely_fly_folder in likely_fly_folders:
         if "fly" in likely_fly_folder:
 
             # TODO: currently this just gets the next number. should generate in a way
             # that ensures that a single fly is not duplicated
-            new_fly_number = get_new_fly_number(target_path)
+            setattr(args, 'source_dir', os.path.join(args.import_path, likely_fly_folder))
+            new_fly_number = get_new_fly_number(args)
             # print(f'\n*Building {likely_fly_folder} as fly number {new_fly_number}*')
             print(
-                f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   ':-^{width}}"
+                f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   '}"
             )
 
-            # Define source fly directory
-            source_fly = os.path.join(import_path, likely_fly_folder)
+            # Define source fly directory - use args.source_dir instead
+            # source_fly = os.path.join(args.import_path, likely_fly_folder)
 
             # Define destination fly directory
             # fly_time = get_fly_time(source_fly)
-            new_fly_name = "fly_" + str(new_fly_number)
+            new_fly_name = f"fly_{str(new_fly_number)}"
 
-            destination_fly = os.path.join(target_path, new_fly_name)
-            assert not os.path.exists(
-                destination_fly
-            ), f"Fly directory already exists: {destination_fly}"
-            os.mkdir(destination_fly)
+            setattr(
+                args,
+                'destination_dir',
+                os.path.join(args.target_dir, new_fly_name)
+            )
+
+            overwrite_msg = None
+            if os.path.exists(args.destination_dir):
+                if not args.overwrite:
+                    raise FileExistsError(f"Fly dir {args.destination_dir} already exists, use -o to overwrite")
+                overwrite_msg = f"Overwriting existing fly dir {args.destination_dir}"
+
+                rmtree(os.path.join(args.destination_dir))
+
+            os.mkdir(args.destination_dir)
 
             # put log file into fly directory
-            setattr(args, 'dir', destination_fly)
             args = setup_logging(args, logtype='flybuilder',
-                logdir=os.path.join(destination_fly, "logs"))
+                logdir=os.path.join(args.destination_dir, "logs"))
 
-            logging.info(f"Created fly directory:{destination_fly:.>{width-22}}")
+            print(f'Using logger: {logging.getLogger()}')
+            logging.info(f"Created fly directory:{args.destination_dir}")
+            if overwrite_msg is not None:
+                logging.info(overwrite_msg)
 
             # Copy fly data
-            copy_fly(source_fly, destination_fly, args)
-            logging.info('Copied fly data from {} to {}'.format(source_fly, destination_fly))
+            copy_fly(args)
+            logging.info(f'Copied fly data from {args.source_dir} to {args.destination_dir}')
 
             # Add date to fly.json file
             try:
-                add_date_to_fly(destination_fly)
+                add_date_to_fly(args)
             except Exception as e:
-                print(str(e))
+                print(e)
+
+            add_fly_to_conversion_db(args)
 
             # Add json metadata to master dataset
-            add_fly_to_xlsx(destination_fly, print)
+            try:
+                add_fly_to_xlsx(args)
+            except Exception as e:
+                print(e)
+
+
+def add_fly_to_conversion_db(args):
+    conversion_db_file = os.path.join(args.target_dir, "conversion_db.csv")
+    if os.path.exists(conversion_db_file):
+        df = pd.read_csv(conversion_db_file)
+    else:
+        df = pd.DataFrame(columns=['import_dir', 'processed_dir', 'conversion_date'])
+    flynum = args.destination_dir.split('/')[-1].split('_')[1]
+
+    df = pd.concat((df, pd.DataFrame.from_records([
+        {'flynum': flynum,
+        'import_dir': args.source_dir,
+        'processed_dir': args.destination_dir,
+        'collection_date': args.import_date,
+        'collection_session': args.source_dir.split('/')[-1],
+        'conversion_date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}])))
+    df.to_csv(conversion_db_file, index=False)
+
+
+def get_new_fly_number(args):
+    # first check to see if this fly has already been converted
+    conversion_db_file = os.path.join(args.target_dir, "conversion_db.csv")
+    new_fly_number = None
+    if os.path.exists(conversion_db_file):
+        df = pd.read_csv(conversion_db_file, index_col=None)
+        if args.source_dir in df.import_dir.values:
+            print(f"Fly already converted: {args.source_dir} as ")
+            new_fly_number = df.flynum[df.import_dir == args.source_dir].values[0]
+    if new_fly_number is None:
+        oldest_fly = 0
+        for current_fly_folder in os.listdir(args.target_dir):
+            if current_fly_folder.startswith("fly"):
+                fly_num = current_fly_folder.split("_")[-1]
+                if int(fly_num) > oldest_fly:
+                    oldest_fly = int(fly_num)
+        new_fly_number = oldest_fly + 1
+    return str(new_fly_number).zfill(3)
 
 
 # TODO: this seems to have some dangerous assumptions
 # and uses bare excepts
-def add_date_to_fly(destination_fly):
+def add_date_to_fly(args):
     """ get date from xml file and add to fly.json"""
 
-    ### Get date
-    try:  # Check if there are func folders
-        # Get func folders
-        func_folders = [
-            os.path.join(destination_fly, x)
-            for x in os.listdir(destination_fly)
-            if "func" in x
-        ]
+    # Get date
+    # Get func folders
+    func_folders = [
+        os.path.join(args.destination_dir, x)
+        for x in os.listdir(args.destination_dir)
+        if "func" in x
+    ]
+    if len(func_folders) > 0:
         brainsss.utils.sort_nicely(func_folders)
         func_folder = func_folders[0]
         # Get full xml file path
         xml_file = os.path.join(func_folder, "imaging", "functional.xml")
-    except:  # Use anatomy folder
+    else:  # Use anatomy folder
         # Get anat folders
         anat_folders = [
-            os.path.join(destination_fly, x)
-            for x in os.listdir(destination_fly)
+            os.path.join(args.destination_dir, x)
+            for x in os.listdir(args.destination_dir)
             if "anat" in x
         ]
         brainsss.utils.sort_nicely(anat_folders)
         anat_folder = anat_folders[0]
         # Get full xml file path
         xml_file = os.path.join(anat_folder, "imaging", "anatomy.xml")
+
     # Extract datetime
     datetime_str, _, _ = get_datetime_from_xml(xml_file)
     # Get just date
     date = datetime_str.split("-")[0]
     time = datetime_str.split("-")[1]
 
-    ### Add to fly.json
-    json_file = os.path.join(destination_fly, "fly.json")
+    # Add to fly.json
+    json_file = os.path.join(args.destination_dir, "fly.json")
     with open(json_file, "r+") as f:
         metadata = json.load(f)
         metadata["date"] = str(date)
@@ -167,7 +217,7 @@ def add_date_to_fly(destination_fly):
         f.truncate()
 
 
-def copy_fly(source_fly, destination_fly, args):
+def copy_fly(args):
 
     """ There will be two types of folders in a fly folder.
     1) func_x folder
@@ -176,10 +226,12 @@ def copy_fly(source_fly, destination_fly, args):
     For anatomy folders, only copy folder. There will also be
     3) fly json data """
 
+    source_fly = args.source_dir
+    destination_fly = args.destination_dir
+
     # look at every item in source fly folder
     for item in os.listdir(source_fly):
-        logging.info("Currently looking at item: {}".format(item))
-        ##sys.stdout.flush()
+        logging.info(f"Currently looking at item: {item}")
 
         # Handle folders
         if os.path.isdir(os.path.join(source_fly, item)):
@@ -189,7 +241,6 @@ def copy_fly(source_fly, destination_fly, args):
             expt_folder = os.path.join(destination_fly, item)
             os.mkdir(expt_folder)
             logging.info("Created directory: {}".format(expt_folder))
-            ##sys.stdout.flush()
 
             # Is this folder an anatomy or functional folder?
             if "anat" in item:
@@ -215,16 +266,12 @@ def copy_fly(source_fly, destination_fly, args):
         # Copy fly.json file
         else:
             if item == "fly.json":
-                ##print('found fly json file')
-                ##sys.stdout.flush()
                 source_path = os.path.join(source_fly, item)
                 target_path = os.path.join(destination_fly, item)
-                ##print('Will copy from {} to {}'.format(source_path, target_path))
-                ##sys.stdout.flush()
+                logging.info('Copying from {} to {}'.format(source_path, target_path))
                 copyfile(source_path, target_path)
             else:
                 logging.warning("Invalid file in fly folder (skipping): {}".format(item))
-                ##sys.stdout.flush()
 
 
 def copy_bruker_data(source, destination, folder_type, print):
@@ -240,7 +287,7 @@ def copy_bruker_data(source, destination, folder_type, print):
 
         # If the item is a file
         else:
-            ### Change file names and filter various files
+            # Change file names and filter various files
             # Don't copy these files
             if "SingleImage" in item:
                 continue
@@ -259,7 +306,7 @@ def copy_bruker_data(source, destination, folder_type, print):
                         os.path.split(destination)[0], "visual"
                     )
                     os.mkdir(args.visual_import_dir)
-                except:
+                except (FileExistsError, FileNotFoundError):
                     pass
                 target_item = os.path.join(
                     os.path.split(destination)[0], "visual", item
@@ -299,11 +346,7 @@ def copy_bruker_data(source, destination, folder_type, print):
 
 
 def copy_file(source, target, print):
-    # print('Transfering file {}'.format(target))
-    to_print = ("/").join(target.split("/")[-4:])
-    width = 120
-    print(f"Transfering file{to_print:.>{width-16}}")
-    ##sys.stdout.flush()
+    logging.info(f'Copy file {source} to {target}')
     copyfile(source, target)
 
 
@@ -337,7 +380,7 @@ def copy_fictrac(func_dir, args):
         datetime = file.split("-")[1][:-4]
         test_ymd = datetime.split("_")[0]
         test_time = datetime.split("_")[1]
-        test_hour = test_time[0:2]
+        test_hour = test_time[:2]
         test_minute = test_time[2:4]
         test_second = test_time[4:6]
         test_total_seconds = (
@@ -347,7 +390,7 @@ def copy_fictrac(func_dir, args):
         # Year/month/day must be exact
         if true_ymd != test_ymd:
             continue
-        logging.info("Found file from same day: {}".format(file))
+        logging.info(f"Found file from same day: {file}")
 
         # Time must be within 10min
         time_difference = np.abs(true_total_seconds - test_total_seconds)
@@ -359,15 +402,13 @@ def copy_fictrac(func_dir, args):
         fp = os.path.join(args.fictrac_import_dir, file)
         file_size = os.path.getsize(fp)
         if file_size > 30000000:  # 30MB
-            width = 120
-            logging.info(f"Found correct .dat file{file:.>{width-23}}")
+            logging.info(f"Found correct .dat file{file}")
             datetime_correct = datetime
             break
 
     if datetime_correct is None:
-        width = 120
         logging.warning(
-            f"{'   No fictrac data found --- continuing without fictrac data   ':*^{width}}"
+            f"{'   No fictrac data found --- continuing without fictrac data   '}"
         )
         return
 
@@ -376,26 +417,13 @@ def copy_fictrac(func_dir, args):
         file for file in os.listdir(args.fictrac_import_dir) if datetime_correct in file
     ]
 
-    # correct_time_files = []
-    # for file in os.listdir(fictrac_folder):
-    #     if datetime_correct in file:
-    #         correct_time_files.append(file)
-
-    # print('Found these files with correct times: {}'.format(correct_time_files))
-    ##sys.stdout.flush()
-
     # Now transfer these 4 files to the fly
     for file in correct_time_files:
         target_path = os.path.join(fictrac_destination, file)
         source_path = os.path.join(args.fictrac_import_dir, file)
-        to_print = ("/").join(target_path.split("/")[-4:])
-        logging.info(f"Transfering file{to_print:.>{width-16}}")
-        # print('Transfering {}'.format(target_path))
-        ##sys.stdout.flush()
         copyfile(source_path, target_path)
 
-    ### Create empty xml file.
-    # Update this later
+    # Create empty xml file - Update this later
     root = etree.Element("root")
     fictrac = objectify.Element("fictrac")
     root.append(fictrac)
@@ -408,20 +436,16 @@ def copy_fictrac(func_dir, args):
 
 def create_imaging_json(xml_source_file, print):
 
-    # Make empty dict
-    source_data = {}
-
     # Get datetime
     try:
         datetime_str, _, _ = get_datetime_from_xml(xml_source_file)
-    except:
+    except FileNotFoundError:
         logging.warning("No xml or cannot read.")
-        ##sys.stdout.flush()
         return
+
     date = datetime_str.split("-")[0]
     time = datetime_str.split("-")[1]
-    source_data["date"] = str(date)
-    source_data["time"] = str(time)
+    source_data = {"date": str(date), "time": str(time)}
 
     # Get rest of data
     tree = objectify.parse(xml_source_file)
@@ -471,15 +495,11 @@ def get_expt_time(directory):
     _, _, datetime_dict = get_datetime_from_xml(xml_file)
     true_ymd = datetime_dict["year"] + datetime_dict["month"] + datetime_dict["day"]
     true_total_seconds = (
-        int(datetime_dict["hour"]) * 60 * 60
-        + int(datetime_dict["minute"]) * 60
-        + int(datetime_dict["second"])
+        int(datetime_dict["hour"]) * 60 * 60 +
+        int(datetime_dict["minute"]) * 60 +
+        int(datetime_dict["second"])
     )
 
-    ##print('dict: {}'.format(datetime_dict))
-    ##print('true_ymd: {}'.format(true_ymd))
-    ##print('true_total_seconds: {}'.format(true_total_seconds))
-    ##sys.stdout.flush()
     return true_ymd, true_total_seconds
 
 
@@ -489,8 +509,8 @@ def get_fly_time(fly_folder):
     xml_files = []
     xml_files = get_xml_files(fly_folder, xml_files)
 
-    ##print('found xml files: {}'.format(xml_files))
-    ##sys.stdout.flush()
+    logging.info(f'found xml files: {xml_files}')
+
     datetimes_str = []
     datetimes_int = []
     for xml_file in xml_files:
@@ -500,12 +520,10 @@ def get_fly_time(fly_folder):
 
     # Now pick the oldest datetime
     datetimes_int = np.asarray(datetimes_int)
-    ##print('Found datetimes: {}'.format(datetimes_str))
-    ##sys.stdout.flush()
+    logging.info(f'Found datetimes: {datetimes_str}')
     index_min = np.argmin(datetimes_int)
     datetime = datetimes_str[index_min]
-    ##print('Found oldest datetime: {}'.format(datetime))
-    ##sys.stdout.flush()
+    logging.info(f'Found oldest datetime: {datetime}')
     return datetime
 
 
@@ -515,23 +533,19 @@ def get_xml_files(fly_folder, xml_files):
         full_path = os.path.join(fly_folder, item)
         if os.path.isdir(full_path):
             xml_files = get_xml_files(full_path, xml_files)
-        else:
-            if (
-                ".xml" in item
-                and "_Cycle" not in item
-                and "fly.xml" not in item
-                and "scan.xml" not in item
-                and "expt.xml" not in item
-            ):
-                xml_files.append(full_path)
-                ##print('Found xml file: {}'.format(full_path))
-                ##sys.stdout.flush()
+        elif (
+            ".xml" in item
+            and "_Cycle" not in item
+            and "fly.xml" not in item
+            and "scan.xml" not in item
+            and "expt.xml" not in item):
+            xml_files.append(full_path)
+            logging.info(f'Found xml file: {full_path}')
     return xml_files
 
 
 def get_datetime_from_xml(xml_file):
-    ##print('Getting datetime from {}'.format(xml_file))
-    ##sys.stdout.flush()
+    logging.info(f'Getting datetime from {xml_file}')
     tree = ET.parse(xml_file)
     root = tree.getroot()
     datetime = root.get("date")
@@ -553,11 +567,7 @@ def get_datetime_from_xml(xml_file):
     am_pm = datetime.split(" ")[-1]
     if am_pm == "AM" and hour == "12":
         hour = str(00)
-    elif am_pm == "AM":
-        pass
-    elif am_pm == "PM" and hour == "12":
-        pass
-    else:
+    elif am_pm != "AM" and (am_pm != "PM" or hour != "12"):
         hour = str(int(hour) + 12)
 
     # Add zeros if needed
@@ -583,29 +593,6 @@ def get_datetime_from_xml(xml_file):
     return datetime_str, datetime_int, datetime_dict
 
 
-def get_new_fly_number(target_path):
-    oldest_fly = 0
-    for current_fly_folder in os.listdir(target_path):
-        if current_fly_folder.startswith("fly"):
-            fly_num = current_fly_folder.split("_")[-1]
-            if int(fly_num) > oldest_fly:
-                oldest_fly = int(fly_num)
-    new_fly_number = oldest_fly + 1
-    return str(new_fly_number).zfill(3)
-
-
-# OLDER VERSION:
-# def get_new_fly_number(target_path):
-#     oldest_fly = 0
-#     for current_fly_folder in os.listdir(target_path):
-#         if 'fly' in current_fly_folder and current_fly_folder[-3] == '_':
-#             last_2_chars = current_fly_folder[-2:]
-#             if int(last_2_chars) > oldest_fly:
-#                 oldest_fly = int(last_2_chars)
-#     current_fly_number = oldest_fly + 1
-#     return current_fly_number
-
-
 def load_json(file):
     with open(file, "r") as f:
         data = json.load(f)
@@ -618,103 +605,116 @@ def load_xml(file):
     return root
 
 
-def add_times_to_jsons(destination_fly):
-    """ Deprecated """
-    # Do for each func_x folder
-    func_folders = [
-        os.path.join(destination_fly, x)
-        for x in os.listdir(destination_fly)
-        if "func" in x
-    ]
-    for func_folder in func_folders:
-        pass
-
-
-def add_fly_to_xlsx(fly_folder, print):
-
-    ### TRY TO LOAD ELSX ###
+# NOTE: this is seems like an inefficient way to do this
+# I would save as a standard data frame
+# or save as a json into each folder and then create a separate script to generate the
+# data frame
+def add_fly_to_xlsx(args):
+    # try to load excel file
     # TODO: should use a standard format like TSV instead of xlsx
-    try:
-        xlsx_path = "/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/20190101_walking_dataset/master_2P.xlsx"
-        wb = load_workbook(filename=xlsx_path, read_only=False)
+    if args.xlsx_file is None:
+        args.xlsx_file = os.path.join(args.basedir, "master_2P.xlsx")
+    if os.path.exists(args.xlsx_file):
+        wb = load_workbook(filename=args.xlsx_file, read_only=False)
         ws = wb.active
-    except:
-        logging.warning(
-            "FYI you have no excel metadata sheet found, so unable to append metadata for this fly."
-        )
-        return
+        logging.info(f'Loaded existing xlsx file: {args.xlsx_file}')
+    else:
+        logging.info(f'Creating new xlsx file: {args.xlsx_file}')
+        wb = Workbook()
+        ws = wb.active
+        title_row = [
+            'fly_id',
+            'expt_id',
+            'date',
+            'brain_area',
+            "genotype",
+            'visual_input',
+            'unknown',
+            "fly_notes",
+            "expt_notes",
+            "expt_time",
+            "circadian_on",
+            "circadian_off",
+            "gender",
+            "age",
+            "temp",
+            "laser_power",
+            "PMT_green",
+            "PMT_red",
+            "x_dim",
+            "y_dim",
+            "z_dim",
+            "x_voxel_size",
+            "y_voxel_size",
+            "z_voxel_size",
+        ]
+        ws.append(title_row)
 
-    ### TRY TO LOAD FLY METADATA ###
+    # TRY TO LOAD FLY METADATA
     try:
-        fly_file = os.path.join(fly_folder, "fly.json")
+        fly_file = os.path.join(args.destination_dir, "fly.json")
         fly_data = load_json(fly_file)
-    except:
+    except FileNotFoundError:
         logging.warning("FYI no *fly.json* found; this will not be logged in your excel sheet.")
-        fly_data = {}
-        fly_data["circadian_on"] = None
-        fly_data["circadian_off"] = None
-        fly_data["sex"] = None  # biological sex rather than gender
-        fly_data["age"] = None
-        fly_data["temp"] = None
-        fly_data["notes"] = None
-        fly_data["date"] = None
-        fly_data["genotype"] = None
+        fly_data = {
+            "circadian_on": None,
+            "circadian_off": None,
+            "gender": None,
+            "age": None,
+            "temp": None,
+            "notes": None,
+            "date": None,
+            "genotype": None}
 
-    expt_folders = []
-    expt_folders = [
-        os.path.join(fly_folder, x) for x in os.listdir(fly_folder) if "func" in x
+    func_folders = [
+        os.path.join(args.destination_dir, x) for x in os.listdir(args.destination_dir) if "func" in x
     ]
-    brainsss.utils.sort_nicely(expt_folders)
-    for expt_folder in expt_folders:
+    brainsss.utils.sort_nicely(func_folders)
+    for func_folder in func_folders:
 
-        ### TRY TO LOAD EXPT METADATA ###
+        # TRY TO LOAD EXPT METADATA
         try:
-            expt_file = os.path.join(expt_folder, "expt.json")
+            expt_file = os.path.join(func_folder, "expt.json")
             expt_data = load_json(expt_file)
-        except:
+        except FileNotFoundError:
             logging.warning(
                 "FYI no *expt.json* found; this will not be logged in your excel sheet."
             )
-            expt_data = {}
-            expt_data["brain_area"] = None
-            expt_data["notes"] = None
-            expt_data["time"] = None
+            expt_data = {"brain_area": None, "notes": None, "time": None}
 
-        ### TRY TO LOAD SCAN DATA ###
+        # TRY TO LOAD SCAN DATA
         try:
-            scan_file = os.path.join(expt_folder, "imaging", "scan.json")
+            scan_file = os.path.join(func_folder, "imaging", "scan.json")
             scan_data = load_json(scan_file)
             scan_data["x_voxel_size"] = "{:.1f}".format(scan_data["x_voxel_size"])
             scan_data["y_voxel_size"] = "{:.1f}".format(scan_data["y_voxel_size"])
             scan_data["z_voxel_size"] = "{:.1f}".format(scan_data["z_voxel_size"])
-        except:
-            scan_data = {}
-            scan_data["laser_power"] = None
-            scan_data["PMT_green"] = None
-            scan_data["PMT_red"] = None
-            scan_data["x_dim"] = None
-            scan_data["y_dim"] = None
-            scan_data["z_dim"] = None
-            scan_data["x_voxel_size"] = None
-            scan_data["y_voxel_size"] = None
-            scan_data["z_voxel_size"] = None
+        except FileNotFoundError:
+            scan_data = {
+                "laser_power": None,
+                "PMT_green": None,
+                "PMT_red": None,
+                "x_dim": None,
+                "y_dim": None,
+                "z_dim": None,
+                "x_voxel_size": None,
+                "y_voxel_size": None,
+                "z_voxel_size": None}
 
-        visual_file = os.path.join(expt_folder, "visual", "visual.json")
+        visual_file = os.path.join(func_folder, "visual", "visual.json")
         try:
             visual_data = load_json(visual_file)
-            visual_input = visual_data[0]["name"] + " ({})".format(len(visual_data))
-        except:
+            visual_input = visual_data[0]["name"] + f" ({len(visual_data)})"
+        except FileNotFoundError:
             visual_input = None
 
         # Get fly_id
-        fly_folder = os.path.split(os.path.split(expt_folder)[0])[-1]
-        fly_id = fly_folder.split("_")[-1]
+        fly_id = args.destination_dir.split("_")[-1]
 
         # Get expt_id
-        expt_id = expt_folder.split("_")[-1]
+        expt_id = func_folder.split("_")[-1]
 
         # Append the new row
-        new_row = []
         new_row = [
             int(fly_id),
             int(expt_id),
@@ -728,7 +728,7 @@ def add_fly_to_xlsx(fly_folder, print):
             expt_data["time"],
             fly_data["circadian_on"],
             fly_data["circadian_off"],
-            fly_data["sex"],
+            fly_data["gender"],
             fly_data["age"],
             fly_data["temp"],
             scan_data["laser_power"],
@@ -745,16 +745,18 @@ def add_fly_to_xlsx(fly_folder, print):
         ws.append(new_row)
 
     # Save the file
-    wb.save(xlsx_path)
+    wb.save(args.xlsx_file)
+
+
+# for use from outside
+def build_fly_from_argdict(argdict):
+    arglist = dict_to_args_list(argdict)
+    args = parse_args(arglist)
+    build_fly(args)
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     assert os.path.exists(args.basedir), f"basedir {args.basedir} does not exist"
-
-    if args.basedir is None:
-        args.basedir = "/Users/poldrack/data_unsynced/brainsss/flydata"
-    if args.import_date is None:
-        args.import_date = "20220329"
 
     build_fly(args)
