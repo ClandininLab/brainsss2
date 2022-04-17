@@ -1,12 +1,12 @@
 ## File organization scheme
 
-Original data:
-
-located in basedir/imports
+The overall idea here is to develop a scheme that departs minimally from the existing scheme, while also moving towards a bit more systematicity in the organization of the various files.
 
 ### Original data
 
-Let's say that we want fly_2 recorded on march 29, 2022.  The organization in the imports folder looks like this:
+The original data are located in basedir/imports
+
+Let's say that we want fly_2 recorded on March 29, 2022.  The organization in the imports folder looks like this:
 
 imports
 ├── 20220329
@@ -49,7 +49,7 @@ fictrac
 
 ### Fly builder
 
-The fly_builder.py script copies the data from the imports directory into a new fly directory, creating a new directory structure within the processed data directory.  The name of the directory is generated automatically based on the existing fly directories, which have the naming scheme "fly_XXX" where XXX is a zero-padded three digit number.  A newly built fly is given the next available number.
+The fly_builder.py script copies the data from the imports directory into a new fly directory, creating a new directory structure within the processed data directory (which sits in the same base directory as the imports directory).  The name of the directory is generated automatically based on the existing fly directories, which have the naming scheme "fly_XXX" where XXX is a zero-padded three digit number.  A newly built fly is given the next available number.
 
 TODO: devise a way to ensure a one-one mapping between import datasets and fly numbers.  currently running fly_builder.py twice on the same import dataset would generate two fly numbers.
 
@@ -74,7 +74,6 @@ fly_009
 │   │   ├── functional.xml
 │   │   ├── functional_channel_1.nii
 │   │   ├── functional_channel_2.nii
-│   │   ├── functional_channel_2_moco.h5
 │   │   ├── scan.json
 │   │   ├── timestamps.h5
 │   │   └── voltage_output.xml
@@ -85,20 +84,6 @@ fly_009
 │       ├── photodiode.csv
 │       ├── photodiode.h5
 │       └── stimulus_metadata.pkl
-├── func_1
-│   ├── QC
-│   ├── fictrac
-│   ├── imaging
-│   │   ├── TSeries-12172018-1322-006_Cycle00001_VoltageRecording_001.xml
-│   │   ├── functional.xml
-│   │   ├── functional_channel_1.nii
-│   │   ├── functional_channel_2.nii
-│   │   ├── scan.json
-│   │   └── voltage_output.xml
-│   ├── logs
-│   ├── preproc
-│   └── visual
-│       └── photodiode.csv
 └── logs
     └── flybuilder_20220411-170431.txt
 
