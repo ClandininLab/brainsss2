@@ -6,6 +6,7 @@ import sys
 import os
 import brainsss
 import logging
+from pathlib import Path
 from logging_utils import setup_logging
 from preprocess_utils import (
     load_user_settings_from_json,
@@ -16,7 +17,8 @@ from preprocess_utils import (
 from argparse_utils import (
     get_base_parser,
     add_builder_arguments,
-    add_preprocess_arguments
+    add_preprocess_arguments,
+    add_fictrac_qc_arguments,
 )
 
 
@@ -27,6 +29,8 @@ def parse_args(input):
     parser = add_builder_arguments(parser)
 
     parser = add_preprocess_arguments(parser)
+
+    parser = add_fictrac_qc_arguments(parser)
 
     return parser.parse_args(input)
 
@@ -71,18 +75,27 @@ def build_fly(args, use_sbatch=False):
     return output
 
 
-# generate a more generic runner for func processing
+def get_dirs_to_process(args):
+    """get the directories to process from the fly directory"""
+    return {
+        'func': [i.as_posix() for i in Path(args.process).glob('func_*')], 
+        'anat': [i.as_posix() for i in Path(args.process).glob('anat_*')]
+    }
 
 
-def run_job(funcdir, args, sbatch_dict):
-    job_ids = []
-    if args.verbose:
-        print(funcfiles)
+def run_fictrac_qc(args, use_sbatch=False):
 
-    for funcfile in funcfiles:
-        funcdir = os.path.dirname(funcfile)
+    funcdirs = get_dirs_to_process(args)['func']
+    assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
+
+    for func in funcdirs:
         directory = os.path.join(func, "fictrac")
-        if os.path.exists(directory):
+        logging.info(f'running fictrac_qc.py on {directory}')
+        if not os.path.exists(directory):
+            logging.info(f"{directory} not found, skipping fictrac_qc")
+            continue
+
+        if use_sbatch:
             args_dict = {"logfile": args.logfile, "directory": directory, "fps": 100}
             script = "fictrac_qc.py"
             job_id = brainsss.sbatch(
@@ -97,42 +110,21 @@ def run_job(funcdir, args, sbatch_dict):
                 nodes=nodes,
             )
             job_ids.append(job_id)
-        else:
-            logging.info(f"{directory} not found, skipping fictrac_qc")
-    for job_id in job_ids:
-        brainsss.wait_for_job(job_id, logfile, com_path)
+        else: # run locally
+            logging.info('running fictrac_qc.py locally')
+            setattr(args, 'dir', directory)  # create required arg for fictrac_qc.py
+            args.logdir = None
+            argstring = ' '.join(dict_to_args_list(args.__dict__))
+            print(f'fictrac_qc: processing {directory}')
 
+            print(argstring)
+            output = run_shell_command(f'python fictrac_qc.py {argstring}')
+        return(output)
 
-def run_fictrac_qc(funcfiles, args):
+    if use_sbatch:
+        for job_id in job_ids:
+            brainsss.wait_for_job(job_id, logfile, com_path)
 
-    ##################
-    ### Fictrac QC ###
-    ##################
-
-    job_ids = []
-    print(funcfiles)
-    for funcfile in funcfiles:
-        func = os.path.dirname(funcfile)
-        directory = os.path.join(func, "fictrac")
-        if os.path.exists(directory):
-            args_dict = {"logfile": args.logfile, "directory": directory, "fps": 100}
-            script = "fictrac_qc.py"
-            job_id = brainsss.sbatch(
-                jobname="fictracqc",
-                script=os.path.join(scripts_path, script),
-                modules=modules,
-                args=args_dict,
-                logfile=logfile,
-                time=1,
-                mem=1,
-                nice=nice,
-                nodes=nodes,
-            )
-            job_ids.append(job_id)
-        else:
-            logging.info(f"{directory} not found, skipping fictrac_qc")
-    for job_id in job_ids:
-        brainsss.wait_for_job(job_id, logfile, com_path)
 
 
 def run_stim_triggered_beh():
@@ -446,42 +438,15 @@ def temporal_mean_brain_post():
 
 def process_fly(args):
     """process a single fly"""
-    logging.info(f"processing fly from {fly_dir}")
 
-    funcs = []
-    anats = []
+    assert os.path.exists(args.process)
+    logging.info(f"processing fly from {args.process}")
+
     if args.test:
         print("test mode, not actually processing flies")
-        return fly_dir
-    logging.info(f"processing fly dir: {fly_dir}")
-    fly_directory = os.path.join(args.target_dir, fly_dir)
-    if args.dirtype == "func" or args.dirtype is None:
-        funcs.extend(
-            [
-                os.path.join(fly_directory, x)
-                for x in os.listdir(fly_directory)
-                if "func" in x
-            ]
-        )
-    if args.dirtype == "anat" or args.dirtype is None:
-        anats.extend(
-            [
-                os.path.join(fly_directory, x)
-                for x in os.listdir(fly_directory)
-                if "anat" in x
-            ]
-        )
-    logging.info(
-        f"found {len(funcs)} functional files and {len(anats)} anatomical files"
-    )
-
-    brainsss.utils.sort_nicely(funcs)
-    brainsss.utils.sort_nicely(anats)
-    funcanats = funcs + anats
-    dirtypes = ["func"] * len(funcs) + ["anat"] * len(anats)
 
     if args.fictrac_qc:
-        fictrac_output = run_fictrac_qc(funcs, args)
+        fictrac_output = run_fictrac_qc(args)
 
     if args.stim_triggered_beh:
         stb_output = run_stim_triggered_beh()
@@ -489,7 +454,7 @@ def process_fly(args):
     if args.bleaching_qc:
         bleaching_output = run_bleaching_qc()
 
-    if args.temporal_mean_brain_pre:
+    if 'pre' in args.temporal_mean or 'both' in args.temporal_mean:
         mean_brain_pre_output = run_temporal_mean_brain_pre()
 
     if args.motion_correction:
@@ -510,15 +475,9 @@ def process_fly(args):
     if args.h5_to_nii:
         h5_to_nii_output = run_h5_to_nii()
 
-    if args.temporal_mean_brain_post:
+    if 'post' in args.temporal_mean or 'both' in args.temporal_mean:
         mean_brain_post_output = run_temporal_mean_brain_post()
 
-    ############
-    ### Done ###
-    ############
-
-    brainsss.print_footer(logfile, width)
-    return None
 
 
 def setup_build_dirs(args):
@@ -547,12 +506,17 @@ if __name__ == "__main__":
 
     args = parse_args(sys.argv[1:])
     print(args)
-    args = setup_modules(args)
 
     if args.target_dir is None:
-        args.target_dir = os.path.join(args.basedir, "processed")
-    if not os.path.exists(args.target_dir):
-        os.mkdir(args.target_dir)
+        if args.process:
+            args.target_dir = os.path.dirname(args.process)
+        else:
+            args.target_dir = os.path.join(args.basedir, "processed")
+            if not os.path.exists(args.target_dir):
+                os.mkdir(args.target_dir)
+    
+    if 'dir' not in args or args.dir is None:
+        setattr(args, 'dir', args.target_dir)
 
     args = setup_logging(args, logtype='preprocess',
         logdir=os.path.join(args.target_dir, "logs"))
@@ -563,7 +527,7 @@ if __name__ == "__main__":
     print(args)
 
     if args.build:
-        print('building fly')
+        logging.info("building fly")
         args = setup_build_dirs(args)
         output = build_fly(args)
         args.process = get_flydir_from_output(output)
@@ -573,4 +537,4 @@ if __name__ == "__main__":
 
     if args.process is not None:
         print('processing', args.process)
-        processed_flies = process_fly(args)
+        process_fly(args)
