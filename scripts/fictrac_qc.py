@@ -4,22 +4,24 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from brainsss import smooth_and_interp_fictrac, load_fictrac
-import argparse
+from argparse_utils import (
+    get_base_parser,
+    add_fictrac_qc_arguments,
+)
 from logging_utils import setup_logging
 
 
-def parse_args(input):
-    parser = argparse.ArgumentParser(description="process fictrac qc")
-    parser.add_argument(
-        "-d", "--dir", type=str, help="directory containing fictrac data", required=True
-    )
-    parser.add_argument(
-        "--fps", type=float, default=100, help="frame rate of fictrac camera"
-    )
-    # TODO: What is this? not clear from smooth_and_interp_fictrac
-    parser.add_argument("--resolution", type=float, help="resolution of fictrac data")
-    parser.add_argument('-v', "--verbose", action="store_true", help="verbose output")
-    args = parser.parse_args(input)
+def parse_args(input, allow_unknown=True):
+    parser = get_base_parser('fictrac_qc')
+   
+    parser = add_fictrac_qc_arguments(parser)
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
     return args
 
 
