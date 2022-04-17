@@ -4,49 +4,70 @@
 
 import sys
 import os
-import json
 import brainsss
 import logging
-import argparse
-from pathlib import Path
 from logging_utils import setup_logging
 from preprocess_utils import (
-    parse_args,
+    load_user_settings_from_json,
+    setup_modules,
     dict_to_args_list,
-    load_user_settings_from_json
+    run_shell_command
+)
+from argparse_utils import (
+    get_base_parser,
+    add_builder_arguments,
+    add_preprocess_arguments
 )
 
 
-def build_fly(dir_to_build, args, use_sbatch=False):
-    """build a single fly"""
-    logging.info(f"building fly from {dir_to_build}")
 
-    args = {
+def parse_args(input):
+    parser = get_base_parser('preprocess')
+   
+    parser = add_builder_arguments(parser)
+
+    parser = add_preprocess_arguments(parser)
+
+    return parser.parse_args(input)
+
+
+def build_fly(args, use_sbatch=False):
+    """build a single fly"""
+    logging.info(f"building flies from {args.import_path}")
+
+    args_dict = {
         "logfile": args.logfile,
         "import_date": args.import_date,
+        'import_path': args.import_path,
         "target_dir": args.target_dir,
-        "fly_dirs": fly_dirs,
-        "user": user,
+        "fly_dirs": args.fly_dirs,
+        "user": args.user,
     }
-
-    script = "fly_builder.py"
-    job_id = brainsss.sbatch(
-        jobname="bldfly",
-        script=os.path.join(scripts_path, script),
-        modules=modules,
-        args=args,
-        logfile=logfile,
-        time=1,
-        mem=1,
-        nice=nice,
-        nodes=nodes,
-    )
-    func_and_anats = brainsss.wait_for_job(job_id, logfile, com_path)
-    func_and_anats = func_and_anats.split("\n")[:-1]
-    funcs = [
-        x.split(":")[1] for x in func_and_anats if "func:" in x
-    ]  # will be full paths to fly/expt
-    anats = [x.split(":")[1] for x in func_and_anats if "anat:" in x]
+    logging.info(args_dict)
+    if use_sbatch:
+        job_id = brainsss.sbatch(
+            jobname="bldfly",
+            script=os.path.join(scripts_path, script),
+            modules=modules,
+            args=args,
+            logfile=logfile,
+            time=1,
+            mem=1,
+            nice=nice,
+            nodes=nodes,
+        )
+        func_and_anats = brainsss.wait_for_job(job_id, logfile, com_path)
+    
+        func_and_anats = func_and_anats.split("\n")[:-1]
+        funcs = [
+            x.split(":")[1] for x in func_and_anats if "func:" in x
+        ]  # will be full paths to fly/expt
+        anats = [x.split(":")[1] for x in func_and_anats if "anat:" in x]
+    else:
+        # run locally
+        logging.info('running fly_builder.py locally')
+        argstring = ' '.join(dict_to_args_list(args.__dict__))
+        run_shell_command(f'python fly_builder.py {argstring}')
     return None
 
 
@@ -423,7 +444,7 @@ def temporal_mean_brain_post():
         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
-def process_fly(fly_dir, args):
+def process_fly(args):
     """process a single fly"""
     logging.info(f"processing fly from {fly_dir}")
 
@@ -500,29 +521,32 @@ def process_fly(fly_dir, args):
     return None
 
 
-def setup_modules(args):
-    # change modules from a list to a single string
-    if args.modules is None:
-        module_list = [
-            "gcc/6.3.0",
-            "python/3.6",
-            "py-numpy/1.14.3_py36",
-            "py-pandas/0.23.0_py36",
-            "viz",
-            "py-scikit-learn/0.19.1_py36",
-            "antspy/0.2.2",
-        ]
-    else:
-        module_list = args.modules
-    setattr(args, "modules", " ".join(module_list))
+def setup_build_dirs(args):
+    assert args.import_date is not None, "must specify import_date for building"
+    if args.import_dir is None:
+        args.import_dir = os.path.join(args.basedir, "imports")
+    setattr(args, 'import_path', os.path.join(args.import_dir, args.import_date))
+    assert os.path.exists(args.import_path), f"Import path does not exist: {args.import_path}"
+
+    if args.fictrac_import_dir is None:
+        args.fictrac_import_dir = os.path.join(args.basedir, "fictrac")
+    assert os.path.exists(
+        args.fictrac_import_dir
+    ), f"fictrac import dir {args.fictrac_import_dir} does not exist"
+    return args
 
 
 # NOTE: moving the main() function contents out of main() function to make debugging easier
 if __name__ == "__main__":
 
     args = parse_args(sys.argv[1:])
-
+    print(args)
     args = setup_modules(args)
+
+    if args.target_dir is None:
+        args.target_dir = os.path.join(args.basedir, "processed")
+    if not os.path.exists(args.target_dir):
+        os.mkdir(args.target_dir)
 
     args = setup_logging(args, logtype='preprocess',
         logdir=os.path.join(args.target_dir, "logs"))
@@ -531,14 +555,15 @@ if __name__ == "__main__":
         args = load_user_settings_from_json(args)
 
     print(args)
-    sdfklj
 
-    if args.build_fly is not None:
-        assert args.import_dir is not None, "imports_path is required"
-        built_flydir = build_all_flies(args)
-        args.process_flydir = built_flydir
+    if args.build:
+        print('building fly')
+        args = setup_build_dirs(args)
+        args.process = build_fly(args)
+        print('done:', args.process)
 
     # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
 
-    if args.process_flydir is not None:
-        processed_flies = process_all_flies(args)
+    if args.process is not None:
+        print('processing', args.process_flydir)
+        processed_flies = process_fly(args)
