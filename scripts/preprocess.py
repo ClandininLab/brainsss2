@@ -22,7 +22,7 @@ from argparse_utils import (
     add_preprocess_arguments,
     add_fictrac_qc_arguments,
 )
-
+from slurm import SlurmBatchJob
 
 
 def parse_args(input):
@@ -93,46 +93,35 @@ def run_fictrac_qc(args):
     assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
     job_ids = []
 
+    sbatch = {}
     for func in funcdirs:
+
         directory = os.path.join(func, "fictrac")
         logging.info(f'running fictrac_qc.py on {directory}')
         if not os.path.exists(directory):
             logging.info(f"{directory} not found, skipping fictrac_qc")
             continue
-        logfile = 'fictrac_slurm_log.out'
-        com_path = './com'
+
         if not args.local:
+            logfile = os.path.join(directory, 'logs', "fictrac_qc.log")
             args_dict = {"dir": directory,
                          "fps": 100,
-                         "logfile": os.path.join(directory, 'logs', "fictrac_qc.log")}
-            script = "fictrac_qc.py"
-            job_id = brainsss.sbatch(
-                jobname="fictracqc",
-                script=os.path.join(args.script_path, script),
-                modules=args.modules,
-                args=args_dict,
-                logfile=logfile,
-                time=1,
-                mem=1,
-                nice=args.nice,
-                nodes=args.nodes,
-                global_resources=True
-            )
-            job_ids.append(job_id)
+                         'basedir': args.basedir,}
+            sbatch[func] = SlurmBatchJob('fictrac_qc', "fictrac_qc.py", args_dict, logfile,)
+            sbatch[func].run()
+
         else: # run locally
             logging.info('running fictrac_qc.py locally')
             setattr(args, 'dir', directory)  # create required arg for fictrac_qc.py
             args.logdir = None
             argstring = ' '.join(dict_to_args_list(args.__dict__))
-            print(f'fictrac_qc: processing {directory}')
-
             print(argstring)
             output = run_shell_command(f'python fictrac_qc.py {argstring}')
             return(output)
 
-    if use_sbatch:
-        for job_id in job_ids:
-            brainsss.wait_for_job(job_id, logfile, com_path)
+    if not args.local:
+        for func, job in sbatch.items():
+            job.wait()
     return(None)
 
 
