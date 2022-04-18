@@ -20,7 +20,7 @@ class SlurmBatchJob:
                  user_args: dict = None, verbose: bool = False,
                  logfile: str = None, **kwargs):
         """
-        Class to run a slurm job
+        Class to define and run a slurm job
 
         Parameters
         ----------
@@ -31,7 +31,9 @@ class SlurmBatchJob:
         user_args : dict
             dictionary of arguments to pass to the script
         verbose : bool
-            whether to verbose logging
+            enable verbose logging
+        logfile : str
+            path to logfile (if not specified, logs to stdout only)
         kwargs : dict
             additional arguments to pass to the sbatch command
         
@@ -48,6 +50,8 @@ class SlurmBatchJob:
             fh = logging.FileHandler(self.logfile)
             fh.setFormatter(formatter)
             logger.addHandler(fh)
+        else:
+            logger.info('No logfile specified - logging to stdout only')
         if self.verbose:
             logger.setLevel(logging.DEBUG)
         else:
@@ -132,7 +136,7 @@ class SlurmBatchJob:
 
 
 if __name__ == "__main__":
-    argdict = {'foo': 1}
+    argdict = {'time_hours': 1}
     sbatch = SlurmBatchJob('test', 'dummy_script.py', 
         argdict, verbose=True, logfile='test.log')
     sbatch.run()
