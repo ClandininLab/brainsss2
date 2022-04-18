@@ -8,6 +8,8 @@ import brainsss
 import logging
 from pathlib import Path
 from logging_utils import setup_logging
+# THIS A HACK FOR DEVELOPMENT
+sys.path.append('../brainsss')
 from preprocess_utils import (
     load_user_settings_from_json,
     setup_modules,
@@ -48,7 +50,7 @@ def build_fly(args, use_sbatch=False):
         "user": args.user,
     }
     logging.info(args_dict)
-    if use_sbatch:
+    if not args.local:
         job_id = brainsss.sbatch(
             jobname="bldfly",
             script=os.path.join(scripts_path, script),
@@ -83,7 +85,7 @@ def get_dirs_to_process(args):
     }
 
 
-def run_fictrac_qc(args, use_sbatch=True):
+def run_fictrac_qc(args):
 
     funcdirs = get_dirs_to_process(args)['func']
     funcdirs.sort()
@@ -99,7 +101,7 @@ def run_fictrac_qc(args, use_sbatch=True):
             continue
         logfile = 'fictrac_slurm_log.out'
         com_path = './com'
-        if use_sbatch:
+        if not args.local:
             args_dict = {"dir": directory,
                          "fps": 100,
                          "logfile": os.path.join(directory, 'logs', "fictrac_qc.log")}

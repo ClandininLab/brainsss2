@@ -12,6 +12,9 @@ import logging
 from logging_utils import setup_logging
 import datetime
 from argparse_utils import get_base_parser, add_builder_arguments
+# THIS A HACK FOR DEVELOPMENT
+sys.path.append('../brainsss')
+
 from preprocess_utils import dict_to_args_list
 
 
