@@ -88,17 +88,24 @@ def sbatch(
     nodes=2,
     begin="now",
     global_resources=False,
+    node_cmd=None,
 ):
     if dep != "":
         dep = "--dependency=afterok:{} --kill-on-invalid-dep=yes ".format(dep)
 
-    command = f"ml {modules}; python3 {script} {json.dumps(json.dumps(args))}"
+    if modules is None:
+        module_string = ''
+    else:
+        module_string = 'ml {modules}; '
+
+    command = f"{module_string}python3 {script} {json.dumps(json.dumps(args))}"
+    print(command)
 
     if nice:  # For lowering the priority of the job
         nice = 1000000
 
-    if nodes == 1:
-        node_cmd = "-w sh02-07n34 "
+    if nodes == 1 and node_cmd is not None:
+        node_cmd = "-w sh02-07n34 "  # HARDCODED - BAD!
     else:
         node_cmd = ""
 
