@@ -32,6 +32,14 @@ def run_shell_command(command_line):
     return process_output.decode("utf-8")
 
 
+def dict_to_namespace(d):
+    # convert dict to argparse.Namespace
+    args = argparse.Namespace()
+    for k, v in d.items():
+        setattr(args, k, v)
+    return args
+
+
 def dict_to_args_list(d):
     # convert a dict to a set of command line args
     argslist = []
