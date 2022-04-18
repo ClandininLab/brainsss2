@@ -1,29 +1,79 @@
 # refactor of slurm utils
-from preprocess_utils import dict_to_args_list
+import argparse
+from preprocess_utils import dict_to_args_list, dict_to_namespace
 import subprocess
 import logging
 import time
 import os
 
 
-def slurm_submit(jobname, script, args, logfile): #
+def slurm_submit(jobname, 
+                 script,
+                 errfile,
+                 args=None,
+                 dep=None,
+                 modules=None): #
     # , time, mem, nodes, modules, global_resources):
     """
-    Submit a job to slurm.
+    submit slurm job
+
+    Parameters:
+    -----------
+    jobname: str
+        name of job
+    script: str
+        path to script to run
+    args_dict: dict
+        arguments to pass to script
+    errfile: str
+        path to error file
+    dep: str
+        job dependency
+    modules: list
+        list of modules to load
+    time_hours: int
+        time limit for job in hours
+    com_path: str
+        path to directory to store output
     """
-    module_string = ''
+
+    default_args = {
+        'nice': False,
+        'time_hours': 1,
+        'com_path': './com'
+    }
+    if args_dict is None:
+        args_dict = {}
+    elif not isinstance(args, dict):
+        raise TypeError('args must be dict or None')
+
+    if com_path is None:
+        com_path = './com'
+    if not os.path.exists(com_path):
+        os.mkdir(com_path)
+
+    if modules is None:
+        module_string = ''
+    else:
+        module_string = 'ml {" ".join(modules)}; '
+
+    if dep is not None:
+        logging.info(f'dependencies: {dep}')
+        dep = "--dependency=afterok:{} --kill-on-invalid-dep=yes ".format(dep)
 
     command = f"{module_string}python3 {script} {' '.join(dict_to_args_list(args))}"
     logging.info(f'command: {command}')
 
-    hours = 1
-
-    sbatch_command = f"sbatch -J {jobname} -o ./com/%j.out -e {logfile} -t {hours}:00:00 --wrap='{command}'"
-    # --nice={} {}--open-mode=append --cpus-per-task={} --begin={} --wrap='{}' {}".format(
+    sbatch_command = (
+        f"sbatch -J {jobname} -o ./com/%j.out "
+        f"--nice={args.nice} {}--open-mode=append --cpus-per-task={args.nodes} "
+        f"-e ./com/%j.stderr  -t {time_hours}:00:00 --wrap='{command}'"
+    )
     #    jobname, logfile, time, nice, node_cmd, mem, begin, command, dep
 
     logging.info(f'sbatch_command: {sbatch_command}')
-  
+    logging.info(f'Redirecting stderr to {errfile}')
+
     sbatch_response = subprocess.getoutput(sbatch_command)
     logging.info(f'sbatch_response: {sbatch_response}')
 
