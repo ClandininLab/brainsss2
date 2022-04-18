@@ -83,12 +83,13 @@ def get_dirs_to_process(args):
     }
 
 
-def run_fictrac_qc(args, use_sbatch=False):
+def run_fictrac_qc(args, use_sbatch=True):
 
     funcdirs = get_dirs_to_process(args)['func']
     funcdirs.sort()
 
     assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
+    job_ids = []
 
     for func in funcdirs:
         directory = os.path.join(func, "fictrac")
@@ -96,7 +97,8 @@ def run_fictrac_qc(args, use_sbatch=False):
         if not os.path.exists(directory):
             logging.info(f"{directory} not found, skipping fictrac_qc")
             continue
-
+        logfile = 'fictrac_slurm_log.out'
+        com_path = './com'
         if use_sbatch:
             args_dict = {"dir": directory,
                          "fps": 100,
@@ -104,14 +106,15 @@ def run_fictrac_qc(args, use_sbatch=False):
             script = "fictrac_qc.py"
             job_id = brainsss.sbatch(
                 jobname="fictracqc",
-                script=os.path.join(scripts_path, script),
+                script=os.path.join(args.script_path, script),
                 modules=args.modules,
                 args=args_dict,
                 logfile=logfile,
                 time=1,
                 mem=1,
-                nice=nice,
-                nodes=nodes,
+                nice=args.nice,
+                nodes=args.nodes,
+                global_resources=True
             )
             job_ids.append(job_id)
         else: # run locally
@@ -123,11 +126,12 @@ def run_fictrac_qc(args, use_sbatch=False):
 
             print(argstring)
             output = run_shell_command(f'python fictrac_qc.py {argstring}')
-        return(output)
+            return(output)
 
     if use_sbatch:
         for job_id in job_ids:
             brainsss.wait_for_job(job_id, logfile, com_path)
+    return(None)
 
 
 
@@ -512,7 +516,7 @@ if __name__ == "__main__":
     print(args)
 
     args = setup_modules(args)
-    
+
     if args.target_dir is None:
         if args.process:
             args.target_dir = os.path.dirname(args.process)
@@ -543,4 +547,5 @@ if __name__ == "__main__":
 
     if args.process is not None:
         print('processing', args.process)
+        setattr(args, 'script_path', os.path.dirname(os.path.realpath(__file__)))
         process_fly(args)
