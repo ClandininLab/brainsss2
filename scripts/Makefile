@@ -9,5 +9,8 @@ test-build-local:
 test-proc-local:
 	python preprocess.py -b $(BASEDIR) -v --no_require_settings --fictrac_qc --process $(BASEDIR)/processed/fly_001 --local
 
+test-process-local:
+	python preprocess.py -b $(BASEDIR) --build --import_date 20220329 -v --no_require_settings --fictrac_qc --local
+
 test-both-slurm:
 	sbatch preprocess.sh -b $(BASEDIR) --import_date 20220329  -v --no_require_settings --fictrac_qc --build 
