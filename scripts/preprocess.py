@@ -458,7 +458,7 @@ def process_fly(args):
     if args.fictrac_qc:
         fictrac_output = run_fictrac_qc(args)
 
-    if args.stim_triggered_beh:
+    if args.STB:
         stb_output = run_stim_triggered_beh()
 
     if args.bleaching_qc:
@@ -544,7 +544,9 @@ if __name__ == "__main__":
         output = build_fly(args)
         args.process = get_flydir_from_output(output)
         print('Built to flydir:', args.process)
-
+        if args.build_only:
+            logging.info('build only, exiting')
+            args.process = None
     # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
 
     if args.process is not None:
