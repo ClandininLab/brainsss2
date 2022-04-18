@@ -1,10 +1,10 @@
 import numpy as np
-import sys
 import os
 import scipy
 import scipy.signal
 import pandas as pd
 from scipy.interpolate import interp1d
+
 
 def load_fictrac(directory, file='fictrac.dat'):
     """ Loads fictrac data from .dat file that fictrac outputs.
@@ -22,36 +22,40 @@ def load_fictrac(directory, file='fictrac.dat'):
     fictrac_data: pandas dataframe of all parameters saved by fictrac """
 
     for item in os.listdir(directory):
-      if '.dat' in item:
-        file = item
+        if '.dat' in item:
+            file = item
+
+    if not os.path.exists(file):
+        raise FileNotFoundError('Fictrac data file not found: ' + file)
 
     with open(os.path.join(directory, file),'r') as f:
         df = pd.DataFrame(l.rstrip().split() for l in f)
 
         # Name columns
-        df = df.rename(index=str, columns={0: 'frameCounter',
-                                       1: 'dRotCamX',
-                                       2: 'dRotCamY',
-                                       3: 'dRotCamZ',
-                                       4: 'dRotScore',
-                                       5: 'dRotLabX',
-                                       6: 'dRotLabY',
-                                       7: 'dRotLabZ',
-                                       8: 'AbsRotCamX',
-                                       9: 'AbsRotCamY',
-                                       10: 'AbsRotCamZ',
-                                       11: 'AbsRotLabX',
-                                       12: 'AbsRotLabY',
-                                       13: 'AbsRotLabZ',
-                                       14: 'positionX',
-                                       15: 'positionY',
-                                       16: 'heading',
-                                       17: 'runningDir',
-                                       18: 'speed',
-                                       19: 'integratedX',
-                                       20: 'integratedY',
-                                       21: 'timeStamp',
-                                       22: 'sequence'})
+        df = df.rename(index=str, columns={
+            0: 'frameCounter',
+            1: 'dRotCamX',
+            2: 'dRotCamY',
+            3: 'dRotCamZ',
+            4: 'dRotScore',
+            5: 'dRotLabX',
+            6: 'dRotLabY',
+            7: 'dRotLabZ',
+            8: 'AbsRotCamX',
+            9: 'AbsRotCamY',
+            10: 'AbsRotCamZ',
+            11: 'AbsRotLabX',
+            12: 'AbsRotLabY',
+            13: 'AbsRotLabZ',
+            14: 'positionX',
+            15: 'positionY',
+            16: 'heading',
+            17: 'runningDir',
+            18: 'speed',
+            19: 'integratedX',
+            20: 'integratedY',
+            21: 'timeStamp',
+            22: 'sequence'})
 
         # Remove commas
         for column in df.columns.values[:-1]:
