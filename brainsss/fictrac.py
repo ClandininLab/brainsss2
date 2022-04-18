@@ -27,11 +27,9 @@ def load_fictrac(directory, file="fictrac.dat"):
             file = item
 
     fictrac_file = os.path.join(directory, file)
-    fictrac_file = os.path.join(directory, file)
-    if not os.path.exists():
+    if not os.path.exists(fictrac_file):
         raise FileNotFoundError(
-            f"Fictrac data file not found: {fictrac_file}. "
-)
+            f"Fictrac data file not found: {fictrac_file}. ")
     with open(fictrac_file, "r") as f:
         df = pd.DataFrame(line.rstrip().split() for line in f)
 
