@@ -87,7 +87,7 @@ def run_fictrac_qc(args, use_sbatch=False):
 
     funcdirs = get_dirs_to_process(args)['func']
     funcdirs.sort()
-    
+
     assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
 
     for func in funcdirs:
@@ -100,7 +100,7 @@ def run_fictrac_qc(args, use_sbatch=False):
         if use_sbatch:
             args_dict = {"dir": directory,
                          "fps": 100,
-                         "logfile": os.path.join(directory, 'logs', "fictrac_qc.log"),)}
+                         "logfile": os.path.join(directory, 'logs', "fictrac_qc.log")}
             script = "fictrac_qc.py"
             job_id = brainsss.sbatch(
                 jobname="fictracqc",
@@ -511,6 +511,8 @@ if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     print(args)
 
+    args = setup_modules(args)
+    
     if args.target_dir is None:
         if args.process:
             args.target_dir = os.path.dirname(args.process)
