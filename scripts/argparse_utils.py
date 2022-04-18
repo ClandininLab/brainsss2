@@ -2,6 +2,7 @@ import argparse
 import getpass
 
 
+# generic arguments for all components
 def get_base_parser(description):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
@@ -24,6 +25,11 @@ def add_preprocess_arguments(parser):
         "--build-only", action="store_true", help="don't process after building"
     )
     parser.add_argument(
+        '--local',
+        action='store_true', 
+        help='run locally (rather than using slurm)'
+    )
+    parser.add_argument(
         "-n", "--nodes", help="number of nodes to use", type=int, default=1
     )
     parser.add_argument('-a', '--run_all', action='store_true', help='run all preprocessing steps')
@@ -44,6 +50,7 @@ def add_preprocess_arguments(parser):
     parser.add_argument("--temporal_mean", type=str, help="run temporal mean (pre, post, both or None)",
                         choices=['pre', 'post', 'both', 'None'], nargs='+', default=['None'])
     parser.add_argument("--h5_to_nii", action="store_true", help="run h52nii")
+
     parser.add_argument("--nice", action="store_true", help="nice")
     parser.add_argument(
         "--no_require_settings", action="store_true", help="don't require settings file"
@@ -56,10 +63,6 @@ def add_preprocess_arguments(parser):
         "-s",
         "--settings_file",
         help="user settings file (JSON) - defaults to ~/.brainsss/settings.json",
-    )
-    # setup for building flies
-    parser.add_argument(
-        "--stim_triggered_beh", action="store_true", help="run stim_triggered_beh"
     )
     parser.add_argument('--modules', help='modules to load', type=str, nargs="+")
     return(parser)
