@@ -26,10 +26,13 @@ def load_fictrac(directory, file="fictrac.dat"):
         if ".dat" in item:
             file = item
 
-    if not os.path.exists(file):
-        raise FileNotFoundError("Fictrac data file not found: " + file)
-
-    with open(os.path.join(directory, file), "r") as f:
+    fictrac_file = os.path.join(directory, file)
+    fictrac_file = os.path.join(directory, file)
+    if not os.path.exists():
+        raise FileNotFoundError(
+            f"Fictrac data file not found: {fictrac_file}. "
+)
+    with open(fictrac_file, "r") as f:
         df = pd.DataFrame(line.rstrip().split() for line in f)
 
         # Name columns
