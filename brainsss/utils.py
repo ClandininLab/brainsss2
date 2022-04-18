@@ -147,11 +147,11 @@ def get_job_status(job_id, logfile, should_print=False):
                 return status
             core_memory = 7.77 * 1024 * 1024 * 1024  # GB to MB to KB to bytes
 
-            if memory_used > 1024**3:
+            if memory_used > 1024 ** 3:
                 memory_to_print = f"{memory_used/1024 ** 3 :0.1f}" + "GB"
-            elif memory_used > 1024**2:
+            elif memory_used > 1024 ** 2:
                 memory_to_print = f"{memory_used/1024 ** 2 :0.1f}" + "MB"
-            elif memory_used > 1024**1:
+            elif memory_used > 1024 ** 1:
                 memory_to_print = f"{memory_used/1024 ** 1 :0.1f}" + "KB"
             else:
                 memory_to_print = f"{memory_used :0.1f}" + "B"
