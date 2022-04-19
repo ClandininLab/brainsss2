@@ -3,13 +3,13 @@
 
 #SBATCH --job-name=prepro
 #SBATCH --partition=normal
-#SBATCH --time=7-00:00:00
+#SBATCH --time=7:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --output=./logs/preprocess_%j.out
 #SBATCH --open-mode=append
 
 
-ml python/3.6
+# ml python/3.6
 date
 python3 -u ./preprocess.py $@
