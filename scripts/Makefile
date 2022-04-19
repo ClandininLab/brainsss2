@@ -1,5 +1,5 @@
 BASEDIR = /data/brainsss
-BASEDIR = /scratch/users/russpold/brainsss
+#BASEDIR = /scratch/users/russpold/brainsss
 
 clean:
 	-rm -rf $(BASEDIR)/processed/* $(BASEDIR)/logs/* $(BASEDIR)/master_2P.xlsx
@@ -12,6 +12,9 @@ test-proc-local:
 
 test-process-local:
 	python preprocess.py -b $(BASEDIR) --build --import_date 20220329 -v --no_require_settings --fictrac_qc --local
+
+test-build-slurm:
+	python preprocess.py -b $(BASEDIR) -v --no_require_settings --build --import_date 20220329
 
 test-proc-slurm:
 	sbatch preprocess.sh -b $(BASEDIR) -v --no_require_settings --fictrac_qc --process $(BASEDIR)/processed/fly_001
