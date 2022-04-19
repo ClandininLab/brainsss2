@@ -81,14 +81,16 @@ class SlurmBatchJob:
             f"{self.args['module_string']}"
             f"python3 {self.script} {' '.join(dict_to_args_list(self.args))}"
         )
+        logger.debug(f'command: {self.command}')
 
         self.sbatch_command = (
-            f"sbatch -J {jobname} -o {self.args['com_path']}/%j.out --wrap='{self.command}' "
+            f"sbatch -J {jobname} -o {self.args['com_path']}/{jobname}_%j.out --wrap='{self.command}' "
             f"--nice={self.args['nice']} {self.args['node_cmd']} --open-mode=append "
             f"--cpus-per-task={self.args['nodes']} --partition={self.args['partition']} "
-            f"-e {self.args['com_path']}/%j.stderr "
+            f"-e {self.args['com_path']}/{jobname}_%j.stderr "
             f"-t {self.args['time_hours']}:00:00"
         )
+        logger.debug(f'sbatch_command: {self.sbatch_command}')
 
     def setup_args(self, user_args, kwargs):
         # extend default args with user args and kwargs
@@ -104,7 +106,9 @@ class SlurmBatchJob:
     def run(self):
         sbatch_response = subprocess.getoutput(self.sbatch_command)
         setattr(self, 'job_id', sbatch_response.split(" ")[-1].strip())
+        logger.debug(f'job_id: {self.job_id}')
         setattr(self, 'sbatch_response', sbatch_response)
+        logger.debug(f'sbatch_response: {self.sbatch_response}')
 
     def wait(self, wait_time=5):
         while True:
