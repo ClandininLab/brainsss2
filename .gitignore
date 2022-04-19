@@ -1,2 +1,5 @@
 brainsss.egg-info/*
 brainsss/brainsss/__pycache__/*
+__pycache__
+.ipynb_checkpoints
+.DS_Store
