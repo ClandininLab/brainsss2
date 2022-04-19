@@ -545,7 +545,8 @@ def get_xml_files(fly_folder, xml_files):
             and "scan.xml" not in item
             and "expt.xml" not in item):
             xml_files.append(full_path)
-            logging.info(f'Found xml file: {full_path}')
+            logging.info(f'Found xml file: {full_path}'
+        )
     return xml_files
 
 
