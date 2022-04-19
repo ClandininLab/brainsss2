@@ -6,6 +6,7 @@ import sys
 import os
 import brainsss
 import logging
+import datetime
 from pathlib import Path
 from logging_utils import setup_logging
 # THIS A HACK FOR DEVELOPMENT
@@ -93,7 +94,59 @@ def get_dirs_to_process(args):
     }
 
 
-def run_fictrac_qc(args):
+def run_preprocessing_step(script, args, args_dict):
+    """run a preprocessing step
+    
+    
+    Parameters:
+        script {str}:
+            script to run
+        args {argparse.Namespace}:
+            parsed arguments
+        args_dict {dict}:
+            dictionary of arguments to pass to script
+
+        """
+    stepname = script.split(".")[0]
+    logging.info(f"running {stepname}")
+
+    funcdirs = get_dirs_to_process(args)['func']
+    funcdirs.sort()
+
+    assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
+    job_ids = []
+
+    sbatch = {}
+    for func in funcdirs:
+        logfile = os.path.join(
+            func,
+            'logs',
+            f"{stepname}_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+        )
+        if not os.path.exists(os.path.dirname(logfile)):
+            os.mkdir(os.path.dirname(logfile))
+
+        if not args.local:
+            args_dict['dir'] = func
+            sbatch[func] = SlurmBatchJob(stepname, script, args_dict, logfile)
+            sbatch[func].run()
+
+        else: # run locally
+            logging.info(f'running {script} locally')
+            setattr(args, 'dir', func)  # create required arg for fictrac_qc.py
+            args.logdir = None
+            argstring = ' '.join(dict_to_args_list(args.__dict__))
+            print(argstring)
+            output = run_shell_command(f'python {script} {argstring}')
+            return(output)
+
+    if not args.local:
+        for func, job in sbatch.items():
+            job.wait()
+            output = job.status()
+    return(output)
+
+def run_fictrac_qc_older(args):
 
     funcdirs = get_dirs_to_process(args)['func']
     funcdirs.sort()
@@ -104,15 +157,11 @@ def run_fictrac_qc(args):
     sbatch = {}
     for func in funcdirs:
 
-        directory = os.path.join(func, "fictrac")
-        logging.info(f'running fictrac_qc.py on {directory}')
-        if not os.path.exists(directory):
-            logging.info(f"{directory} not found, skipping fictrac_qc")
-            continue
+        logging.info(f'running fictrac_qc.py on {func}')
 
         if not args.local:
             logfile = os.path.join(directory, 'logs', "fictrac_qc.log")
-            args_dict = {"dir": directory,
+            args_dict = {"dir": func,
                          "fps": 100,
                          'basedir': args.basedir,}
             sbatch[func] = SlurmBatchJob('fictrac_qc', "fictrac_qc.py", args_dict, logfile,)
@@ -120,7 +169,7 @@ def run_fictrac_qc(args):
 
         else: # run locally
             logging.info('running fictrac_qc.py locally')
-            setattr(args, 'dir', directory)  # create required arg for fictrac_qc.py
+            setattr(args, 'dir', func)  # create required arg for fictrac_qc.py
             args.logdir = None
             argstring = ' '.join(dict_to_args_list(args.__dict__))
             print(argstring)
@@ -453,7 +502,12 @@ def process_fly(args):
         print("test mode, not actually processing flies")
 
     if args.fictrac_qc:
-        fictrac_output = run_fictrac_qc(args)
+        #fictrac_output = run_fictrac_qc(args)
+        step_args_dict = {
+            "fps": 100,
+            'basedir': args.basedir,}
+        run_preprocessing_step('fictrac_qc.py', args, step_args_dict)
+
 
     if args.STB:
         stb_output = run_stim_triggered_beh()
