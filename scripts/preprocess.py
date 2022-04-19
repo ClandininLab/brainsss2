@@ -42,8 +42,9 @@ def build_fly(args, use_sbatch=False):
     """build a single fly"""
     logging.info(f"building flies from {args.import_path}")
 
+    assert args.import_date is not None, "no import date specified"
+
     args_dict = {
-        "logfile": args.logfile,
         "import_date": args.import_date,
         'import_dir': args.import_dir,
         "target_dir": args.target_dir,
@@ -52,11 +53,16 @@ def build_fly(args, use_sbatch=False):
         "verbose": args.verbose,
         'basedir': args.basedir,
     }
-    logging.info(args_dict)
+    args_dict['logfile'] = os.path.join(
+        func,
+        'logs',
+        f"flybuilder_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+    )
+
+    logging.info(f'args_dict submitted to fly_builder: {args_dict}')
     if not args.local:
         
-        logfile = os.path.join(args.target_dir, 'logs', "flybuilder.log")
-        sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict, logfile,)
+       sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict)
         sbatch.run()
         sbatch.wait()
         output = sbatch.status()
@@ -64,6 +70,7 @@ def build_fly(args, use_sbatch=False):
     else:
         # run locally
         logging.info('running fly_builder.py locally')
+        args.logfile = args_dict['logfile']
         argstring = ' '.join(dict_to_args_list(args.__dict__))
         output = run_shell_command(f'python fly_builder.py {argstring}')
 
@@ -531,6 +538,7 @@ def process_fly(args):
 
 def setup_build_dirs(args):
     assert args.import_date is not None, "must specify import_date for building"
+
     if args.import_dir is None:
         args.import_dir = os.path.join(args.basedir, "imports")
     setattr(args, 'import_path', os.path.join(args.import_dir, args.import_date))
