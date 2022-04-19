@@ -102,19 +102,21 @@ def run_preprocessing_step(script, args, args_dict):
 
     sbatch = {}
     for func in funcdirs:
-        logfile = os.path.join(
-            func,
-            'logs',
-            f"{stepname}_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
-        )
+        if 'logfile' not in args_dict:
+            logfile = os.path.join(
+                func,
+                'logs',
+                f"{stepname}_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+            )
+            args_dict['logfile'] = logfile
+
         if not os.path.exists(os.path.dirname(logfile)):
             os.mkdir(os.path.dirname(logfile))
 
-        args_dict['logfile'] = logfile
         
         if not args.local:
             args_dict['dir'] = func
-            sbatch[func] = SlurmBatchJob(stepname, script, args_dict, logfile)
+            sbatch[func] = SlurmBatchJob(stepname, script, args_dict)
             sbatch[func].run()
 
         else: # run locally
