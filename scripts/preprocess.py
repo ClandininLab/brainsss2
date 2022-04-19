@@ -60,29 +60,13 @@ def build_fly(args, use_sbatch=False):
         sbatch.run()
         sbatch.wait()
         output = sbatch.status()
-        # job_id = brainsss.sbatch(
-        #     jobname="bldfly",
-        #     script=os.path.join(scripts_path, script),
-        #     modules=modules,
-        #     args=args,
-        #     logfile=logfile,
-        #     time=1,
-        #     mem=1,
-        #     nice=nice,
-        #     nodes=nodes,
-        # )
-        # func_and_anats = brainsss.wait_for_job(job_id, logfile, com_path)
-    
-        # func_and_anats = func_and_anats.split("\n")[:-1]
-        # funcs = [
-        #     x.split(":")[1] for x in func_and_anats if "func:" in x
-        # ]  # will be full paths to fly/expt
-        # anats = [x.split(":")[1] for x in func_and_anats if "anat:" in x]
+
     else:
         # run locally
         logging.info('running fly_builder.py locally')
         argstring = ' '.join(dict_to_args_list(args.__dict__))
         output = run_shell_command(f'python fly_builder.py {argstring}')
+
     return output
 
 
@@ -126,6 +110,8 @@ def run_preprocessing_step(script, args, args_dict):
         if not os.path.exists(os.path.dirname(logfile)):
             os.mkdir(os.path.dirname(logfile))
 
+        args_dict['logfile'] = logfile
+        
         if not args.local:
             args_dict['dir'] = func
             sbatch[func] = SlurmBatchJob(stepname, script, args_dict, logfile)
