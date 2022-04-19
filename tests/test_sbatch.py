@@ -13,7 +13,8 @@ import pytest
 @pytest.fixture
 def sbatch():
     argdict = {"foo": 1}
-    return SlurmBatchJob("test", "dummy_script.py", argdict)
+    return SlurmBatchJob("test", "dummy_script.py", 
+        argdict, logfile='logs/sbatch_test.log')
 
 
 def test_sbatch_argdict(sbatch):
@@ -36,6 +37,7 @@ def test_sbatch_wait(sbatch):
     sbatch.run()
     sbatch.wait()
     assert sbatch.status() == "COMPLETED"
+    assert os.path.exists(sbatch.logfile)
 
 
 def sbatch_older():
