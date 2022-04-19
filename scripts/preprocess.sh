@@ -2,7 +2,7 @@
 # A shell script to run the python preprocessing script via slurm
 
 #SBATCH --job-name=prepro
-#SBATCH --partition=LocalQ
+#SBATCH --partition=normal
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
