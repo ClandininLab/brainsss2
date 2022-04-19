@@ -27,7 +27,8 @@ def reinstate_file_handlers(saved_handlers):
     saved_handlers: list
         list of saved file handlers
     """
-    for h in saved_handlers:
+    
+    for h in list(set(saved_handlers)):
         logging.getLogger().addHandler(h)
 
 
@@ -90,14 +91,18 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
         setattr(args, "verbose", False)
 
     if args.logdir is None:
-        assert args.dir is not None, "args.dir must be specified if args.logdir is not"
-        args.logdir = os.path.join(args.dir, "logs")
+        if args.basedir is not None:
+            args.logdir = args.basedir
+        elif args.dir is not None:
+            args.logdir = args.dir
+        else:
+            raise ValueError("args.dir or args.basedir must be specified if args.logdir is not")
     args.logdir = os.path.realpath(args.logdir)
 
     if not os.path.exists(args.logdir):
         os.mkdir(args.logdir)
 
-    args.flystring = get_flystring(args)
+    setattr(args, 'flystring', get_flystring(args))
 
     #  RP: use os.path.join rather than combining strings
     setattr(
@@ -107,7 +112,7 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
     )
 
     #  RP: replace custom code with logging.basicConfig
-    args.file_handler = logging.FileHandler(args.logfile)
+    setattr(args, 'file_handler', logging.FileHandler(args.logfile))
     logging_handlers = [args.file_handler]
     if args.verbose:
         #  use logging.StreamHandler to echo log messages to stdout
