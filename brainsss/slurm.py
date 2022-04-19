@@ -5,14 +5,16 @@ import logging
 import time
 import os
 
-# set up module level logging
-logger = logging.getLogger('SlurmBatchJob')
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+from logging_utils import remove_existing_file_handlers
+
+# # set up module level logging
+# logger = logging.getLogger('SlurmBatchJob')
+# logger.setLevel(logging.DEBUG)
+# ch = logging.StreamHandler()
+# ch.setLevel(logging.DEBUG)
+# formatter = logging.Formatter('|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
+# ch.setFormatter(formatter)
+# logger.addHandler(ch)
 
 
 class SlurmBatchJob:
@@ -44,25 +46,34 @@ class SlurmBatchJob:
         self.output = None
         self.verbose = verbose
         self.logfile = None
+        self.logdir = None
+        
+        # first remove outside file logger
+        self.saved_handlers = remove_existing_file_handlers()
 
         if logfile is not None:
             self.logfile = logfile
         elif 'logfile' in user_args:
             self.logfile = user_args['logfile']
         if self.logfile is not None:
-            self.logdir = os.path.dirname(self.logfile)
+            self.logdir = os.path.dirname(os.path.realpath(self.logfile))
+            if not os.path.exists(self.logdir):
+                os.makedirs(self.logdir)
             fh = logging.FileHandler(self.logfile)
+            formatter = logging.Formatter(
+                '|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
             fh.setFormatter(formatter)
-            logger.addHandler(fh)
+            logging.getLogger().addHandler(fh)
+            logging.debug(f'log dir: {self.logdir}')
         else:
-            logger.info('No logfile specified - logging to stdout only')
+            logging.info('No logfile specified - logging to stdout only')
 
         if self.verbose:
-            logger.setLevel(logging.DEBUG)
+            logging.getLogger().setLevel(logging.DEBUG)
         else:
-            logger.setLevel(logging.WARNING)
+            logging.getLogger().setLevel(logging.INFO)
 
-        logger.info('Setting up SlurmBatchJob')
+        logging.info('Setting up SlurmBatchJob')
         # check args
         assert os.path.exists(self.script)
 
@@ -76,26 +87,22 @@ class SlurmBatchJob:
         }
 
         self.setup_args(user_args, kwargs)
-        logger.info(f'args: {self.args}')
-
-        if not os.path.exists(self.logdir):
-            os.makedirs(self.logdir)
-        logger.debug(f'log dir: {self.logdir}')
+        logging.info(f'args: {self.args}')
 
         self.command = (
             f"{self.args['module_string']}"
             f"python3 {self.script} {' '.join(dict_to_args_list(self.args))}"
         )
-        logger.debug(f'command: {self.command}')
+        logging.debug(f'command: {self.command}')
 
         self.sbatch_command = (
-            f"sbatch -J {jobname} -o {self.logdir}/{jobname}_%j.out --wrap='{self.command}' "
+            f"sbatch -J {jobname} -o {self.logfile} --wrap='{self.command}' "
             f"--nice={self.args['nice']} {self.args['node_cmd']} --open-mode=append "
             f"--cpus-per-task={self.args['nodes']} --partition={self.args['partition']} "
-            f"-e {self.logdir}/{jobname}_%j.stderr "
+            f"-e {self.logfile} "
             f"-t {self.args['time_hours']}:00:00"
         )
-        logger.debug(f'sbatch_command: {self.sbatch_command}')
+        logging.debug(f'sbatch_command: {self.sbatch_command}')
 
     def setup_args(self, user_args, kwargs):
         # extend default args with user args and kwargs
@@ -111,22 +118,22 @@ class SlurmBatchJob:
     def run(self):
         sbatch_response = subprocess.getoutput(self.sbatch_command)
         setattr(self, 'job_id', sbatch_response.split(" ")[-1].strip())
-        logger.debug(f'job_id: {self.job_id}')
+        logging.debug(f'job_id: {self.job_id}')
         setattr(self, 'sbatch_response', sbatch_response)
-        logger.debug(f'sbatch_response: {self.sbatch_response}')
+        logging.debug(f'sbatch_response: {self.sbatch_response}')
 
     def wait(self, wait_time=5):
         while True:
             status = self.status()
             if status is not None and status not in ['PENDING', 'RUNNING']:
                 status = self.status(return_full_output=True)
-                logger.info(f'Job {self.job_id} finished with status: {status}\n\n')
-                com_file = f'{self.logdir}/{self.jobname}_%j.out'
+                logging.info(f'Job {self.job_id} finished with status: {status}\n\n')
+                logging.info(f'opening log_file: {self.logfile}')
                 try:
-                    with open(com_file, "r") as f:
+                    with open(self.logfile, "r") as f:
                         output = f.read()
                 except FileNotFoundError:
-                    logger.warning('Could not find com file: {com_file}')
+                    logging.warning(f'Could not find log file: {self.logfile}')
                     output = None
                 return output
             else:
