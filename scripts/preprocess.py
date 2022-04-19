@@ -4,11 +4,12 @@
 
 import sys
 import os
-import brainsss
 import logging
 import datetime
 from pathlib import Path
 from logging_utils import setup_logging
+from collections import OrderedDict
+
 # THIS A HACK FOR DEVELOPMENT
 sys.path.append('../brainsss')
 from preprocess_utils import ( # noqa
@@ -28,7 +29,7 @@ from slurm import SlurmBatchJob  # noqa
 
 def parse_args(input):
     parser = get_base_parser('preprocess')
-   
+
     parser = add_builder_arguments(parser)
 
     parser = add_preprocess_arguments(parser)
@@ -52,42 +53,39 @@ def build_fly(args, use_sbatch=False):
         "user": args.user,
         "verbose": args.verbose,
         'basedir': args.basedir,
+        'logfile': os.path.join(
+            args.target_dir,
+            'logs',
+            f"flybuilder_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log")
     }
-    args_dict['logfile'] = os.path.join(
-        args.target_dir,
-        'logs',
-        f"flybuilder_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
-    )
 
     logging.info(f'args_dict submitted to fly_builder: {args_dict}')
     if not args.local:
-        
+
         sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict)
         sbatch.run()
         sbatch.wait()
-        output = sbatch.status()
+        return sbatch.status()
 
     else:
         # run locally
         logging.info('running fly_builder.py locally')
         args.logfile = args_dict['logfile']
         argstring = ' '.join(dict_to_args_list(args.__dict__))
-        output = run_shell_command(f'python fly_builder.py {argstring}')
-
-    return output
+        return run_shell_command(f'python fly_builder.py {argstring}')
 
 
 def get_dirs_to_process(args):
     """get the directories to process from the fly directory"""
     return {
-        'func': [i.as_posix() for i in Path(args.process).glob('func_*')], 
+        'func': [i.as_posix() for i in Path(args.process).glob('func_*')],
         'anat': [i.as_posix() for i in Path(args.process).glob('anat_*')]
     }
 
 
 def run_preprocessing_step(script, args, args_dict):
     """run a preprocessing step
-    
+
     Parameters:
         script {str}:
             script to run
@@ -139,275 +137,275 @@ def run_preprocessing_step(script, args, args_dict):
     return(output)
 
 
-def run_stim_triggered_beh():
+# def run_stim_triggered_beh():
 
-    for func in funcs:
-        args = {"logfile": logfile, "func_path": func}
-        script = "stim_triggered_avg_beh.py"
-        job_id = brainsss.sbatch(
-            jobname="stim",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=1,
-            mem=2,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
-
-
-def run_bleaching_qc():
-
-    # job_ids = []
-    for funcanat, dirtype in zip(funcanats, dirtypes):
-        directory = os.path.join(funcanat, "imaging")
-        args = {"logfile": logfile, "directory": directory, "dirtype": dirtype}
-        script = "bleaching_qc.py"
-        job_id = brainsss.sbatch(
-            jobname="bleachqc",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=1,
-            mem=2,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
+#     for func in funcs:
+#         args = {"logfile": logfile, "func_path": func}
+#         script = "stim_triggered_avg_beh.py"
+#         job_id = brainsss.sbatch(
+#             jobname="stim",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=1,
+#             mem=2,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
-def run_temporal_mean_brain_pre():
+# def run_bleaching_qc():
 
-    for funcanat, dirtype in zip(funcanats, dirtypes):
-        directory = os.path.join(funcanat, "imaging")
-
-        if dirtype == "func":
-            files = ["functional_channel_1.nii", "functional_channel_2.nii"]
-        if dirtype == "anat":
-            files = ["anatomy_channel_1.nii", "anatomy_channel_2.nii"]
-
-        args = {"logfile": logfile, "directory": directory, "files": files}
-        script = "make_mean_brain.py"
-        job_id = brainsss.sbatch(
-            jobname="meanbrn",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=1,
-            mem=2,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
+#     # job_ids = []
+#     for funcanat, dirtype in zip(funcanats, dirtypes):
+#         directory = os.path.join(funcanat, "imaging")
+#         args = {"logfile": logfile, "directory": directory, "dirtype": dirtype}
+#         script = "bleaching_qc.py"
+#         job_id = brainsss.sbatch(
+#             jobname="bleachqc",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=1,
+#             mem=2,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
-def run_motion_correction():
+# def run_temporal_mean_brain_pre():
 
-    for funcanat, dirtype in zip(funcanats, dirtypes):
+#     for funcanat, dirtype in zip(funcanats, dirtypes):
+#         directory = os.path.join(funcanat, "imaging")
 
-        directory = os.path.join(funcanat, "imaging")
-        # NB: 1/2 are actually anatomy/functional
-        if dirtype == "func":
-            brain_master = "functional_channel_1.nii"
-            brain_mirror = "functional_channel_2.nii"
-        if dirtype == "anat":
-            brain_master = "anatomy_channel_1.nii"
-            brain_mirror = "anatomy_channel_2.nii"
+#         if dirtype == "func":
+#             files = ["functional_channel_1.nii", "functional_channel_2.nii"]
+#         if dirtype == "anat":
+#             files = ["anatomy_channel_1.nii", "anatomy_channel_2.nii"]
 
-        args = {
-            "logfile": logfile,
-            "directory": directory,
-            "brain_master": brain_master,
-            "brain_mirror": brain_mirror,
-            "scantype": dirtype,
-        }
-
-        script = "motion_correction.py"
-        # if global_resources:
-        #     dur = 48
-        #     mem = 8
-        # else:
-        #     dur = 96
-        #     mem = 4
-        global_resources = True
-        dur = 48
-        mem = 8
-        job_id = brainsss.sbatch(
-            jobname="moco",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=dur,
-            mem=mem,
-            nice=nice,
-            nodes=nodes,
-            global_resources=global_resources,
-        )
-    ### currently submitting these jobs simultaneously since using global resources
-    brainsss.wait_for_job(job_id, logfile, com_path)
+#         args = {"logfile": logfile, "directory": directory, "files": files}
+#         script = "make_mean_brain.py"
+#         job_id = brainsss.sbatch(
+#             jobname="meanbrn",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=1,
+#             mem=2,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
-def run_zscore():
-    # TODO: check that moco file exists
+# def run_motion_correction():
 
-    for func in funcs:
-        load_directory = os.path.join(func, "moco")
-        save_directory = os.path.join(func)
-        brain_file = "functional_channel_2_moco.h5"
+#     for funcanat, dirtype in zip(funcanats, dirtypes):
 
-        args = {
-            "logfile": logfile,
-            "load_directory": load_directory,
-            "save_directory": save_directory,
-            "brain_file": brain_file,
-        }
-        script = "zscore.py"
-        job_id = brainsss.sbatch(
-            jobname="zscore",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=1,
-            mem=2,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
+#         directory = os.path.join(funcanat, "imaging")
+#         # NB: 1/2 are actually anatomy/functional
+#         if dirtype == "func":
+#             brain_master = "functional_channel_1.nii"
+#             brain_mirror = "functional_channel_2.nii"
+#         if dirtype == "anat":
+#             brain_master = "anatomy_channel_1.nii"
+#             brain_mirror = "anatomy_channel_2.nii"
 
+#         args = {
+#             "logfile": logfile,
+#             "directory": directory,
+#             "brain_master": brain_master,
+#             "brain_mirror": brain_mirror,
+#             "scantype": dirtype,
+#         }
 
-def run_highpass():
-    # TODO: check for file existence
-
-    for func in funcs:
-
-        load_directory = os.path.join(func)
-        save_directory = os.path.join(func)
-        brain_file = "functional_channel_2_moco_zscore.h5"
-
-        args = {
-            "logfile": logfile,
-            "load_directory": load_directory,
-            "save_directory": save_directory,
-            "brain_file": brain_file,
-        }
-        script = "temporal_high_pass_filter.py"
-        job_id = brainsss.sbatch(
-            jobname="highpass",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=4,
-            mem=2,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
+#         script = "motion_correction.py"
+#         # if global_resources:
+#         #     dur = 48
+#         #     mem = 8
+#         # else:
+#         #     dur = 96
+#         #     mem = 4
+#         global_resources = True
+#         dur = 48
+#         mem = 8
+#         job_id = brainsss.sbatch(
+#             jobname="moco",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=dur,
+#             mem=mem,
+#             nice=nice,
+#             nodes=nodes,
+#             global_resources=global_resources,
+#         )
+#     ### currently submitting these jobs simultaneously since using global resources
+#     brainsss.wait_for_job(job_id, logfile, com_path)
 
 
-def run_correlation():
+# def run_zscore():
+#     # TODO: check that moco file exists
 
-    for func in funcs:
-        load_directory = os.path.join(func)
-        save_directory = os.path.join(func, "corr")
-        brain_file = "functional_channel_2_moco_zscore_highpass.h5"
-        behavior = "dRotLabY"
+#     for func in funcs:
+#         load_directory = os.path.join(func, "moco")
+#         save_directory = os.path.join(func)
+#         brain_file = "functional_channel_2_moco.h5"
 
-        args = {
-            "logfile": logfile,
-            "load_directory": load_directory,
-            "save_directory": save_directory,
-            "brain_file": brain_file,
-            "behavior": behavior,
-        }
-        script = "correlation.py"
-        job_id = brainsss.sbatch(
-            jobname="corr",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=2,
-            mem=4,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
-
-
-def run_STA():
-
-    for func in funcs:
-        args = {"logfile": logfile, "func_path": func}
-        script = "stim_triggered_avg_neu.py"
-        job_id = brainsss.sbatch(
-            jobname="STA",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=4,
-            mem=4,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
+#         args = {
+#             "logfile": logfile,
+#             "load_directory": load_directory,
+#             "save_directory": save_directory,
+#             "brain_file": brain_file,
+#         }
+#         script = "zscore.py"
+#         job_id = brainsss.sbatch(
+#             jobname="zscore",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=1,
+#             mem=2,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
-def run_h5_to_nii():
+# def run_highpass():
+#     # TODO: check for file existence
 
-    for func in funcs:
-        args = {
-            "logfile": logfile,
-            "h5_path": os.path.join(
-                func, "functional_channel_2_moco_zscore_highpass.h5"
-            ),
-        }
-        script = "h5_to_nii.py"
-        job_id = brainsss.sbatch(
-            jobname="h5tonii",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=2,
-            mem=10,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
+#     for func in funcs:
+
+#         load_directory = os.path.join(func)
+#         save_directory = os.path.join(func)
+#         brain_file = "functional_channel_2_moco_zscore.h5"
+
+#         args = {
+#             "logfile": logfile,
+#             "load_directory": load_directory,
+#             "save_directory": save_directory,
+#             "brain_file": brain_file,
+#         }
+#         script = "temporal_high_pass_filter.py"
+#         job_id = brainsss.sbatch(
+#             jobname="highpass",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=4,
+#             mem=2,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
-def temporal_mean_brain_post():
+# def run_correlation():
 
-    for funcanat, dirtype in zip(funcanats, dirtypes):
-        directory = os.path.join(funcanat, "moco")
+#     for func in funcs:
+#         load_directory = os.path.join(func)
+#         save_directory = os.path.join(func, "corr")
+#         brain_file = "functional_channel_2_moco_zscore_highpass.h5"
+#         behavior = "dRotLabY"
 
-        if dirtype == "func":
-            files = ["functional_channel_1_moco.h5", "functional_channel_2_moco.h5"]
-        if dirtype == "anat":
-            files = ["anatomy_channel_1_moco.h5", "anatomy_channel_2_moco.h5"]
+#         args = {
+#             "logfile": logfile,
+#             "load_directory": load_directory,
+#             "save_directory": save_directory,
+#             "brain_file": brain_file,
+#             "behavior": behavior,
+#         }
+#         script = "correlation.py"
+#         job_id = brainsss.sbatch(
+#             jobname="corr",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=2,
+#             mem=4,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
 
-        args = {"logfile": logfile, "directory": directory, "files": files}
-        script = "make_mean_brain.py"
-        job_id = brainsss.sbatch(
-            jobname="meanbrn",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=2,
-            mem=10,
-            nice=nice,
-            nodes=nodes,
-        )
-        brainsss.wait_for_job(job_id, logfile, com_path)
+
+# def run_STA():
+
+#     for func in funcs:
+#         args = {"logfile": logfile, "func_path": func}
+#         script = "stim_triggered_avg_neu.py"
+#         job_id = brainsss.sbatch(
+#             jobname="STA",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=4,
+#             mem=4,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
+
+
+# def run_h5_to_nii():
+
+#     for func in funcs:
+#         args = {
+#             "logfile": logfile,
+#             "h5_path": os.path.join(
+#                 func, "functional_channel_2_moco_zscore_highpass.h5"
+#             ),
+#         }
+#         script = "h5_to_nii.py"
+#         job_id = brainsss.sbatch(
+#             jobname="h5tonii",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=2,
+#             mem=10,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
+
+
+# def temporal_mean_brain_post():
+
+#     for funcanat, dirtype in zip(funcanats, dirtypes):
+#         directory = os.path.join(funcanat, "moco")
+
+#         if dirtype == "func":
+#             files = ["functional_channel_1_moco.h5", "functional_channel_2_moco.h5"]
+#         if dirtype == "anat":
+#             files = ["anatomy_channel_1_moco.h5", "anatomy_channel_2_moco.h5"]
+
+#         args = {"logfile": logfile, "directory": directory, "files": files}
+#         script = "make_mean_brain.py"
+#         job_id = brainsss.sbatch(
+#             jobname="meanbrn",
+#             script=os.path.join(scripts_path, script),
+#             modules=modules,
+#             args=args,
+#             logfile=logfile,
+#             time=2,
+#             mem=10,
+#             nice=nice,
+#             nodes=nodes,
+#         )
+#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
 def process_fly(args):
@@ -417,46 +415,57 @@ def process_fly(args):
     logging.info(f"processing fly from {args.process}")
 
     if args.test:
-        print("test mode, not actually processing flies")
+        logging.info("test mode, not actually processing flies")
 
+    workflow_dict = OrderedDict()
+
+    # add each step to the workflow
     if args.fictrac_qc:
-        #fictrac_output = run_fictrac_qc(args)
-        step_args_dict = {
-            "fps": 100,
-            'basedir': args.basedir,}
-        run_preprocessing_step('fictrac_qc.py', args, step_args_dict)
+        workflow_dict['fictrac_qc.py'] = {
+            {"fps": 100,
+             'basedir': args.basedir}
+        }
 
+    for script, step_args_dict in workflow_dict.items():
+        logging.info(f'running step: {script}')
+        run_preprocessing_step(script, args, step_args_dict)
 
-    if args.STB:
-        stb_output = run_stim_triggered_beh()
+    # if args.fictrac_qc:
+    #     #fictrac_output = run_fictrac_qc(args)
+    #     step_args_dict = {
+    #         "fps": 100,
+    #         'basedir': args.basedir,}
+    #     run_preprocessing_step('fictrac_qc.py', args, step_args_dict)
 
-    if args.bleaching_qc:
-        bleaching_output = run_bleaching_qc()
+    # if args.STB:
+    #     stb_output = run_stim_triggered_beh()
 
-    if 'pre' in args.temporal_mean or 'both' in args.temporal_mean:
-        mean_brain_pre_output = run_temporal_mean_brain_pre()
+    # if args.bleaching_qc:
+    #     bleaching_output = run_bleaching_qc()
 
-    if args.motion_correction:
-        motion_correction_output = run_motion_correction()
+    # if 'pre' in args.temporal_mean or 'both' in args.temporal_mean:
+    #     mean_brain_pre_output = run_temporal_mean_brain_pre()
 
-    if args.zscore:
-        zscore_output = run_zscore()
+    # if args.motion_correction:
+    #     motion_correction_output = run_motion_correction()
 
-    if args.highpass:
-        highpass_output = run_highpass()
+    # if args.zscore:
+    #     zscore_output = run_zscore()
 
-    if args.correlation:
-        correlation_output = run_correlation()
+    # if args.highpass:
+    #     highpass_output = run_highpass()
 
-    if args.STA:
-        STA_output = run_STA()
+    # if args.correlation:
+    #     correlation_output = run_correlation()
 
-    if args.h5_to_nii:
-        h5_to_nii_output = run_h5_to_nii()
+    # if args.STA:
+    #     STA_output = run_STA()
 
-    if 'post' in args.temporal_mean or 'both' in args.temporal_mean:
-        mean_brain_post_output = run_temporal_mean_brain_post()
+    # if args.h5_to_nii:
+    #     h5_to_nii_output = run_h5_to_nii()
 
+    # if 'post' in args.temporal_mean or 'both' in args.temporal_mean:
+    #     mean_brain_post_output = run_temporal_mean_brain_post()
 
 
 def setup_build_dirs(args):
@@ -496,7 +505,7 @@ if __name__ == "__main__":
             args.target_dir = os.path.join(args.basedir, "processed")
             if not os.path.exists(args.target_dir):
                 os.mkdir(args.target_dir)
-    
+
     if 'dir' not in args or args.dir is None:
         setattr(args, 'dir', args.target_dir)
 
