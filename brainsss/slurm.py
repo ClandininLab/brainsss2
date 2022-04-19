@@ -16,7 +16,7 @@ logger.addHandler(ch)
 
 
 class SlurmBatchJob:
-    def __init__(self, jobname: str, script: str, 
+    def __init__(self, jobname: str, script: str,
                  user_args: dict = None, verbose: bool = False,
                  logfile: str = None, **kwargs):
         """
@@ -36,13 +36,12 @@ class SlurmBatchJob:
             path to logfile (if not specified, logs to stdout only)
         kwargs : dict
             additional arguments to pass to the sbatch command
-        
+
         """
         self.jobname = jobname
         self.script = script
         self.job_id = None
         self.output = None
-        self.com_dir = None
         self.verbose = verbose
         self.logfile = None
 
@@ -51,16 +50,18 @@ class SlurmBatchJob:
         elif 'logfile' in user_args:
             self.logfile = user_args['logfile']
         if self.logfile is not None:
+            self.logdir = os.path.dirname(self.logfile)
             fh = logging.FileHandler(self.logfile)
             fh.setFormatter(formatter)
             logger.addHandler(fh)
         else:
             logger.info('No logfile specified - logging to stdout only')
+
         if self.verbose:
             logger.setLevel(logging.DEBUG)
         else:
             logger.setLevel(logging.WARNING)
-            
+
         logger.info('Setting up SlurmBatchJob')
         # check args
         assert os.path.exists(self.script)
@@ -68,7 +69,6 @@ class SlurmBatchJob:
         self.default_args = {
             'nice': False,
             'time_hours': 1,
-            'com_path': './com',
             'module_string': '',
             'node_cmd': '',
             'nodes': 1,
@@ -78,9 +78,9 @@ class SlurmBatchJob:
         self.setup_args(user_args, kwargs)
         logger.info(f'args: {self.args}')
 
-        if not os.path.exists(self.args['com_path']):
-            os.makedirs(self.args['com_path'])
-        logger.debug(f'com_path: {self.args["com_path"]}')
+        if not os.path.exists(self.logdir):
+            os.makedirs(self.logdir)
+        logger.debug(f'log dir: {self.logdir}')
 
         self.command = (
             f"{self.args['module_string']}"
@@ -89,10 +89,10 @@ class SlurmBatchJob:
         logger.debug(f'command: {self.command}')
 
         self.sbatch_command = (
-            f"sbatch -J {jobname} -o {self.args['com_path']}/{jobname}_%j.out --wrap='{self.command}' "
+            f"sbatch -J {jobname} -o {self.logdir}/{jobname}_%j.out --wrap='{self.command}' "
             f"--nice={self.args['nice']} {self.args['node_cmd']} --open-mode=append "
             f"--cpus-per-task={self.args['nodes']} --partition={self.args['partition']} "
-            f"-e {self.args['com_path']}/{jobname}_%j.stderr "
+            f"-e {self.logdir}/{jobname}_%j.stderr "
             f"-t {self.args['time_hours']}:00:00"
         )
         logger.debug(f'sbatch_command: {self.sbatch_command}')
@@ -105,9 +105,9 @@ class SlurmBatchJob:
             self.args.update(user_args)
         elif user_args is not None:
             raise TypeError('args must be dict or None')
-        
+
         self.args.update(kwargs)
-    
+
     def run(self):
         sbatch_response = subprocess.getoutput(self.sbatch_command)
         setattr(self, 'job_id', sbatch_response.split(" ")[-1].strip())
@@ -121,10 +121,7 @@ class SlurmBatchJob:
             if status is not None and status not in ['PENDING', 'RUNNING']:
                 status = self.status(return_full_output=True)
                 logger.info(f'Job {self.job_id} finished with status: {status}\n\n')
-                com_file = os.path.join(
-                    self.args['com_path'],
-                    f'{self.job_id}.out'
-                )
+                com_file = f'{self.logdir}/{jobname}_%j.out'
                 try:
                     with open(com_file, "r") as f:
                         output = f.read()
@@ -148,7 +145,7 @@ class SlurmBatchJob:
 
 if __name__ == "__main__":
     argdict = {'time_hours': 1}
-    sbatch = SlurmBatchJob('test', 'dummy_script.py', 
+    sbatch = SlurmBatchJob('test', 'dummy_script.py',
         argdict, verbose=True, logfile='test.log')
     print(sbatch.sbatch_command)
     sbatch.run()
