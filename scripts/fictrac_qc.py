@@ -9,6 +9,7 @@ from argparse_utils import (
     add_fictrac_qc_arguments,
 )
 from logging_utils import setup_logging
+import logging
 
 
 def parse_args(input, allow_unknown=True):
@@ -59,7 +60,15 @@ if __name__ == "__main__":
 
     setup_logging(args, logtype="fictrac_qc")
 
-    fictrac_raw = load_fictrac(args.dir)
+    print(args)
+
+    fictrac_dir = os.path.join(args.dir, "fictrac")
+    logging.info(f'running fictrac_qc.py on {fictrac_dir}')
+    if not os.path.exists(fictrac_dir):
+        logging.info(f"fictrac directory {fictrac_dir} not found, skipping fictrac_qc")
+        sys.exit(0)
+
+    fictrac_raw = load_fictrac(fictrac_dir)
 
     # fly = os.path.split(os.path.split(directory)[0])[1]
     # expt = os.path.split(directory)[1]
