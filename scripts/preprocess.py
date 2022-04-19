@@ -2,6 +2,8 @@
 # Top-level script to build and/or process a single fly
 # will be wrapped by another script to allow processing of multiple flies
 
+# pyright: reportMissingImports=false
+
 import sys
 import os
 import logging
@@ -54,15 +56,15 @@ def build_fly(args, use_sbatch=False):
         "verbose": args.verbose,
         'basedir': args.basedir,
         'logfile': os.path.join(
-            args.target_dir,
+            args.basedir,
             'logs',
-            f"flybuilder_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log")
+            f"flybuilder_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.txt")
     }
 
     logging.info(f'args_dict submitted to fly_builder: {args_dict}')
     if not args.local:
 
-        sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict)
+        sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict, verbose=args.verbose)
         sbatch.run()
         sbatch.wait()
         return sbatch.status()
@@ -510,7 +512,7 @@ if __name__ == "__main__":
         setattr(args, 'dir', args.target_dir)
 
     args = setup_logging(args, logtype='preprocess',
-        logdir=os.path.join(args.target_dir, "logs"))
+        logdir=os.path.join(args.basedir, "logs"))
 
     if not args.ignore_settings:
         args = load_user_settings_from_json(args)
