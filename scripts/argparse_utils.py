@@ -26,11 +26,14 @@ def add_preprocess_arguments(parser):
     )
     parser.add_argument(
         '--local',
-        action='store_true', 
+        action='store_true',
         help='run locally (rather than using slurm)'
     )
     parser.add_argument(
         "-n", "--nodes", help="number of nodes to use", type=int, default=1
+    )
+    parser.add_argument(
+        "--partition", help="slurm partition to use for running jobs", type=str, default='normal'
     )
     parser.add_argument('-a', '--run_all', action='store_true', help='run all preprocessing steps')
 
