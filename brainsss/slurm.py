@@ -121,7 +121,7 @@ class SlurmBatchJob:
             if status is not None and status not in ['PENDING', 'RUNNING']:
                 status = self.status(return_full_output=True)
                 logger.info(f'Job {self.job_id} finished with status: {status}\n\n')
-                com_file = f'{self.logdir}/{jobname}_%j.out'
+                com_file = f'{self.logdir}/{self.jobname}_%j.out'
                 try:
                     with open(com_file, "r") as f:
                         output = f.read()
