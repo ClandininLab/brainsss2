@@ -14,8 +14,7 @@ import datetime
 from argparse_utils import get_base_parser, add_builder_arguments
 # THIS A HACK FOR DEVELOPMENT
 sys.path.append('../brainsss')
-
-from preprocess_utils import dict_to_args_list
+from preprocess_utils import dict_to_args_list # noqa
 
 
 def parse_args(input, allow_unknown=True):
@@ -538,15 +537,13 @@ def get_xml_files(fly_folder, xml_files):
         full_path = os.path.join(fly_folder, item)
         if os.path.isdir(full_path):
             xml_files = get_xml_files(full_path, xml_files)
-        elif (
-            ".xml" in item
-            and "_Cycle" not in item
-            and "fly.xml" not in item
-            and "scan.xml" not in item
-            and "expt.xml" not in item):
+        elif (".xml" in item
+              and "_Cycle" not in item
+              and "fly.xml" not in item
+              and "scan.xml" not in item
+              and "expt.xml" not in item):
             xml_files.append(full_path)
-            logging.info(f'Found xml file: {full_path}'
-        )
+            logging.info(f'Found xml file: {full_path}')
     return xml_files
 
 
