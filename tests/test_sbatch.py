@@ -38,6 +38,8 @@ def test_sbatch_wait(sbatch):
     sbatch.wait()
     assert sbatch.status() == "COMPLETED"
     assert os.path.exists(sbatch.logfile)
+    assert os.path.exists(os.path.join(sbatch.logdir, f'test_{sbatch.job_id}.out'))
+    assert os.path.exists(os.path.join(sbatch.logdir, f'test_{sbatch.job_id}.stderr'))
 
 
 def sbatch_older():
