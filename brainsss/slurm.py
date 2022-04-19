@@ -73,6 +73,9 @@ class SlurmBatchJob:
         self.setup_args(user_args, kwargs)
         logger.info(f'args: {self.args}')
 
+        if not os.path.exists(self.args['com_path']):
+            os.makedirs(self.args['com_path'])
+
         self.command = (
             f"{self.args['module_string']}"
             f"python3 {self.script} {' '.join(dict_to_args_list(self.args))}"
@@ -139,6 +142,7 @@ if __name__ == "__main__":
     argdict = {'time_hours': 1}
     sbatch = SlurmBatchJob('test', 'dummy_script.py', 
         argdict, verbose=True, logfile='test.log')
+    print(sbatch.sbatch_command)
     sbatch.run()
     print(sbatch.sbatch_response)
     print(sbatch.job_id)
