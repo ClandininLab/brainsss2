@@ -11,19 +11,19 @@ from pathlib import Path
 from logging_utils import setup_logging
 # THIS A HACK FOR DEVELOPMENT
 sys.path.append('../brainsss')
-from preprocess_utils import (
+from preprocess_utils import ( # noqa
     load_user_settings_from_json,
     setup_modules,
     dict_to_args_list,
     run_shell_command
-)
-from argparse_utils import (
+)  # noqa
+from argparse_utils import ( # noqa
     get_base_parser,
     add_builder_arguments,
     add_preprocess_arguments,
     add_fictrac_qc_arguments,
-)
-from slurm import SlurmBatchJob
+)  # noqa
+from slurm import SlurmBatchJob  # noqa
 
 
 def parse_args(input):
@@ -88,7 +88,6 @@ def get_dirs_to_process(args):
 def run_preprocessing_step(script, args, args_dict):
     """run a preprocessing step
     
-    
     Parameters:
         script {str}:
             script to run
@@ -124,7 +123,7 @@ def run_preprocessing_step(script, args, args_dict):
             sbatch[func] = SlurmBatchJob(stepname, script, args_dict)
             sbatch[func].run()
 
-        else: # run locally
+        else:  # run locally
             logging.info(f'running {script} locally')
             setattr(args, 'dir', func)  # create required arg for fictrac_qc.py
             args.logdir = None
@@ -141,10 +140,6 @@ def run_preprocessing_step(script, args, args_dict):
 
 
 def run_stim_triggered_beh():
-
-    ##########################
-    ### Stim Triggered Beh ###
-    ##########################
 
     for func in funcs:
         args = {"logfile": logfile, "func_path": func}
@@ -164,10 +159,6 @@ def run_stim_triggered_beh():
 
 
 def run_bleaching_qc():
-
-    ####################
-    ### Bleaching QC ###
-    ####################
 
     # job_ids = []
     for funcanat, dirtype in zip(funcanats, dirtypes):
@@ -189,10 +180,6 @@ def run_bleaching_qc():
 
 
 def run_temporal_mean_brain_pre():
-
-    #######################################
-    ### Create temporal mean brains PRE ###
-    #######################################
 
     for funcanat, dirtype in zip(funcanats, dirtypes):
         directory = os.path.join(funcanat, "imaging")
@@ -219,10 +206,6 @@ def run_temporal_mean_brain_pre():
 
 
 def run_motion_correction():
-
-    #########################
-    ### Motion Correction ###
-    #########################
 
     for funcanat, dirtype in zip(funcanats, dirtypes):
 
@@ -271,9 +254,6 @@ def run_motion_correction():
 
 def run_zscore():
     # TODO: check that moco file exists
-    ##############
-    ### ZSCORE ###
-    ##############
 
     for func in funcs:
         load_directory = os.path.join(func, "moco")
@@ -303,9 +283,6 @@ def run_zscore():
 
 def run_highpass():
     # TODO: check for file existence
-    ################
-    ### HIGHPASS ###
-    ################
 
     for func in funcs:
 
@@ -335,10 +312,6 @@ def run_highpass():
 
 
 def run_correlation():
-
-    ###################
-    ### CORRELATION ###
-    ###################
 
     for func in funcs:
         load_directory = os.path.join(func)
@@ -370,10 +343,6 @@ def run_correlation():
 
 def run_STA():
 
-    #########################################
-    ### STIMULUS TRIGGERED NEURAL AVERAGE ###
-    #########################################
-
     for func in funcs:
         args = {"logfile": logfile, "func_path": func}
         script = "stim_triggered_avg_neu.py"
@@ -392,10 +361,6 @@ def run_STA():
 
 
 def run_h5_to_nii():
-    # TODO: check for file existence
-    #################
-    ### H5 TO NII ###
-    #################
 
     for func in funcs:
         args = {
@@ -420,10 +385,6 @@ def run_h5_to_nii():
 
 
 def temporal_mean_brain_post():
-    # TODO: check that moco files exist
-    #########################################
-    ### Create temporal mean brains, POST ###
-    #########################################
 
     for funcanat, dirtype in zip(funcanats, dirtypes):
         directory = os.path.join(funcanat, "moco")
