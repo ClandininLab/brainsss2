@@ -68,6 +68,7 @@ class SlurmBatchJob:
             'module_string': '',
             'node_cmd': '',
             'nodes': 1,
+            'partition': 'normal',
         }
 
         self.setup_args(user_args, kwargs)
@@ -84,7 +85,7 @@ class SlurmBatchJob:
         self.sbatch_command = (
             f"sbatch -J {jobname} -o {self.args['com_path']}/%j.out --wrap='{self.command}' "
             f"--nice={self.args['nice']} {self.args['node_cmd']} --open-mode=append "
-            f"--cpus-per-task={self.args['nodes']} "
+            f"--cpus-per-task={self.args['nodes']} --partition={self.args['partition']} "
             f"-e {self.args['com_path']}/%j.stderr "
             f"-t {self.args['time_hours']}:00:00"
         )
@@ -100,7 +101,6 @@ class SlurmBatchJob:
         
         self.args.update(kwargs)
     
-
     def run(self):
         sbatch_response = subprocess.getoutput(self.sbatch_command)
         setattr(self, 'job_id', sbatch_response.split(" ")[-1].strip())
@@ -125,7 +125,6 @@ class SlurmBatchJob:
                 return output
             else:
                 time.sleep(wait_time)
-
 
     def status(self, return_full_output=False):
 
