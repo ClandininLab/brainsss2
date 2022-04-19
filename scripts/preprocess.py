@@ -45,7 +45,7 @@ def build_fly(args, use_sbatch=False):
     args_dict = {
         "logfile": args.logfile,
         "import_date": args.import_date,
-        'import_path': args.import_path,
+        'import_dir': args.import_dir,
         "target_dir": args.target_dir,
         "fly_dirs": args.fly_dirs,
         "user": args.user,
