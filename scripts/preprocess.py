@@ -48,27 +48,35 @@ def build_fly(args, use_sbatch=False):
         "target_dir": args.target_dir,
         "fly_dirs": args.fly_dirs,
         "user": args.user,
+        "verbose": args.verbose,
+        'basedir': args.basedir,
     }
     logging.info(args_dict)
     if not args.local:
-        job_id = brainsss.sbatch(
-            jobname="bldfly",
-            script=os.path.join(scripts_path, script),
-            modules=modules,
-            args=args,
-            logfile=logfile,
-            time=1,
-            mem=1,
-            nice=nice,
-            nodes=nodes,
-        )
-        func_and_anats = brainsss.wait_for_job(job_id, logfile, com_path)
+        
+        logfile = os.path.join(args.target_dir, 'logs', "flybuilder.log")
+        sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict, logfile,)
+        sbatch.run()
+        sbatch.wait()
+        output = sbatch.status()
+        # job_id = brainsss.sbatch(
+        #     jobname="bldfly",
+        #     script=os.path.join(scripts_path, script),
+        #     modules=modules,
+        #     args=args,
+        #     logfile=logfile,
+        #     time=1,
+        #     mem=1,
+        #     nice=nice,
+        #     nodes=nodes,
+        # )
+        # func_and_anats = brainsss.wait_for_job(job_id, logfile, com_path)
     
-        func_and_anats = func_and_anats.split("\n")[:-1]
-        funcs = [
-            x.split(":")[1] for x in func_and_anats if "func:" in x
-        ]  # will be full paths to fly/expt
-        anats = [x.split(":")[1] for x in func_and_anats if "anat:" in x]
+        # func_and_anats = func_and_anats.split("\n")[:-1]
+        # funcs = [
+        #     x.split(":")[1] for x in func_and_anats if "func:" in x
+        # ]  # will be full paths to fly/expt
+        # anats = [x.split(":")[1] for x in func_and_anats if "anat:" in x]
     else:
         # run locally
         logging.info('running fly_builder.py locally')
