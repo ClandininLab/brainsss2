@@ -102,9 +102,9 @@ def run_preprocessing_step(script, args, args_dict):
         script {str}:
             script to run
         args {argparse.Namespace}:
-            parsed arguments
+            parsed arguments from main script
         args_dict {dict}:
-            dictionary of arguments to pass to script
+            dictionary of arguments to pass to step script
 
         """
     stepname = script.split(".")[0]
