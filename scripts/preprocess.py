@@ -105,7 +105,6 @@ def run_preprocessing_step(script, args, args_dict):
     funcdirs.sort()
 
     assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
-    job_ids = []
 
     sbatch = {}
     for func in funcdirs:
@@ -120,7 +119,6 @@ def run_preprocessing_step(script, args, args_dict):
         if not os.path.exists(os.path.dirname(logfile)):
             os.mkdir(os.path.dirname(logfile))
 
-        
         if not args.local:
             args_dict['dir'] = func
             sbatch[func] = SlurmBatchJob(stepname, script, args_dict)
@@ -140,42 +138,6 @@ def run_preprocessing_step(script, args, args_dict):
             job.wait()
             output = job.status()
     return(output)
-
-def run_fictrac_qc_older(args):
-
-    funcdirs = get_dirs_to_process(args)['func']
-    funcdirs.sort()
-
-    assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
-    job_ids = []
-
-    sbatch = {}
-    for func in funcdirs:
-
-        logging.info(f'running fictrac_qc.py on {func}')
-
-        if not args.local:
-            logfile = os.path.join(directory, 'logs', "fictrac_qc.log")
-            args_dict = {"dir": func,
-                         "fps": 100,
-                         'basedir': args.basedir,}
-            sbatch[func] = SlurmBatchJob('fictrac_qc', "fictrac_qc.py", args_dict, logfile,)
-            sbatch[func].run()
-
-        else: # run locally
-            logging.info('running fictrac_qc.py locally')
-            setattr(args, 'dir', func)  # create required arg for fictrac_qc.py
-            args.logdir = None
-            argstring = ' '.join(dict_to_args_list(args.__dict__))
-            print(argstring)
-            output = run_shell_command(f'python fictrac_qc.py {argstring}')
-            return(output)
-
-    if not args.local:
-        for func, job in sbatch.items():
-            job.wait()
-    return(None)
-
 
 
 def run_stim_triggered_beh():
