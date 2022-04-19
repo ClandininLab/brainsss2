@@ -54,7 +54,7 @@ def build_fly(args, use_sbatch=False):
         'basedir': args.basedir,
     }
     args_dict['logfile'] = os.path.join(
-        func,
+        args.target_dir,
         'logs',
         f"flybuilder_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
     )
@@ -62,7 +62,7 @@ def build_fly(args, use_sbatch=False):
     logging.info(f'args_dict submitted to fly_builder: {args_dict}')
     if not args.local:
         
-       sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict)
+        sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict)
         sbatch.run()
         sbatch.wait()
         output = sbatch.status()
