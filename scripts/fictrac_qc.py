@@ -14,7 +14,7 @@ import logging
 
 def parse_args(input, allow_unknown=True):
     parser = get_base_parser('fictrac_qc')
-   
+
     parser = add_fictrac_qc_arguments(parser)
 
     if allow_unknown:
@@ -32,7 +32,7 @@ def make_2d_hist(fictrac, fictrac_folder, full_id, save=True, fixed_crop=True):
     plt.hist2d(fictrac["Y"], fictrac["Z"], bins=100, cmap="Blues", norm=norm)
     plt.ylabel("Rotation, deg/sec")
     plt.xlabel("Forward, mm/sec")
-    plt.title("Behavior 2D hist {}".format(full_id))
+    plt.title(f"Behavior 2D hist {full_id}")
     plt.colorbar()
     name = "fictrac_2d_hist.png"
     if fixed_crop:

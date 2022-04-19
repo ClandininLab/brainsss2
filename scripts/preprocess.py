@@ -12,6 +12,8 @@ from pathlib import Path
 from logging_utils import setup_logging
 from collections import OrderedDict
 
+from logging_utils import remove_existing_file_handlers, reinstate_file_handlers
+
 # THIS A HACK FOR DEVELOPMENT
 sys.path.append('../brainsss')
 from preprocess_utils import ( # noqa
@@ -41,7 +43,7 @@ def parse_args(input):
     return parser.parse_args(input)
 
 
-def build_fly(args, use_sbatch=False):
+def build_fly(args):
     """build a single fly"""
     logging.info(f"building flies from {args.import_path}")
 
@@ -67,8 +69,16 @@ def build_fly(args, use_sbatch=False):
         sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict, verbose=args.verbose)
         sbatch.run()
         sbatch.wait()
-        return sbatch.status()
+        _ = remove_existing_file_handlers()
+        reinstate_file_handlers(sbatch.saved_handlers)
 
+        logging.info(f'flybuilder job complete: {sbatch.status(return_full_output=True)}')
+        # get fly directory from output
+        slurm_logfile = os.path.join(args.basedir, f'logs/flybuilder_{sbatch.job_id}.out')
+        if os.path.exists(slurm_logfile):
+            return(get_flydir_from_building_log(slurm_logfile))
+        else:
+            return None
     else:
         # run locally
         logging.info('running fly_builder.py locally')
@@ -493,11 +503,19 @@ def get_flydir_from_output(output):
             return line.split(" ")[1].strip()
 
 
+def get_flydir_from_building_log(logfile):
+    """get the fly directory from the log file"""
+    with open(logfile, 'r') as f:
+        for line in f.readlines():
+            print(line)
+            if "flydir: " in line:
+                return line.split(" ")[1].strip()
+
+
 if __name__ == "__main__":
 
     args = parse_args(sys.argv[1:])
     print(args)
-
     args = setup_modules(args)
 
     if args.target_dir is None:
@@ -523,6 +541,8 @@ if __name__ == "__main__":
         logging.info("building fly")
         args = setup_build_dirs(args)
         output = build_fly(args)
+        if output is None:
+            raise Exception('fly building failed')
         args.process = get_flydir_from_output(output)
         print('Built to flydir:', args.process)
         if args.build_only:

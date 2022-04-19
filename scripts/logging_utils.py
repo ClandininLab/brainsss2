@@ -7,6 +7,30 @@ import datetime
 from git_utils import get_current_git_hash
 
 
+def remove_existing_file_handlers():
+    l = logging.getLogger()
+    saved_handlers = []
+    for h in l.handlers:
+        print(h)
+        if isinstance(h, logging.FileHandler):
+            saved_handlers.append(h)
+            logging.getLogger().removeHandler(h)
+    return saved_handlers
+
+
+def reinstate_file_handlers(saved_handlers):
+    """
+    Reinstate saved file handlers.
+
+    Parameters:
+    -----------
+    saved_handlers: list
+        list of saved file handlers
+    """
+    for h in saved_handlers:
+        logging.getLogger().addHandler(h)
+
+
 def get_flystring(args):
     """
     Get flystring from args.
@@ -83,7 +107,8 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
     )
 
     #  RP: replace custom code with logging.basicConfig
-    logging_handlers = [logging.FileHandler(args.logfile)]
+    args.file_handler = logging.FileHandler(args.logfile)
+    logging_handlers = [args.file_handler]
     if args.verbose:
         #  use logging.StreamHandler to echo log messages to stdout
         logging_handlers.append(logging.StreamHandler())

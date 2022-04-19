@@ -1,3 +1,7 @@
+# main script to import and build processed fly dirs
+
+# pyright: reportMissingImports=false, reportMissingModuleSource=false
+
 import os
 import sys
 import json
@@ -53,6 +57,8 @@ def setup_dirs(args):
 def build_fly(args):
 
     args = setup_dirs(args)
+    print(logging.getLogger())
+    print(logging.getLogger().handlers)
 
     # Assume this folder contains fly1 etc
     # Each area will have a T and a Z
@@ -60,29 +66,23 @@ def build_fly(args):
     # Need to move into fly_X folder that reflects it's date
 
     # get fly folders in flagged directory and sort to ensure correct fly order
-    print(f"Building flies from {args.import_path}")
+    logging.info(f"Building flies from {args.import_path}")
     likely_fly_folders = os.listdir(args.import_path)
     brainsss.utils.sort_nicely(likely_fly_folders)
     likely_fly_folders = [i for i in likely_fly_folders if "fly" in i]
-    print(f"Found fly folders: {likely_fly_folders}")
+    logging.info(f"Found fly folders: {likely_fly_folders}")
     if args.fly_dirs is not None:
         for fly_dir in args.fly_dirs:
             if fly_dir not in likely_fly_folders:
                 raise FileNotFoundError(f"specified fly dir {fly_dir} not found in likely fly folders")
         likely_fly_folders = args.fly_dirs
-        print(f"Continuing with only{str(likely_fly_folders)}")
+        logging.info(f"Continuing with only{str(likely_fly_folders)}")
 
     for likely_fly_folder in likely_fly_folders:
         if "fly" in likely_fly_folder:
 
-            # TODO: currently this just gets the next number. should generate in a way
-            # that ensures that a single fly is not duplicated
             setattr(args, 'source_dir', os.path.join(args.import_path, likely_fly_folder))
             new_fly_number = get_new_fly_number(args)
-            # print(f'\n*Building {likely_fly_folder} as fly number {new_fly_number}*')
-            print(
-                f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   '}"
-            )
 
             # Define source fly directory - use args.source_dir instead
             # source_fly = os.path.join(args.import_path, likely_fly_folder)
@@ -96,25 +96,32 @@ def build_fly(args):
                 'destination_dir',
                 os.path.join(args.target_dir, new_fly_name)
             )
+            print(f'flydir: {args.destination_dir}')
 
             overwrite_msg = None
             if os.path.exists(args.destination_dir):
                 if not args.overwrite:
-                    raise FileExistsError(f"Fly dir {args.destination_dir} already exists, use -o to overwrite")
-                overwrite_msg = f"Overwriting existing fly dir {args.destination_dir}"
+                    logging.warning(f"Fly dir {args.destination_dir} already exists, use -o to overwrite")
+                    logging.info(f'flydir: {args.destination_dir}')
+                    continue
 
+                overwrite_msg = f"Overwriting existing fly dir {args.destination_dir}"
                 rmtree(os.path.join(args.destination_dir))
 
             os.mkdir(args.destination_dir)
+            
+            # print(f'\n*Building {likely_fly_folder} as fly number {new_fly_number}*')
+            print(
+                f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   '}"
+            )
 
             # put log file into fly directory
-            args = setup_logging(args, logtype='flybuilder',
-                logdir=os.path.join(args.destination_dir, "logs"))
+            #args = setup_logging(args, logtype='flybuilder',
+            #    logdir=os.path.join(args.destination_dir, "logs"))
 
-            print(f'Using logger: {logging.getLogger()}')
+            # print(f'Using logger: {logging.getLogger()}')
             logging.info(f"Created fly directory:{args.destination_dir}")
             # print to stdout so that preprocess.py can use this output
-            print(f'flydir: {args.destination_dir}')
             if overwrite_msg is not None:
                 logging.info(overwrite_msg)
 
@@ -162,7 +169,8 @@ def get_new_fly_number(args):
     if os.path.exists(conversion_db_file):
         df = pd.read_csv(conversion_db_file, index_col=None)
         if args.source_dir in df.import_dir.values:
-            print(f"Fly already converted: {args.source_dir} as ")
+            newflydir = df.processed_dir[df.import_dir == args.source_dir].values[0]
+            logging.info(f"Fly already converted: {args.source_dir} as {newflydir}")
             new_fly_number = df.flynum[df.import_dir == args.source_dir].values[0]
     if new_fly_number is None:
         oldest_fly = 0
@@ -604,8 +612,7 @@ def load_json(file):
 
 def load_xml(file):
     tree = objectify.parse(file)
-    root = tree.getroot()
-    return root
+    return tree.getroot()
 
 
 # NOTE: this is seems like an inefficient way to do this
@@ -762,4 +769,5 @@ if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     assert os.path.exists(args.basedir), f"basedir {args.basedir} does not exist"
 
+    args = setup_logging('flybuilder', args)
     build_fly(args)
