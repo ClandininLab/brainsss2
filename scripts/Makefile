@@ -1,4 +1,5 @@
 BASEDIR = /data/brainsss
+QUEUE = normal
 #BASEDIR = /scratch/users/russpold/brainsss
 
 clean:
@@ -14,10 +15,10 @@ test-process-local:
 	python preprocess.py -b $(BASEDIR) --build --import_date 20220329 -v --no_require_settings --fictrac_qc --local
 
 test-build-slurm:
-	python preprocess.py -b $(BASEDIR) -v --no_require_settings --build --import_date 20220329
+	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) -v --no_require_settings --build --import_date 20220329
 
 test-proc-slurm:
-	sbatch preprocess.sh -b $(BASEDIR) -v --no_require_settings --fictrac_qc --process $(BASEDIR)/processed/fly_001
+	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) -v --no_require_settings --fictrac_qc --process $(BASEDIR)/processed/fly_001
 
 test-both-slurm:
-	sbatch preprocess.sh -b $(BASEDIR) --import_date 20220329  -v --no_require_settings --fictrac_qc --build 
+	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) --import_date 20220329  -v --no_require_settings --fictrac_qc --build 
