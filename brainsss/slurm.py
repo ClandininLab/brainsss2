@@ -44,9 +44,13 @@ class SlurmBatchJob:
         self.output = None
         self.com_dir = None
         self.verbose = verbose
+        self.logfile = None
 
         if logfile is not None:
             self.logfile = logfile
+        elif 'logfile' in user_args:
+            self.logfile = user_args['logfile']
+        if self.logfile is not None:
             fh = logging.FileHandler(self.logfile)
             fh.setFormatter(formatter)
             logger.addHandler(fh)
@@ -76,6 +80,7 @@ class SlurmBatchJob:
 
         if not os.path.exists(self.args['com_path']):
             os.makedirs(self.args['com_path'])
+        logger.debug(f'com_path: {self.args["com_path"]}')
 
         self.command = (
             f"{self.args['module_string']}"
