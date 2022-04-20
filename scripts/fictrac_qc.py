@@ -1,6 +1,4 @@
-from xml.dom import ValidationErr
 import numpy as np
-import pandas as pd
 import sys
 import os
 import matplotlib.pyplot as plt
@@ -31,7 +29,8 @@ def parse_args(input, allow_unknown=True):
     return args
 
 
-def make_2d_hist(fictrac, fictrac_folder, full_id, save=True, fixed_crop=True):
+def make_2d_hist(fictrac, fictrac_folder, full_id, 
+                 outdir, save=True, fixed_crop=True):
     plt.figure(figsize=(10, 10))
     norm = mpl.colors.LogNorm()
     plt.hist2d(fictrac["Y"], fictrac["Z"], bins=100, cmap="Blues", norm=norm)
@@ -45,18 +44,20 @@ def make_2d_hist(fictrac, fictrac_folder, full_id, save=True, fixed_crop=True):
         plt.xlim(-10, 15)
         name = "fictrac_2d_hist_fixed.png"
     if save:
-        fname = os.path.join(fictrac_folder, name)
+        fname = os.path.join(outdir, name)
         plt.savefig(fname, dpi=100, bbox_inches="tight")
 
 
-def make_velocity_trace(fictrac, fictrac_folder, full_id, xnew, save=True):
+def make_velocity_trace(fictrac, fictrac_folder, 
+                        full_id, xnew, outdir, save=True,
+                        filename="fictrac_velocity_trace.png"):
     plt.figure(figsize=(10, 10))
     plt.plot(xnew / 1000, fictrac["Y"], color="xkcd:dusk")
     plt.ylabel("forward velocity mm/sec")
     plt.xlabel("time, sec")
     plt.title(full_id)
     if save:
-        fname = os.path.join(fictrac_folder, "velocity_trace.png")
+        fname = os.path.join(outdir, filename)
         plt.savefig(fname, dpi=100, bbox_inches="tight")
 
 
@@ -68,6 +69,10 @@ if __name__ == "__main__":
     print(args)
 
     fictrac_dir = os.path.join(args.dir, "fictrac")
+    outdir = os.path.join(args.dir, 'QC')
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+
     logging.info(f'running fictrac_qc.py on {fictrac_dir}')
     if not os.path.exists(fictrac_dir):
         logging.info(f"fictrac directory {fictrac_dir} not found, skipping fictrac_qc")
@@ -93,6 +98,9 @@ if __name__ == "__main__":
         )
     xnew = np.arange(0, expt_len, args.resolution)
 
-    make_2d_hist(fictrac, fictrac_dir, full_id, save=True, fixed_crop=True)
-    make_2d_hist(fictrac, fictrac_dir, full_id, save=True, fixed_crop=False)
-    make_velocity_trace(fictrac, fictrac_dir, full_id, xnew, save=True)
+    make_2d_hist(fictrac, fictrac_dir, full_id, outdir, save=True,
+                 fixed_crop=True)
+    make_2d_hist(fictrac, fictrac_dir, full_id, outdir, save=True, 
+                 fixed_crop=False)
+    make_velocity_trace(fictrac, fictrac_dir, full_id, xnew, 
+                        outdir, save=True)
