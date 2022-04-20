@@ -88,10 +88,10 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
         setattr(args, "logdir", None)
 
     if args.logdir is None:
-        if args.basedir is not None:
-            args.logdir = args.basedir
-        elif args.dir is not None:
+        if args.dir is not None:
             args.logdir = args.dir
+        elif args.basedir is not None:
+            args.logdir = args.basedir
         else:
             raise ValueError("args.dir or args.basedir must be specified if args.logdir is not")
     args.logdir = os.path.realpath(args.logdir)
