@@ -2,7 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
-import argparse
+# THIS A HACK FOR DEVELOPMENT
+sys.path.append("../brainsss")
+sys.path.append("../brainsss/scripts")
 from logging_utils import setup_logging
 import logging
 from brainsss.visual import (
@@ -10,35 +12,32 @@ from brainsss.visual import (
     get_stimulus_metadata,
     extract_stim_times_from_pd,
 )
+from argparse_utils import (
+    get_base_parser,
+    add_fictrac_qc_arguments,
+)
 from brainsss.fictrac import smooth_and_interp_fictrac, load_fictrac
 
 
-def parse_args(input):
-    parser = argparse.ArgumentParser(description="process stimulus triggered behavior")
-    parser.add_argument(
-        "-d",
-        "--dir",
-        type=str,
-        help="base directory for imaging session",
-        required=True,
-    )
-    parser.add_argument(
-        "--fps", type=float, default=100, help="frame rate of fictrac camera"
-    )
-    # TODO: What is this? not clear from smooth_and_interp_fictrac
-    parser.add_argument(
-        "--resolution", default=10, type=float, help="resolution of fictrac data"
-    )
-    parser.add_argument(
-        '-v', '--verbose', action='store_true', help='verbose output'
-    )
+def parse_args(input, allow_unknown=True):
+    parser = get_base_parser('fictrac_qc')
+
+    parser = add_fictrac_qc_arguments(parser)
+
     parser.add_argument(
         '--outfile',
         default='stim_triggered_turning.png',
         type=str,
         help='output file name'
     )
-    return parser.parse_args(input)
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+    return args
 
 
 def plot_avg_trace(fictrac, starts_angle_0, starts_angle_180, vision_path, args):
