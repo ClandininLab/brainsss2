@@ -58,7 +58,7 @@ def get_flystring(args):
     if "flystring" in args and args.flystring is not None:
         return(args.flystring)
 
-    if 'dir' in args:
+    if 'dir' in args and args.dir is not None:
         dir_split = args.dir.split('/')
         for part in dir_split:
             if 'fly_' in part:
