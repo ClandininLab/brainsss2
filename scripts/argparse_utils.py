@@ -21,7 +21,7 @@ def remove_argument(parser, arg):
 def get_base_parser(description):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
-        "-b", "--basedir", type=str, help="base directory for fly data", required=True
+        "-b", "--basedir", type=str, help="base directory for fly data"
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
     parser.add_argument("-l", "--logdir", type=str, help="log directory")
