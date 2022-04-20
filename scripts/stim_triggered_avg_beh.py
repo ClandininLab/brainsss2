@@ -24,13 +24,6 @@ def parse_args(input, allow_unknown=True):
 
     parser = add_fictrac_qc_arguments(parser)
 
-    parser.add_argument(
-        '--outfile',
-        default='stim_triggered_turning.png',
-        type=str,
-        help='output file name'
-    )
-
     if allow_unknown:
         args, unknown = parser.parse_known_args()
         if unknown is not None:
@@ -40,7 +33,8 @@ def parse_args(input, allow_unknown=True):
     return args
 
 
-def plot_avg_trace(fictrac, starts_angle_0, starts_angle_180, vision_path, args):
+def plot_avg_trace(fictrac, starts_angle_0, starts_angle_180,
+                   outdir):
     """
     Plot the average fictrac trace for the stimulus-triggered average
     """
@@ -81,7 +75,7 @@ def plot_avg_trace(fictrac, starts_angle_0, starts_angle_180, vision_path, args)
     plt.xlabel("Time, ms")
     plt.ylabel("Angular Velocity")
 
-    fname = os.path.join(vision_path, args.outfile)
+    fname = os.path.join(outdir, 'stim_triggered_turning.png')
     plt.savefig(fname, dpi=100, bbox_inches="tight")
     logging.info(f"saved average trace to {fname}")
 
@@ -89,8 +83,8 @@ def plot_avg_trace(fictrac, starts_angle_0, starts_angle_180, vision_path, args)
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
-    setup_logging(args, logtype='stim_triggered_avg_beh')
-
+    args = setup_logging(args, logtype='stim_triggered_avg_beh')
+    logging.info(f'Running stim_triggered_avg_beh on {args.dir}')
     vision_path = os.path.join(args.dir, "visual")
     assert os.path.exists(vision_path), f"vision_path {vision_path} does not exist"
 
@@ -130,5 +124,9 @@ if __name__ == "__main__":
         )
     xnew = np.arange(0, expt_len, args.resolution)
 
-    plot_avg_trace(
-        fictrac, starts_angle_0, starts_angle_180, vision_path, args)
+    outdir = os.path.join(args.dir, "QC")
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
+    plot_avg_trace(fictrac, starts_angle_0, starts_angle_180,
+                   outdir)
