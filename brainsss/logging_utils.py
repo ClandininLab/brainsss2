@@ -87,9 +87,6 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
     else:
         setattr(args, "logdir", None)
 
-    if "verbose" not in args:
-        setattr(args, "verbose", False)
-
     if args.logdir is None:
         if args.basedir is not None:
             args.logdir = args.basedir
@@ -101,6 +98,9 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
 
     if not os.path.exists(args.logdir):
         os.mkdir(args.logdir)
+
+    if "verbose" not in args:
+        setattr(args, "verbose", False)
 
     setattr(args, 'flystring', get_flystring(args))
 
