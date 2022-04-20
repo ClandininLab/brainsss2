@@ -445,6 +445,7 @@ def process_fly(args):
     workflow_dict = OrderedDict()
 
     # add each step to the workflow
+    # should always include basedir to ensure proper logging
     if args.fictrac_qc:
         workflow_dict['fictrac_qc.py'] = {
             "fps": 100,
@@ -452,7 +453,9 @@ def process_fly(args):
         }
 
     if args.STB:
-        workflow_dict['stim_triggered_avg_beh.py'] = {}
+        workflow_dict['stim_triggered_avg_beh.py'] = {
+            'basedir': args.basedir
+        }
 
     for script, step_args_dict in workflow_dict.items():
         logging.info(f'running step: {script}')
@@ -566,6 +569,6 @@ if __name__ == "__main__":
     # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
 
     if args.process is not None:
-        logging.info('processing', args.process)
+        logging.info(f'processing {args.process}')
         setattr(args, 'script_path', os.path.dirname(os.path.realpath(__file__)))
         process_fly(args)
