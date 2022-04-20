@@ -57,6 +57,7 @@ class SlurmBatchJob:
             self.logfile = logfile
         elif 'logfile' in user_args:
             self.logfile = user_args['logfile']
+
         if self.logfile is not None:
             self.logdir = os.path.dirname(os.path.realpath(self.logfile))
             if not os.path.exists(self.logdir):
