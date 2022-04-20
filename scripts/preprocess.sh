@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --output=./logs/preprocess_%j.out
 #SBATCH --open-mode=append
-#SBATCH --output=sbatch_test_%j.log   # Standard output and error log
+#SBATCH --output=sbatch_preproc_%j.log   # Standard output and error log
 
 
 # ml python/3.6
