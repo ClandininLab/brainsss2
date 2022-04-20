@@ -89,9 +89,9 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
 
     if args.logdir is None:
         if args.dir is not None:
-            args.logdir = args.dir
+            args.logdir = os.path.join(args.dir, 'logs')
         elif args.basedir is not None:
-            args.logdir = args.basedir
+            args.logdir = os.path.join(args.basedir, 'logs')
         else:
             raise ValueError("args.dir or args.basedir must be specified if args.logdir is not")
     args.logdir = os.path.realpath(args.logdir)
