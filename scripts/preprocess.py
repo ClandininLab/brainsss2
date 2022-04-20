@@ -13,9 +13,7 @@ sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
 from logging_utils import setup_logging, get_flystring, get_logfile_name
 from collections import OrderedDict
-
 from logging_utils import remove_existing_file_handlers, reinstate_file_handlers
-
 # THIS A HACK FOR DEVELOPMENT
 sys.path.append('../brainsss')
 from preprocess_utils import ( # noqa
@@ -121,6 +119,9 @@ def run_preprocessing_step(script, args, args_dict):
     saved_handlers = []
 
     for func in funcdirs:
+        if args.func_dirs is not None and func.split('/')[-1] not in args.func_dirs:
+            logging.info(f'skipping {func}')
+            continue
         if 'logfile' not in args_dict:
             logfile = get_logfile_name(
                 func,
@@ -141,6 +142,7 @@ def run_preprocessing_step(script, args, args_dict):
 
         else:  # run locally
             logging.info(f'running {script} locally')
+            saved_handlers = remove_existing_file_handlers()
             setattr(args, 'dir', func)  # create required arg for fictrac_qc.py
             args.logdir = None
             argstring = ' '.join(dict_to_args_list(args.__dict__))
@@ -157,7 +159,7 @@ def run_preprocessing_step(script, args, args_dict):
     if len(saved_handlers) > 0:
         reinstate_file_handlers(saved_handlers)
     else:
-        logging.warning('no saved handlers found, something has gone wrong')
+        logging.warning('no saved handlers found')
 
     logging.info(f'Completed step: {stepname}')
     return(output)
@@ -450,12 +452,14 @@ def process_fly(args):
     if args.fictrac_qc:
         workflow_dict['fictrac_qc.py'] = {
             "fps": 100,
-            'basedir': args.basedir
+            'basedir': args.basedir,
+            'dir': args.process
         }
 
     if args.STB:
         workflow_dict['stim_triggered_avg_beh.py'] = {
-            'basedir': args.basedir
+            'basedir': args.basedir,
+            'dir': args.process
         }
 
     for script, step_args_dict in workflow_dict.items():
