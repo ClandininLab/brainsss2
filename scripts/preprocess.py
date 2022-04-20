@@ -559,7 +559,7 @@ if __name__ == "__main__":
         args.process = build_fly(args)
         if args.process is None:
             raise Exception('fly building failed')
-        logging.info('Built to flydir:', args.process)
+        logging.info(f'Built to flydir: {args.process}')
         if args.build_only:
             logging.info('build only, exiting')
             args.process = None
