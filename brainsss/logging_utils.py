@@ -7,6 +7,13 @@ import datetime
 from git_utils import get_current_git_hash
 
 
+def get_logfile_name(logdir, logtype, flystring):
+    return os.path.join(
+        logdir,
+        strftime(f"{logtype}{flystring}_%Y%m%d-%H%M%S.txt")
+    )
+
+
 def remove_existing_file_handlers():
     l = logging.getLogger()
     saved_handlers = []
@@ -108,7 +115,7 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
     setattr(
         args,
         "logfile",
-        os.path.join(args.logdir, strftime(f"{logtype}{args.flystring}_%Y%m%d-%H%M%S.txt")),
+        get_logfile_name(args.logdir, logtype, args.flystring),
     )
 
     #  RP: replace custom code with logging.basicConfig
