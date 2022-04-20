@@ -146,7 +146,6 @@ def run_preprocessing_step(script, args, args_dict):
             print(argstring)
             output = run_shell_command(f'python {script} {argstring}')
 
-
     if not args.local:
         output = {}
         for func, job in sbatch.items():
@@ -449,8 +448,11 @@ def process_fly(args):
     if args.fictrac_qc:
         workflow_dict['fictrac_qc.py'] = {
             "fps": 100,
-             'basedir': args.basedir
+            'basedir': args.basedir
         }
+
+    if args.STB:
+        workflow_dict['stim_triggered_avg_beh.py'] = {}
 
     for script, step_args_dict in workflow_dict.items():
         logging.info(f'running step: {script}')
