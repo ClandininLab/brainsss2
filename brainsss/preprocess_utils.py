@@ -54,7 +54,7 @@ def dict_to_args_list(d):
             argslist.append(f"--{k}")
             argslist.extend(f"{vv}" for vv in v)
         elif v is not None:
-            raise ValueError(f"unsupported type {type(v)}")
+            pass # raise ValueError(f"unsupported type {type(v)}")
     return argslist
 
 

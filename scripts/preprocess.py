@@ -9,6 +9,8 @@ import os
 import logging
 import datetime
 from pathlib import Path
+sys.path.append("../brainsss")
+sys.path.append("../brainsss/scripts")
 from logging_utils import setup_logging
 from collections import OrderedDict
 
@@ -74,9 +76,8 @@ def build_fly(args):
 
         logging.info(f'flybuilder job complete: {sbatch.status(return_full_output=True)}')
         # get fly directory from output
-        slurm_logfile = os.path.join(args.basedir, f'logs/flybuilder_{sbatch.job_id}.out')
-        if os.path.exists(slurm_logfile):
-            return(get_flydir_from_building_log(slurm_logfile))
+        if os.path.exists(sbatch.logfile):
+            return(get_flydir_from_building_log(sbatch.logfile))
         else:
             return None
     else:
@@ -116,6 +117,8 @@ def run_preprocessing_step(script, args, args_dict):
     assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
 
     sbatch = {}
+    saved_handlers = []
+
     for func in funcdirs:
         if 'logfile' not in args_dict:
             logfile = os.path.join(
@@ -132,6 +135,8 @@ def run_preprocessing_step(script, args, args_dict):
             args_dict['dir'] = func
             sbatch[func] = SlurmBatchJob(stepname, script, args_dict)
             sbatch[func].run()
+            if hasattr(sbatch[func], 'saved_handlers'):
+                saved_handlers.extend(sbatch[func].saved_handlers)
 
         else:  # run locally
             logging.info(f'running {script} locally')
@@ -140,12 +145,20 @@ def run_preprocessing_step(script, args, args_dict):
             argstring = ' '.join(dict_to_args_list(args.__dict__))
             print(argstring)
             output = run_shell_command(f'python {script} {argstring}')
-            return(output)
 
     if not args.local:
+        output = {}
         for func, job in sbatch.items():
             job.wait()
-            output = job.status()
+            output[func] = job.status()
+
+    _ = remove_existing_file_handlers()
+    if len(saved_handlers) > 0:
+        reinstate_file_handlers(saved_handlers)
+    else:
+        logging.warning('no saved handlers found, something has gone wrong')
+
+    logging.info(f'Completed step: {stepname}')
     return(output)
 
 
@@ -434,9 +447,12 @@ def process_fly(args):
     # add each step to the workflow
     if args.fictrac_qc:
         workflow_dict['fictrac_qc.py'] = {
-            {"fps": 100,
-             'basedir': args.basedir}
+            "fps": 100,
+            'basedir': args.basedir
         }
+
+    if args.STB:
+        workflow_dict['stim_triggered_avg_beh.py'] = {}
 
     for script, step_args_dict in workflow_dict.items():
         logging.info(f'running step: {script}')
@@ -507,13 +523,13 @@ def get_flydir_from_building_log(logfile):
     """get the fly directory from the log file"""
     with open(logfile, 'r') as f:
         for line in f.readlines():
-            print(line)
             if "flydir: " in line:
-                return line.split(" ")[1].strip()
+                return line.split(" ")[-1].strip()
 
 
 if __name__ == "__main__":
 
+    print('welcome to fly_preprocessing')
     args = parse_args(sys.argv[1:])
     print(args)
     args = setup_modules(args)
@@ -540,17 +556,16 @@ if __name__ == "__main__":
     if args.build:
         logging.info("building fly")
         args = setup_build_dirs(args)
-        output = build_fly(args)
-        if output is None:
+        args.process = build_fly(args)
+        if args.process is None:
             raise Exception('fly building failed')
-        args.process = get_flydir_from_output(output)
-        print('Built to flydir:', args.process)
+        logging.info('Built to flydir:', args.process)
         if args.build_only:
             logging.info('build only, exiting')
             args.process = None
     # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
 
     if args.process is not None:
-        print('processing', args.process)
+        logging.info('processing', args.process)
         setattr(args, 'script_path', os.path.dirname(os.path.realpath(__file__)))
         process_fly(args)

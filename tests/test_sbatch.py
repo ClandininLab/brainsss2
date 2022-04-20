@@ -3,7 +3,8 @@
 
 import sys
 import os
-
+import shutil
+from pathlib import Path
 sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
 import logging  # noqa
@@ -13,6 +14,7 @@ import pytest  # noqa
 
 @pytest.fixture
 def sbatch():
+    shutil.rmtree('logs')
     argdict = {"foo": 1}
     return SlurmBatchJob("test", "dummy_script.py",
         argdict, logfile='logs/sbatch_test.log')
@@ -39,5 +41,5 @@ def test_sbatch_wait(sbatch):
     sbatch.wait()
     assert sbatch.status() == "COMPLETED"
     assert os.path.exists(sbatch.logfile)
-    assert os.path.exists(os.path.join(sbatch.logdir, f'test_{sbatch.job_id}.out'))
-    assert os.path.exists(os.path.join(sbatch.logdir, f'test_{sbatch.job_id}.stderr'))
+    # find internal log file
+    assert len(list(Path('logs').glob('dummy_script_test*'))) == 1

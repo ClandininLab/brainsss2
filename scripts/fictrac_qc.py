@@ -1,9 +1,14 @@
+from xml.dom import ValidationErr
 import numpy as np
+import pandas as pd
 import sys
 import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from brainsss import smooth_and_interp_fictrac, load_fictrac
+# THIS A HACK FOR DEVELOPMENT
+sys.path.append("../brainsss")
+sys.path.append("../brainsss/scripts")
 from argparse_utils import (
     get_base_parser,
     add_fictrac_qc_arguments,
@@ -88,6 +93,6 @@ if __name__ == "__main__":
         )
     xnew = np.arange(0, expt_len, args.resolution)
 
-    make_2d_hist(fictrac, args.dir, full_id, save=True, fixed_crop=True)
-    make_2d_hist(fictrac, args.dir, full_id, save=True, fixed_crop=False)
-    make_velocity_trace(fictrac, args.dir, full_id, xnew, save=True)
+    make_2d_hist(fictrac, fictrac_dir, full_id, save=True, fixed_crop=True)
+    make_2d_hist(fictrac, fictrac_dir, full_id, save=True, fixed_crop=False)
+    make_velocity_trace(fictrac, fictrac_dir, full_id, xnew, save=True)

@@ -13,11 +13,13 @@ from lxml import etree, objectify
 from openpyxl import load_workbook, Workbook
 import brainsss
 import logging
-from logging_utils import setup_logging
+# THIS A HACK FOR DEVELOPMENT
+sys.path.append("../brainsss")
+sys.path.append("../brainsss/scripts")
+
+from logging_utils import setup_logging, remove_existing_file_handlers
 import datetime
 from argparse_utils import get_base_parser, add_builder_arguments
-# THIS A HACK FOR DEVELOPMENT
-sys.path.append('../brainsss')
 from preprocess_utils import dict_to_args_list # noqa
 
 
@@ -769,5 +771,8 @@ if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     assert os.path.exists(args.basedir), f"basedir {args.basedir} does not exist"
 
-    args = setup_logging('flybuilder', args)
+    print(args)
+    _ = remove_existing_file_handlers()
+    args = setup_logging(args, 'flybuilder')
+
     build_fly(args)
