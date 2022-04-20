@@ -45,7 +45,13 @@ def add_preprocess_arguments(parser):
         help='run locally (rather than using slurm)'
     )
     parser.add_argument(
-        "-n", "--nodes", help="number of nodes to use", type=int, default=1
+        "--func_dirs",
+        type=str,
+        nargs='+',
+        help="specific func dirs to process"
+    )
+    parser.add_argument(
+        "--cores", help="number of cores to use", type=int, default=1
     )
     parser.add_argument(
         "--partition", help="slurm partition to use for running jobs", type=str, default='normal'
