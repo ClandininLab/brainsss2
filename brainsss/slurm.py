@@ -85,7 +85,7 @@ class SlurmBatchJob:
             'time_hours': 1,
             'module_string': '',
             'node_cmd': '',
-            'nodes': 1,
+            'cores': 1,
             'partition': 'normal',
         }
 
@@ -101,7 +101,7 @@ class SlurmBatchJob:
         self.sbatch_command = (
             f"sbatch -J {jobname} -o {self.logfile} --wrap='{self.command}' "
             f"--nice={self.args['nice']} {self.args['node_cmd']} --open-mode=append "
-            f"--cpus-per-task={self.args['nodes']} --partition={self.args['partition']} "
+            f"--cpus-per-task={self.args['cores']} --partition={self.args['partition']} "
             f"-e {self.logfile} "
             f"-t {self.args['time_hours']}:00:00"
         )
