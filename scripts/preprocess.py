@@ -134,6 +134,7 @@ def run_preprocessing_step(script, args, args_dict):
             os.mkdir(os.path.dirname(logfile))
 
         if not args.local:
+            logging.info(f'running {script} via slurm')
             args_dict['dir'] = func
             sbatch[func] = SlurmBatchJob(stepname, script, args_dict)
             sbatch[func].run()
@@ -459,7 +460,8 @@ def process_fly(args):
     if args.STB:
         workflow_dict['stim_triggered_avg_beh.py'] = {
             'basedir': args.basedir,
-            'dir': args.process
+            'dir': args.process,
+            'cores': 2
         }
 
     for script, step_args_dict in workflow_dict.items():
