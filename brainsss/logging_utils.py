@@ -87,6 +87,10 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
     args: argparse.Namespace
         command line arguments (updated with logging info)
     """
+
+    if 'dir' not in args:
+        setattr(args, 'dir', None)
+
     if logdir is None and "logdir" in args:
         logdir = args.logdir
     elif logdir is not None:
