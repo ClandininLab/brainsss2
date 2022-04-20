@@ -11,7 +11,7 @@ import datetime
 from pathlib import Path
 sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
-from logging_utils import setup_logging
+from logging_utils import setup_logging, get_flystring, get_logfile_name
 from collections import OrderedDict
 
 from logging_utils import remove_existing_file_handlers, reinstate_file_handlers
@@ -85,7 +85,8 @@ def build_fly(args):
         logging.info('running fly_builder.py locally')
         args.logfile = args_dict['logfile']
         argstring = ' '.join(dict_to_args_list(args.__dict__))
-        return run_shell_command(f'python fly_builder.py {argstring}')
+        output = run_shell_command(f'python fly_builder.py {argstring}')
+        return get_flydir_from_output(output)
 
 
 def get_dirs_to_process(args):
@@ -121,10 +122,10 @@ def run_preprocessing_step(script, args, args_dict):
 
     for func in funcdirs:
         if 'logfile' not in args_dict:
-            logfile = os.path.join(
+            logfile = get_logfile_name(
                 func,
-                'logs',
-                f"{stepname}_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+                stepname,
+                get_flystring(args)
             )
             args_dict['logfile'] = logfile
 
