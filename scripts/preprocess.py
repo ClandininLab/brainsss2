@@ -15,7 +15,7 @@ from logging_utils import setup_logging, get_flystring, get_logfile_name
 from collections import OrderedDict
 from logging_utils import remove_existing_file_handlers, reinstate_file_handlers
 # THIS A HACK FOR DEVELOPMENT
-sys.path.append('../brainsss')
+sys.path.insert(0, '../brainsss')
 from preprocess_utils import ( # noqa
     load_user_settings_from_json,
     setup_modules,
@@ -33,6 +33,12 @@ from slurm import SlurmBatchJob  # noqa
 
 def parse_args(input):
     parser = get_base_parser('preprocess')
+
+    parser.add_argument(
+        "-b", "--basedir",
+        type=str,
+        help="base directory for fly data",
+        required=True)
 
     parser = add_builder_arguments(parser)
 
@@ -120,41 +126,37 @@ def run_preprocessing_step(script, args, args_dict):
 
     for func in funcdirs:
         if args.func_dirs is not None and func.split('/')[-1] not in args.func_dirs:
-            logging.info(f'skipping {func}')
+            logging.info(f'skipping {func} - not included in --func_dirs')
             continue
+
         if 'logfile' not in args_dict:
             logfile = get_logfile_name(
-                func,
-                stepname,
-                get_flystring(args)
+                os.path.join(func, 'logs'),
+                stepname
             )
-            args_dict['logfile'] = logfile
+        print(f'LOGGING to {logfile}')
+        args_dict['logfile'] = logfile
 
         if not os.path.exists(os.path.dirname(logfile)):
             os.mkdir(os.path.dirname(logfile))
 
-        if not args.local:
-            logging.info(f'running {script} via slurm')
-            args_dict['dir'] = func
-            sbatch[func] = SlurmBatchJob(stepname, script, args_dict)
-            sbatch[func].run()
-            if hasattr(sbatch[func], 'saved_handlers'):
-                saved_handlers.extend(sbatch[func].saved_handlers)
-
-        else:  # run locally
+        if args.local:
             logging.info(f'running {script} locally')
-            saved_handlers = remove_existing_file_handlers()
-            setattr(args, 'dir', func)  # create required arg for fictrac_qc.py
-            args.logdir = None
-            argstring = ' '.join(dict_to_args_list(args.__dict__))
-            print(argstring)
-            output = run_shell_command(f'python {script} {argstring}')
+        else:
+            logging.info(f'running {script} via slurm')
 
-    if not args.local:
-        output = {}
-        for func, job in sbatch.items():
-            job.wait()
-            output[func] = job.status()
+        args_dict['dir'] = func
+        args.dir = func
+        sbatch[func] = SlurmBatchJob(stepname, script, 
+                                     args_dict, local=args.local)
+        sbatch[func].run()
+        if hasattr(sbatch[func], 'saved_handlers'):
+            saved_handlers.extend(sbatch[func].saved_handlers)
+
+    output = {}
+    for func, job in sbatch.items():
+        job.wait()
+        output[func] = job.status()
 
     _ = remove_existing_file_handlers()
     if len(saved_handlers) > 0:
@@ -164,46 +166,6 @@ def run_preprocessing_step(script, args, args_dict):
 
     logging.info(f'Completed step: {stepname}')
     return(output)
-
-
-# def run_stim_triggered_beh():
-
-#     for func in funcs:
-#         args = {"logfile": logfile, "func_path": func}
-#         script = "stim_triggered_avg_beh.py"
-#         job_id = brainsss.sbatch(
-#             jobname="stim",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=1,
-#             mem=2,
-#             nice=nice,
-#             nodes=nodes,
-#         )
-#         brainsss.wait_for_job(job_id, logfile, com_path)
-
-
-# def run_bleaching_qc():
-
-#     # job_ids = []
-#     for funcanat, dirtype in zip(funcanats, dirtypes):
-#         directory = os.path.join(funcanat, "imaging")
-#         args = {"logfile": logfile, "directory": directory, "dirtype": dirtype}
-#         script = "bleaching_qc.py"
-#         job_id = brainsss.sbatch(
-#             jobname="bleachqc",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=1,
-#             mem=2,
-#             nice=nice,
-#             nodes=nodes,
-#         )
-#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
 # def run_temporal_mean_brain_pre():
@@ -464,8 +426,24 @@ def process_fly(args):
             'cores': 2
         }
 
+    if args.bleaching_qc:
+        workflow_dict['bleaching_qc.py'] = {
+            'basedir': args.basedir,
+            'dir': args.process,
+            'cores': 2
+        }
+    
+    if len(set(args.temporal_mean).intersection(set(['both', 'pre']))) > 0:
+        workflow_dict['make_mean_brain.py'] = {
+            'basedir': args.basedir,
+            'dir': args.process,
+            'cores': 2,
+            'dirtype': 'func'
+        }
+
     for script, step_args_dict in workflow_dict.items():
         logging.info(f'running step: {script}')
+        args.dir = args.process
         run_preprocessing_step(script, args, step_args_dict)
 
     # if args.fictrac_qc:
@@ -542,6 +520,7 @@ if __name__ == "__main__":
     print('welcome to fly_preprocessing')
     args = parse_args(sys.argv[1:])
     print(args)
+    
     args = setup_modules(args)
 
     if args.target_dir is None:
