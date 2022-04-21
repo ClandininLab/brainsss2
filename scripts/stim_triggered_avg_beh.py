@@ -7,7 +7,7 @@ sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
 from logging_utils import setup_logging
 import logging
-from brainsss.visual import (
+from visual import (
     load_photodiode,
     get_stimulus_metadata,
     extract_stim_times_from_pd,
@@ -16,13 +16,21 @@ from argparse_utils import (
     get_base_parser,
     add_fictrac_qc_arguments,
 )
-from brainsss.fictrac import smooth_and_interp_fictrac, load_fictrac
+from fictrac import smooth_and_interp_fictrac, load_fictrac
 
 
 def parse_args(input, allow_unknown=True):
     parser = get_base_parser('fictrac_qc')
 
     parser = add_fictrac_qc_arguments(parser)
+
+    # need to add this manually to procesing steps in order to make required
+    parser.add_argument(
+        '-d',
+        '--dir', 
+        type=str,
+        help='func directory',
+        required=True)
 
     if allow_unknown:
         args, unknown = parser.parse_known_args()
@@ -86,6 +94,8 @@ if __name__ == "__main__":
     args = setup_logging(args, logtype='stim_triggered_avg_beh')
     logging.info(f'Running stim_triggered_avg_beh on {args.dir}')
     vision_path = os.path.join(args.dir, "visual")
+    logging.info(f'loading vision data from {vision_path}')
+
     assert os.path.exists(vision_path), f"vision_path {vision_path} does not exist"
 
     t, ft_triggers, pd1, pd2 = load_photodiode(vision_path)
