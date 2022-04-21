@@ -86,6 +86,10 @@ OR turn settings file off with --no_require_settings"""
     with open(args.settings_file) as f:
         user_settings = json.load(f)
     for k, v in user_settings.items():
+        if v == "True":
+            v = True
+        elif v == "False":
+            v = False
         setattr(args, k, v)
     logging.info(f"loaded settings from {args.settings_file}")
     return args
