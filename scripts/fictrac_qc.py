@@ -1,18 +1,19 @@
+from argparse import ArgumentError
 import numpy as np
 import sys
 import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from brainsss import smooth_and_interp_fictrac, load_fictrac
 # THIS A HACK FOR DEVELOPMENT
-sys.path.append("../brainsss")
-sys.path.append("../brainsss/scripts")
+sys.path.insert(0, os.path.realpath("../brainsss"))
+sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
 from argparse_utils import (
     get_base_parser,
     add_fictrac_qc_arguments,
 )
 from logging_utils import setup_logging
 import logging
+from fictrac import smooth_and_interp_fictrac, load_fictrac
 
 
 def parse_args(input, allow_unknown=True):
@@ -20,12 +21,21 @@ def parse_args(input, allow_unknown=True):
 
     parser = add_fictrac_qc_arguments(parser)
 
+    # need to add this manually to procesing steps in order to make required
+    parser.add_argument(
+        '-d',
+        '--dir', 
+        type=str,
+        help='func directory',
+        required=True)
+
     if allow_unknown:
         args, unknown = parser.parse_known_args()
         if unknown is not None:
             print(f'skipping unknown arguments:{unknown}')
     else:
         args = parser.parse_args()
+
     return args
 
 
@@ -65,7 +75,7 @@ if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
     setup_logging(args, logtype="fictrac_qc")
-
+    print(logging.getLogger().handlers)
     print(args)
 
     fictrac_dir = os.path.join(args.dir, "fictrac")
@@ -78,7 +88,11 @@ if __name__ == "__main__":
         logging.info(f"fictrac directory {fictrac_dir} not found, skipping fictrac_qc")
         sys.exit(0)
 
-    fictrac_raw = load_fictrac(fictrac_dir)
+    try:
+        fictrac_raw = load_fictrac(fictrac_dir)
+    except FileNotFoundError:
+        logging.error(f"fictrac directory {fictrac_dir} not found, skipping fictrac_qc")
+        sys.exit(0)
 
     # fly = os.path.split(os.path.split(directory)[0])[1]
     # expt = os.path.split(directory)[1]
