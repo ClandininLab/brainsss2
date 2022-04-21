@@ -29,10 +29,8 @@ def remove_argument(parser, arg):
 def get_base_parser(description):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
-    parser.add_argument("-l", "--logdir", type=str, help="log directory")
+    parser.add_argument("-l", "--logfile", type=str, help="log file")
     parser.add_argument('-t', '--test', action='store_true', help='test mode')
-    parser.add_argument(
-        "-b", "--basedir", type=str, help="base directory for fly data")
     return parser
 
 
@@ -40,7 +38,6 @@ def get_base_parser(description):
 # they are done this way so that they can be imported into preprocess.py
 # NOTE: do not use single letter args here (except in preprocess)
 def add_preprocess_arguments(parser):
-    parser = argparse.ArgumentParser(description=description)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--build", help="build_flies", action="store_true")
     group.add_argument("--process", type=str, help="fly directory to process")
@@ -135,7 +132,6 @@ def add_builder_arguments(parser):
 
 
 def add_fictrac_qc_arguments(parser):
-    parser.add_argument('-d', '--dir', type=str, help='func directory')
     parser.add_argument(
         "--fps", type=float, default=100, help="frame rate of fictrac camera"
     )
