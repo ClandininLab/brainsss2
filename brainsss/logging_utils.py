@@ -7,7 +7,7 @@ import datetime
 from git_utils import get_current_git_hash
 
 
-def get_logfile_name(logdir, logtype, flystring):
+def get_logfile_name(logdir, logtype, flystring=''):
     return os.path.join(
         logdir,
         strftime(f"{logtype}{flystring}_%Y%m%d-%H%M%S.txt")
@@ -67,7 +67,7 @@ def get_flystring(args):
     return flystring
 
 
-def setup_logging(args, logtype, logdir=None, preamble=True):
+def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
     """
     Setup logging for the script.
 
@@ -77,8 +77,8 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
         command line arguments
     logtype: str
         name of process to use for logfile naming
-    logdir: str
-        directory to save logfile in
+    logfile: str
+        file to save logfile in
     preamble: bool
         whether to print preamble to logfile
 
@@ -91,21 +91,37 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
     if 'dir' not in args:
         setattr(args, 'dir', None)
 
-    if logdir is None and "logdir" in args:
-        logdir = args.logdir
-    elif logdir is not None:
-        setattr(args, "logdir", logdir)
+    # fx argument has priority over args.logfile
+    if logfile is not None:
+        setattr(args, 'logfile', logfile)
+        setattr(args, 'logdir', os.path.dirname(logfile))
+    elif 'logfile' in args and args.logfile is not None:
+        setattr(args, 'logfile', args.logfile)
+        setattr(args, 'logdir', os.path.dirname(args.logfile))
     else:
-        setattr(args, "logdir", None)
-
-    if args.logdir is None:
-        if args.dir is not None:
-            args.logdir = os.path.join(args.dir, 'logs')
-        elif args.basedir is not None:
-            args.logdir = os.path.join(args.basedir, 'logs')
+        # come up with a logfile name
+        if logdir is None and "logdir" in args:
+            logdir = args.logdir
+        elif logdir is not None:
+            setattr(args, "logdir", logdir)
         else:
-            raise ValueError("args.dir or args.basedir must be specified if args.logdir is not")
-    args.logdir = os.path.realpath(args.logdir)
+            setattr(args, "logdir", None)
+
+        if args.logdir is None:
+            # try to put into dir if possible
+            if args.dir is not None:
+                args.logdir = os.path.join(args.dir, 'logs')
+            # fall back on basedir
+            elif args.basedir is not None:
+                args.logdir = os.path.join(args.basedir, 'logs')
+            else:
+                raise ValueError("args.dir or args.basedir must be specified if args.logdir is not")
+        args.logdir = os.path.realpath(args.logdir)
+        setattr(
+            args,
+            "logfile",
+            get_logfile_name(args.logdir, logtype),
+        )
 
     if not os.path.exists(args.logdir):
         os.mkdir(args.logdir)
@@ -113,14 +129,8 @@ def setup_logging(args, logtype, logdir=None, preamble=True):
     if "verbose" not in args:
         setattr(args, "verbose", False)
 
-    setattr(args, 'flystring', get_flystring(args))
+    #setattr(args, 'flystring', get_flystring(args))
 
-    #  RP: use os.path.join rather than combining strings
-    setattr(
-        args,
-        "logfile",
-        get_logfile_name(args.logdir, logtype, args.flystring),
-    )
 
     #  RP: replace custom code with logging.basicConfig
     setattr(args, 'file_handler', logging.FileHandler(args.logfile))
