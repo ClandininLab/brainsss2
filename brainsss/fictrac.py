@@ -15,7 +15,7 @@ def load_fictrac(directory, file="fictrac.dat"):
 
     Parameters
     ----------
-    directory: string of full path to file
+    directory: string of full path to file REALLY? SEEMS LIKE IT WANTS A DIRECTORY
     file: string of file name
 
     Returns
