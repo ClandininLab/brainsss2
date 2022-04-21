@@ -3,21 +3,35 @@ import sys
 import os
 import matplotlib.pyplot as plt
 import nibabel as nib
-import argparse
 from pathlib import Path
+# THIS A HACK FOR DEVELOPMENT
+sys.path.insert(0, os.path.realpath("../brainsss"))
+sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
+from argparse_utils import (
+    get_base_parser,
+    add_fictrac_qc_arguments,
+)
+from logging_utils import setup_logging
+import logging
 
+def parse_args(input, allow_unknown=True):
+    parser = get_base_parser('bleaching_qc')
 
-def parse_args(input):
-    parser = argparse.ArgumentParser(description="run bleaching qc")
+    # need to add this manually to procesing steps in order to make required
     parser.add_argument(
-        "-d",
-        "--dir",
+        '-d',
+        '--dir', 
         type=str,
-        help="directory containing func or anat data",
-        required=True,
-    )
-    parser.add_argument('-v', "--verbose", action="store_true", help="verbose output")
-    args = parser.parse_args(input)
+        help='func directory',
+        required=True)
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+
     return args
 
 
@@ -37,7 +51,7 @@ def load_data(args):
     return data_mean
 
 
-def get_bleaching_curve(data_mean, args):
+def get_bleaching_curve(data_mean, outdir):
     """get bleaching curve"""
 
     plt.rcParams.update({"font.size": 24})
@@ -61,19 +75,21 @@ def get_bleaching_curve(data_mean, args):
         loss_string = loss_string + file + " lost" + f"{int(signal_loss[file])}" + "%\n"
     plt.title(loss_string, ha="center", va="bottom")
 
-    save_file = os.path.join(args.dir, "bleaching.png")
+    save_file = os.path.join(outdir, "bleaching.png")
     plt.savefig(save_file, dpi=300, bbox_inches="tight")
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
-    # TODO: Fix logging
-    # logfile = args['logfile']
-    width = 120
+    args = setup_logging(args, logtype="bleaching_qc")
 
-    print("loading data")
+    logging.info(f"loading data from {args.dir}")
     data_mean = load_data(args)
 
-    print("getting bleaching curve")
-    get_bleaching_curve(data_mean, args)
+    logging.info("getting bleaching curve")
+    outdir = os.path.join(args.dir, "QC")
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+    logging.info(f'saving results to {outdir}')
+    get_bleaching_curve(data_mean, outdir)
