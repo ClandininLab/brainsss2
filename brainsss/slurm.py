@@ -5,8 +5,8 @@ import logging
 import time
 import os
 import sys
-sys.path.append("../brainsss")
-sys.path.append("../brainsss/scripts")
+sys.path.insert(0, "../brainsss")
+sys.path.insert(0, "../brainsss/scripts")
 from logging_utils import remove_existing_file_handlers
 
 # set up module level logging
@@ -22,7 +22,8 @@ logger.addHandler(ch)
 class SlurmBatchJob:
     def __init__(self, jobname: str, script: str,
                  user_args: dict = None, verbose: bool = False,
-                 logfile: str = None, **kwargs):
+                 logfile: str = None, local=False,
+                **kwargs):
         """
         Class to define and run a slurm job
 
@@ -38,6 +39,8 @@ class SlurmBatchJob:
             enable verbose logging
         logfile : str
             path to logfile (if not specified, logs to stdout only)
+        local : bool
+            run job locally instead of on slurm
         kwargs : dict
             additional arguments to pass to the sbatch command
 
@@ -49,6 +52,10 @@ class SlurmBatchJob:
         self.verbose = verbose
         self.logfile = None
         self.logdir = None
+        self.local = local
+        self.local_response = None
+        self.local_run = False
+        self.sbatch_run = False
 
         # first remove any outside file logger
         self.saved_handlers = remove_existing_file_handlers()
@@ -119,16 +126,39 @@ class SlurmBatchJob:
         self.args.update(kwargs)
 
     def run(self):
+        if self.local:
+            self.run_local()
+            
         sbatch_response = subprocess.getoutput(self.sbatch_command)
         setattr(self, 'job_id', sbatch_response.split(" ")[-1].strip())
         logger.debug(f'job_id: {self.job_id}')
+        if self.job_id is not None:
+            self.sbatch_run = True
         setattr(self, 'sbatch_response', sbatch_response)
         logger.debug(f'sbatch_response: {self.sbatch_response}')
 
+    def run_local(self):
+        """run without slurm"""
+        logger.info(f'Running job locally: {self.jobname}')
+        setattr(self, 'job_id', None)
+        logger.info(f'command: {self.command}')
+        response = subprocess.run(self.command, shell=True)
+        setattr(self, 'local_response', response)
+        logger.info(f'response: {response}')
+        if response is not None:
+            setattr(self, 'local_run', True)
+
     def wait(self, wait_time=5):
+        if self.local:
+            logger.warning('Cannot wait for local job - returning output from local job')
+            return(self.local_response)
+
+        if not self.sbatch_run:
+            logging.warning('Cannot wait for job - job not run')
+
         while True:
             status = self.status()
-            if status is not None and status not in ['PENDING', 'RUNNING']:
+            if status is not None and status not in ['PENDING', 'RUNNING', 'CONFIGURING']:
                 status = self.status(return_full_output=True)
                 logger.info(f'Job {self.job_id} finished with status: {status}\n\n')
                 logger.info(f'opening log_file: {self.logfile}')
@@ -143,6 +173,15 @@ class SlurmBatchJob:
                 time.sleep(wait_time)
 
     def status(self, return_full_output=False):
+        if self.local:
+            if self.local_response is None:
+               logging.warning('Cannot get status of local job - no response')
+            else:
+                return('COMPLETED')
+
+        if not self.sbatch_run:
+            logging.warning('Cannot get status of job - job not run')
+            return None
 
         temp = subprocess.getoutput(
             f"sacct -n -P -j {self.job_id} --noconvert --format=State,Elapsed,MaxRSS,NCPUS,JobName"
