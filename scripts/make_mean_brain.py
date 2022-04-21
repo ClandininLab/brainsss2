@@ -5,11 +5,13 @@ import nibabel as nib
 import h5py
 import argparse
 from pathlib import Path
+# THIS A HACK FOR DEVELOPMENT
+sys.path.insert(0, os.path.realpath("../brainsss"))
+sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
 from logging_utils import setup_logging
 import logging
 
-
-def parse_args(input):
+def parse_args(input, allow_unknown=True):
     parser = argparse.ArgumentParser(
         description="make mean brain for all functional channels in dir"
     )
@@ -23,11 +25,20 @@ def parse_args(input):
     parser.add_argument(
         "--regexp",
         type=str,
-        default="functional_channel_[1,2].nii",
         help="regexp to match files to process",
+        default="*_channel_[1,2].nii",
     )
+    parser.add_argument('--dirtype', type=str, default="func", 
+                        help="func or anat", choices=['func', 'anat'])
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
-    return parser.parse_args(input)
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+    return args
 
 
 def make_mean_brain(args, file):
@@ -69,9 +80,15 @@ def save_mean_brain(args, file):
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
-    setup_logging(args, logtype="meanbrain")
+    args = setup_logging(args, logtype="make_mean_brain")
 
-    files = [f.as_posix() for f in Path(args.dir).glob("*_channel*.nii")]
+    imaging_dir = os.path.join(args.dir, 'imaging')
+    assert os.path.exists(imaging_dir), f"{imaging_dir} does not exist"
+
+    files = [f.as_posix() for f in Path(imaging_dir).glob(args.regexp)]
+
+    if len(files) == 0:
+        raise FileNotFoundError(f"No files matching {args.regexp} found in {args.dir}")
 
     logging.info(f"found files: {files}")
 
