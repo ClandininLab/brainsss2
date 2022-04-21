@@ -46,6 +46,7 @@ fictrac
 ├── fictrac-20220329_141649.dat
 └── fictrac-20220329_141649.log
 
+Conversions are tracked within processed/conversion_db.csv - this is checked during building, and any imports already built will not be rebuilt unless the --overwrite flag is set.
 
 ### Fly builder
 
@@ -91,4 +92,75 @@ Logging for fly_builder.py is in fly_XXX/logs; all other logging happens within 
 
 - preproc: location of preprocessed outputs from subsequent preprocessing steps
 - QC: location of QC outputs from various steps
+
+## Preprocessing steps
+
+
+### Fictrac QC
+
+outputs:
+
+func_0/
+├── logs
+│   └── fictrac_qc_20220420-074747.log
+└── QC
+    ├── fictrac_2d_hist_fixed.png
+    ├── fictrac_2d_hist.png
+    └── fictrac_velocity_trace.png
+
+### Stimulus-triggered average behavior
+
+
+outputs: 
+
+func_0/
+├── logs
+│   └── stim_triggered_avg_beh_20220420-074802.log
+└── QC
+    └── stim_triggered_turning.png
+
+
+### Bleaching QC
+
+
+### Temporal mean (pre preprocessing)
+
+
+### Motion correction
+
+
+### Z-scoring
+- drop?
+
+
+### highpass filtering
+
+
+### correlation
+
+
+### stimulus-triggered average neural response
+
+
+### Convert h5 to nii
+
+
+### Temporal mean (post preprocessing)
+
+
+
+## Additional steps (not current included)
+
+
+### Anatomical motion correction
+- only to channel 1
+
+
+### Co-registration of anatomical to functional
+
+
+### Anatomical registration to atlas
+
+
+
 
