@@ -90,13 +90,10 @@ def set_stepsize(args, scantype_stepsize_dict=None):
 
 def get_mean_brain(args, file):
     """get mean brain for channel 1"""
-    if args.verbose:
-        print('Getting mean brain')
     assert 'channel_1' in file, 'file must be channel_1'
     meanbrain_file = file.replace('.nii', '_mean.nii')
     if not os.path.exists(meanbrain_file):
-        if args.verbose:
-            print(f'making mean brain for {meanbrain_file}')
+        logging.info(f'making mean brain for {meanbrain_file}')
         make_mean_brain(args, file)
     img = nib.load(meanbrain_file)
     meanbrain = img.get_fdata(dtype='float32')
@@ -145,16 +142,14 @@ def create_moco_output_dir(args):
 
     if not os.path.exists(args.moco_output_dir):
         os.mkdir(args.moco_output_dir)
-    if args.verbose:
-        logging.info(f'Moco output directory: {args.moco_output_dir}')
+    logging.info(f'Moco output directory: {args.moco_output_dir}')
     return(args)
 
 
 def apply_moco_parameters_to_channel_2(args, files,
                                        h5_files, transform_files):
     """Apply moco parameters to channel 2"""
-    if args.verbose:
-        logging.info('Applying moco parameters to channel 2')
+    logging.info('Applying moco parameters to channel 2')
     assert 'channel_2' in files, 'files must include channel_2'
 
     # load ch1 image to get dimensions for chunking
@@ -166,7 +161,6 @@ def apply_moco_parameters_to_channel_2(args, files,
 
     # load full data
     ch2_data = ch2_img.get_fdata(dtype='float32')
-    print('ch1_data.shape:', ch2_data.shape)
 
     # overwrite existing data in place to prevent need for additional memory
     for timepoint in range(n_timepoints):
@@ -184,8 +178,7 @@ def apply_moco_parameters_to_channel_2(args, files,
             interpolator=args.interpolation_method)
         ch2_data[..., timepoint] = result.numpy()
     # save data
-    if args.verbose:
-        logging.info('Saving channel 2 data')
+    logging.info('Saving channel 2 data')
 
     # setup chunking into smaller parts (for memory)
     chunk_boundaries = get_chunk_boundaries(args, n_timepoints)
@@ -197,10 +190,15 @@ def apply_moco_parameters_to_channel_2(args, files,
 def run_motion_correction(args, files, h5_files):
     """Run motion correction on tdTomato channel (1)"""
 
-    if args.verbose:
-        logging.info('Running motion correction')
+    logging.info('Running motion correction')
+
+    # NB: need to make sure that the data is in the correct orientation
+    # (i.e. direction of mean brain and chunkdata must be identical)
+    logging.info('loading mean brain')
+    ch1_meanbrain = get_mean_brain(args, files['channel_1'])
 
     # load ch1 image to get dimensions for chunking
+    logging.info(f'opening file {files["channel_1"]}')
     ch1_img = nib.load(files['channel_1'])
     n_timepoints = ch1_img.shape[-1]
 
@@ -208,20 +206,14 @@ def run_motion_correction(args, files, h5_files):
     chunk_boundaries = get_chunk_boundaries(args, n_timepoints)
 
     # load full data
+    logging.info('loading full data from channel 1')
     ch1_data = ch1_img.get_fdata(dtype='float32')
-    print('ch1_data.shape:', ch1_data.shape)
-
-    # NB: need to make sure that the data is in the correct orientation
-    # (i.e. direction of mean brain and chunkdata must be identical)
-    ch1_meanbrain = get_mean_brain(args, files['channel_1'])
-    print('made meanbrain')
 
     motion_parameters = None
     transform_files = []
     # loop through chunks
     for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
-        if args.verbose:
-            logging.info(f'processing chunk {i + 1} of {len(chunk_boundaries)}')
+        logging.info(f'processing chunk {i + 1} of {len(chunk_boundaries)}')
         # get chunk data
         chunkdata = ch1_data[..., chunk_start:chunk_end]
         chunkdata_ants = ants.from_numpy(chunkdata)
@@ -244,8 +236,7 @@ def run_motion_correction(args, files, h5_files):
                     get_dataset_resolution(args.dir))[1]))
 
         # save results from chunk
-        if args.verbose:
-            logging.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
+        logging.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
         with h5py.File(h5_files['channel_1'], 'a') as f:
             f['data'][..., chunk_start:chunk_end] = mytx['motion_corrected'].numpy()
 
@@ -320,8 +311,7 @@ def save_nii(args, h5_files):
     """save moco data to nifti
     - reuse header info from existing nifti files"""
     for channel, h5_file in h5_files.items():
-        if args.verbose:
-            logging.info(f'converting {h5_file} to nifti')
+        logging.info(f'converting {h5_file} to nifti')
         _ = h5_to_nii(h5_file)
     return(None)
 
@@ -334,8 +324,7 @@ if __name__ == '__main__':
 
     files, args = load_data(args)
 
-    if args.verbose:
-        logging.info(files)
+    logging.info(f'files: {files}')
 
     args = create_moco_output_dir(args)
 
