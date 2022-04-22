@@ -65,7 +65,7 @@ def add_preprocess_arguments(parser):
 
     # flags to run each component
     parser.add_argument(
-        "--motion_correction", 
+        "--motion_correction",
         help="run motion correction (func, anat, or both - defaults to func)",
         choices=['func', 'anat', 'both']
     )
@@ -154,4 +154,11 @@ def add_moco_arguments(parser):
     parser.add_argument('--meanbrain_n_frames', type=int, default=None,
         help='number of frames to average over when computing mean/fixed brain')
     parser.add_argument('--save_nii', action='store_true', help='save nifti files')
+    return(parser)
+
+
+def add_highpassfilter_arguments(parser):
+    parser.add_argument(
+        "--sigma", default=200, type=float, help="sigma for gaussian filter"
+    )
     return(parser)
