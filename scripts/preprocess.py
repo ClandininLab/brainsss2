@@ -422,7 +422,7 @@ def process_fly(args):
         workflow_dict['make_mean_brain.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
-            'cores': 2,
+            'cores': 4,
             'dirtype': 'func'
         }
 
