@@ -1,4 +1,5 @@
 # hdf5 utils
+# pyright: reportMissingImports=false
 
 import os
 import h5py
