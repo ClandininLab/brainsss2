@@ -28,6 +28,7 @@ setup(
         'h5py',
         'matplotlib',
         'antspyx',
+        'nilearn',
         'GitPython'
     ],
 )
