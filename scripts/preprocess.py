@@ -10,6 +10,8 @@ import logging
 import datetime
 
 from pathlib import Path
+
+from scripts.argparse_utils import add_moco_arguments
 sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
 from logging_utils import setup_logging, get_logfile_name  # noqa
@@ -28,6 +30,7 @@ from argparse_utils import ( # noqa
     add_builder_arguments,
     add_preprocess_arguments,
     add_fictrac_qc_arguments,
+    add_moco_arguments
 )  # noqa
 from slurm import SlurmBatchJob  # noqa
 
@@ -51,6 +54,8 @@ def parse_args(input):
     parser = add_preprocess_arguments(parser)
 
     parser = add_fictrac_qc_arguments(parser)
+
+    parser = add_moco_arguments(parser)
 
     return parser.parse_args(input)
 
@@ -179,66 +184,6 @@ def run_preprocessing_step(script, args, args_dict):
     logging.info(f'Completed step: {stepname}')
     return(output)
 
-
-# def run_zscore():
-#     # TODO: check that moco file exists
-
-#     for func in funcs:
-#         load_directory = os.path.join(func, "moco")
-#         save_directory = os.path.join(func)
-#         brain_file = "functional_channel_2_moco.h5"
-
-#         args = {
-#             "logfile": logfile,
-#             "load_directory": load_directory,
-#             "save_directory": save_directory,
-#             "brain_file": brain_file,
-#         }
-#         script = "zscore.py"
-#         job_id = brainsss.sbatch(
-#             jobname="zscore",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=1,
-#             mem=2,
-#             nice=nice,
-#             nodes=nodes,
-#         )
-#         brainsss.wait_for_job(job_id, logfile, com_path)
-
-
-# def run_highpass():
-#     # TODO: check for file existence
-
-#     for func in funcs:
-
-#         load_directory = os.path.join(func)
-#         save_directory = os.path.join(func)
-#         brain_file = "functional_channel_2_moco_zscore.h5"
-
-#         args = {
-#             "logfile": logfile,
-#             "load_directory": load_directory,
-#             "save_directory": save_directory,
-#             "brain_file": brain_file,
-#         }
-#         script = "temporal_high_pass_filter.py"
-#         job_id = brainsss.sbatch(
-#             jobname="highpass",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=4,
-#             mem=2,
-#             nice=nice,
-#             nodes=nodes,
-#         )
-#         brainsss.wait_for_job(job_id, logfile, com_path)
-
-
 # def run_correlation():
 
 #     for func in funcs:
@@ -311,33 +256,6 @@ def run_preprocessing_step(script, args, args_dict):
 #         )
 #         brainsss.wait_for_job(job_id, logfile, com_path)
 
-
-# def temporal_mean_brain_post():
-
-#     for funcanat, dirtype in zip(funcanats, dirtypes):
-#         directory = os.path.join(funcanat, "moco")
-
-#         if dirtype == "func":
-#             files = ["functional_channel_1_moco.h5", "functional_channel_2_moco.h5"]
-#         if dirtype == "anat":
-#             files = ["anatomy_channel_1_moco.h5", "anatomy_channel_2_moco.h5"]
-
-#         args = {"logfile": logfile, "directory": directory, "files": files}
-#         script = "make_mean_brain.py"
-#         job_id = brainsss.sbatch(
-#             jobname="meanbrn",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=2,
-#             mem=10,
-#             nice=nice,
-#             nodes=nodes,
-#         )
-#         brainsss.wait_for_job(job_id, logfile, com_path)
-
-
 def process_fly(args):
     """process a single fly"""
 
@@ -351,6 +269,9 @@ def process_fly(args):
 
     # add each step to the workflow
     # should always include basedir to ensure proper logging
+    # the specific files used in each step are built into the workflow components
+    # so we don't need to track and pass output to input at each step ala nipype
+    # but it means that the steps cannot be reordered and expected to run properly
     if args.fictrac_qc:
         workflow_dict['fictrac_qc.py'] = {
             "fps": 100,
@@ -386,59 +307,42 @@ def process_fly(args):
             'basedir': args.basedir,
             'dir': args.process,
             # use longer run with fewer cores if not using normal queue
+            # need to retest this with the new moco model
             'time_hours': 48 if args.partition == 'normal' else 96,
-            'cores': min(4 if args.partition == 'normal' else 4, get_max_slurm_cpus()),
+            'cores': min(8 if args.partition == 'normal' else 4, get_max_slurm_cpus()),
             'dirtype': args.motion_correction
         }
-
-    for script, step_args_dict in workflow_dict.items():
-        logging.info(f'running step: {script}')
-        args.dir = args.process
-        run_preprocessing_step(script, args, step_args_dict)
 
     if args.highpass:
         workflow_dict['temporal_high_pass_filter.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
-            'cores': 2
+            'cores': 2,
+            'time_hours': 4,
         }
 
-    # if args.fictrac_qc:
-    #     #fictrac_output = run_fictrac_qc(args)
-    #     step_args_dict = {
-    #         "fps": 100,
-    #         'basedir': args.basedir,}
-    #     run_preprocessing_step('fictrac_qc.py', args, step_args_dict)
+    if args.correlation:
+        #             time=2,
+        #             cores=4,
+        logging.warning('correlation not yet implemented!')
 
-    # if args.STB:
-    #     stb_output = run_stim_triggered_beh()
+    if args.STA:
+        #             time=4,
+        #             cores=4,
+        logging.warning('STA not yet implemented!')
 
-    # if args.bleaching_qc:
-    #     bleaching_output = run_bleaching_qc()
-
-    # if 'pre' in args.temporal_mean or 'both' in args.temporal_mean:
-    #     mean_brain_pre_output = run_temporal_mean_brain_pre()
-
-    # if args.motion_correction:
-    #     motion_correction_output = run_motion_correction()
-
-    # if args.zscore:
-    #     zscore_output = run_zscore()
-
-    # if args.highpass:
-    #     highpass_output = run_highpass()
-
-    # if args.correlation:
-    #     correlation_output = run_correlation()
-
-    # if args.STA:
-    #     STA_output = run_STA()
-
-    # if args.h5_to_nii:
-    #     h5_to_nii_output = run_h5_to_nii()
+    if args.h5_to_nii:
+        #             time=2,
+        #             mem=10, - this seems crazy...
+        logging.warning('h5_to_nii not yet implemented!')
 
     # if 'post' in args.temporal_mean or 'both' in args.temporal_mean:
     #     mean_brain_post_output = run_temporal_mean_brain_post()
+
+    for script, step_args_dict in workflow_dict.items():
+        logging.info(f'running step: {script}')
+        args.dir = args.process
+        run_preprocessing_step(script, args, step_args_dict)
 
 
 def setup_build_dirs(args):
