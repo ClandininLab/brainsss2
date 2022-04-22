@@ -219,11 +219,13 @@ def run_motion_correction(args, files, h5_files):
         chunkdata_ants = ants.from_numpy(chunkdata)
 
         # run moco on chunk
+        logging.info(f'moco on chunk {i + 1}')
         mytx = ants.motion_correction(image=chunkdata_ants, fixed=ch1_meanbrain,
             verbose=args.verbose, type_of_transform=args.type_of_transform,
             total_sigma=args.total_sigma, flow_sigma=args.flow_sigma)
         transform_files = transform_files + mytx['motion_parameters']
 
+        logging.info(f'get motion parameters on chunk {i + 1}')
         # extract rigid body transform parameters (translation/rotation)
         if motion_parameters is None:
             motion_parameters = get_motion_parameters_from_transforms(
@@ -330,20 +332,27 @@ if __name__ == '__main__':
 
     args = set_stepsize(args)
 
+    logging.info('set up h5 datsets')
     h5_files = setup_h5_datasets(args, files)
 
+    logging.info('running motion correction')
     transform_files, motion_parameters = run_motion_correction(args, files, h5_files)
 
     if 'channel_2' in files:
+        logging.info('applying motion correction for channel 2')
         apply_moco_parameters_to_channel_2(args, files, h5_files, transform_files)
 
+    logging.info('saving to json')
     save_motcorr_settings_to_json(args, files, h5_files)
 
+    logging.info('saving motion parameters')
     motion_file = save_motion_parameters(args, motion_parameters)
 
+    logging.info('plotting motion')
     moco_plot(args, motion_file)
 
     if args.save_nii:
+        logging.info('saving nifti')
         save_nii(args, h5_files)
 
     logging.info(f'Motion correction complete: {datetime.datetime.now()}')
