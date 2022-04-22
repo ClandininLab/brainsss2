@@ -8,6 +8,7 @@ import sys
 import os
 import logging
 import datetime
+
 from pathlib import Path
 sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
@@ -29,6 +30,11 @@ from argparse_utils import ( # noqa
     add_fictrac_qc_arguments,
 )  # noqa
 from slurm import SlurmBatchJob  # noqa
+
+
+def get_max_slurm_cpus():
+    """get the max number of cpus for slurm"""
+    return int(run_shell_command("sinfo -h -o %C").strip().split('/')[-1])
 
 
 def parse_args(input):
@@ -424,7 +430,7 @@ def process_fly(args):
         workflow_dict['motion_correction.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
-            'cores': 8,
+            'cores': min(8, get_max_slurm_cpus()),
             'dirtype': args.motion_correction
         }
 
