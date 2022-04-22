@@ -330,7 +330,8 @@ if __name__ == '__main__':
 
     args = create_moco_output_dir(args)
 
-    args = set_stepsize(args)
+    if args.stepsize is None:
+        args = set_stepsize(args)
 
     logging.info('set up h5 datsets')
     h5_files = setup_h5_datasets(args, files)
