@@ -11,8 +11,8 @@ import ants
 import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
-from make_mean_brain import make_mean_brain
 import datetime
+import nilearn.image
 from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
 from hdf5_utils import make_empty_h5, get_chunk_boundaries
 # THIS A HACK FOR DEVELOPMENT
@@ -94,7 +94,7 @@ def get_mean_brain(args, file):
     meanbrain_file = file.replace('.nii', '_mean.nii')
     if not os.path.exists(meanbrain_file):
         logging.info(f'making mean brain for {meanbrain_file}')
-        make_mean_brain(args, file)
+        nilearn.image.mean_img(file).to_filename(meanbrain_file)
     img = nib.load(meanbrain_file)
     meanbrain = img.get_fdata(dtype='float32')
     return ants.from_numpy(meanbrain)
