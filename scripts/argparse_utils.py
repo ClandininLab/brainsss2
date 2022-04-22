@@ -153,6 +153,7 @@ def add_moco_arguments(parser):
         help='total sigma for registration - higher values will restrict the amount of deformation allowed')
     parser.add_argument('--meanbrain_n_frames', type=int, default=None,
         help='number of frames to average over when computing mean/fixed brain')
+    parser.add_argument('--stepsize', type=int, help='stepsize for chunking registration')
     parser.add_argument('--save_nii', action='store_true', help='save nifti files')
     return(parser)
 
