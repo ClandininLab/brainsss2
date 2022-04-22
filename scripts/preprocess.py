@@ -12,9 +12,9 @@ import datetime
 from pathlib import Path
 sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
-from logging_utils import setup_logging, get_flystring, get_logfile_name
-from collections import OrderedDict
-from logging_utils import remove_existing_file_handlers, reinstate_file_handlers
+from logging_utils import setup_logging, get_logfile_name  # noqa
+from collections import OrderedDict # noqa
+from logging_utils import remove_existing_file_handlers, reinstate_file_handlers # noqa
 # THIS A HACK FOR DEVELOPMENT
 sys.path.insert(0, '../brainsss')
 from preprocess_utils import ( # noqa
@@ -136,8 +136,8 @@ def run_preprocessing_step(script, args, args_dict):
     saved_handlers = []
 
     for procdir in procdirs:
-        if args.func_dirs is not None and func.split('/')[-1] not in args.func_dirs:
-            logging.info(f'skipping {func} - not included in --func_dirs')
+        if args.func_dirs is not None and procdir.split('/')[-1] not in args.func_dirs:
+            logging.info(f'skipping {procdir} - not included in --func_dirs')
             continue
 
         if 'logfile' not in args_dict:
@@ -156,9 +156,10 @@ def run_preprocessing_step(script, args, args_dict):
         else:
             logging.info(f'running {script} via slurm')
 
+        args_dict['partition'] = args.partition
         args_dict['dir'] = procdir
         args.dir = procdir
-        sbatch[procdir] = SlurmBatchJob(stepname, script, 
+        sbatch[procdir] = SlurmBatchJob(stepname, script,
                                      args_dict, local=args.local)
         sbatch[procdir].run()
         if hasattr(sbatch[procdir], 'saved_handlers'):
@@ -170,60 +171,13 @@ def run_preprocessing_step(script, args, args_dict):
         output[procdir] = job.status()
 
     _ = remove_existing_file_handlers()
-    if len(saved_handlers) > 0:
+    if saved_handlers:
         reinstate_file_handlers(saved_handlers)
     else:
         logging.warning('no saved handlers found')
 
     logging.info(f'Completed step: {stepname}')
     return(output)
-
-
-# def run_motion_correction():
-
-#     for funcanat, dirtype in zip(funcanats, dirtypes):
-
-#         directory = os.path.join(funcanat, "imaging")
-#         # NB: 1/2 are actually anatomy/functional
-#         if dirtype == "func":
-#             brain_master = "functional_channel_1.nii"
-#             brain_mirror = "functional_channel_2.nii"
-#         if dirtype == "anat":
-#             brain_master = "anatomy_channel_1.nii"
-#             brain_mirror = "anatomy_channel_2.nii"
-
-#         args = {
-#             "logfile": logfile,
-#             "directory": directory,
-#             "brain_master": brain_master,
-#             "brain_mirror": brain_mirror,
-#             "scantype": dirtype,
-#         }
-
-#         script = "motion_correction.py"
-#         # if global_resources:
-#         #     dur = 48
-#         #     mem = 8
-#         # else:
-#         #     dur = 96
-#         #     mem = 4
-#         global_resources = True
-#         dur = 48
-#         mem = 8
-#         job_id = brainsss.sbatch(
-#             jobname="moco",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=dur,
-#             mem=mem,
-#             nice=nice,
-#             nodes=nodes,
-#             global_resources=global_resources,
-#         )
-#     ### currently submitting these jobs simultaneously since using global resources
-#     brainsss.wait_for_job(job_id, logfile, com_path)
 
 
 # def run_zscore():
@@ -417,8 +371,8 @@ def process_fly(args):
             'dir': args.process,
             'cores': 2
         }
-    
-    if len(set(args.temporal_mean).intersection(set(['both', 'pre']))) > 0:
+
+    if set(args.temporal_mean).intersection({'both', 'pre'}):
         workflow_dict['make_mean_brain.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
@@ -430,7 +384,9 @@ def process_fly(args):
         workflow_dict['motion_correction.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
-            'cores': min(8, get_max_slurm_cpus()),
+            # use longer run with fewer cores if not using normal queue
+            'time_hours': 48 if args.partition == 'normal' else 96,
+            'cores': min(8 if args.partition == 'normal' else 4, get_max_slurm_cpus()),
             'dirtype': args.motion_correction
         }
 
@@ -438,6 +394,13 @@ def process_fly(args):
         logging.info(f'running step: {script}')
         args.dir = args.process
         run_preprocessing_step(script, args, step_args_dict)
+
+    if args.highpass:
+        workflow_dict['temporal_high_pass_filter.py'] = {
+            'basedir': args.basedir,
+            'dir': args.process,
+            'cores': 2
+        }
 
     # if args.fictrac_qc:
     #     #fictrac_output = run_fictrac_qc(args)
@@ -513,7 +476,7 @@ if __name__ == "__main__":
     print('welcome to fly_preprocessing')
     args = parse_args(sys.argv[1:])
     print(args)
-    
+
     args = setup_modules(args)
 
     if args.target_dir is None:
@@ -540,7 +503,7 @@ if __name__ == "__main__":
         args = setup_build_dirs(args)
         args.process = build_fly(args)
         if args.process is None:
-            raise Exception('fly building failed')
+            raise ValueError('fly building failed')
         logging.info(f'Built to flydir: {args.process}')
         if args.build_only:
             logging.info('build only, exiting')
