@@ -65,7 +65,10 @@ def add_preprocess_arguments(parser):
 
     # flags to run each component
     parser.add_argument(
-        "--motion_correction", action="store_true", help="run motion correction"
+        "--motion_correction", 
+        help="run motion correction (func, anat, or both - defaults to func)",
+        default='func',
+        choices=['func', 'anat', 'both']
     )
     parser.add_argument("--correlation", action="store_true", help="???")
     parser.add_argument("--fictrac_qc", action="store_true", help="run fictrac QC")
@@ -136,4 +139,20 @@ def add_fictrac_qc_arguments(parser):
         "--fps", type=float, default=100, help="frame rate of fictrac camera"
     )
     parser.add_argument("--resolution", type=float, help="resolution of fictrac data")
+    return(parser)
+
+
+def add_moco_arguments(parser):
+    parser.add_argument('--type_of_transform', type=str, default='SyN',
+        help='type of transform to use')
+    parser.add_argument('--interpolation_method', type=str, default='linear')
+    parser.add_argument('--output_format', type=str, choices=['h5', 'nii'],
+        default='h5', help='output format for registered image data')
+    parser.add_argument('--flow_sigma', type=int, default=3,
+        help='flow sigma for registration - higher sigma focuses on coarser features')
+    parser.add_argument('--total_sigma', type=int, default=0,
+        help='total sigma for registration - higher values will restrict the amount of deformation allowed')
+    parser.add_argument('--meanbrain_n_frames', type=int, default=None,
+        help='number of frames to average over when computing mean/fixed brain')
+    parser.add_argument('--save_nii', action='store_true', help='save nifti files')
     return(parser)
