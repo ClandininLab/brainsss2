@@ -1,4 +1,7 @@
 # refactor of slurm utils
+
+# pyright: reportMissingImports=false
+
 from preprocess_utils import dict_to_args_list
 import subprocess
 import logging
@@ -7,7 +10,7 @@ import os
 import sys
 sys.path.insert(0, "../brainsss")
 sys.path.insert(0, "../brainsss/scripts")
-from logging_utils import remove_existing_file_handlers
+from logging_utils import remove_existing_file_handlers  # noqa
 
 # set up module level logging
 logger = logging.getLogger('SlurmBatchJob')
@@ -128,7 +131,7 @@ class SlurmBatchJob:
     def run(self):
         if self.local:
             self.run_local()
-            
+
         sbatch_response = subprocess.getoutput(self.sbatch_command)
         setattr(self, 'job_id', sbatch_response.split(" ")[-1].strip())
         logger.debug(f'job_id: {self.job_id}')
@@ -175,7 +178,7 @@ class SlurmBatchJob:
     def status(self, return_full_output=False):
         if self.local:
             if self.local_response is None:
-               logging.warning('Cannot get status of local job - no response')
+                logging.warning('Cannot get status of local job - no response')
             else:
                 return('COMPLETED')
 
