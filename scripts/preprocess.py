@@ -116,22 +116,27 @@ def run_preprocessing_step(script, args, args_dict):
     stepname = script.split(".")[0]
     logging.info(f"running {stepname}")
 
-    funcdirs = get_dirs_to_process(args)['func']
-    funcdirs.sort()
+    if 'dirtype' not in args and 'dirtype' not in args_dict:
+        args.dirtype = 'func'
+    elif 'dirtype' in args_dict:
+        args.dirtype = args_dict['dirtype']
 
-    assert len(funcdirs) > 0, "no func directories found, somethign has gone wrong"
+    procdirs = get_dirs_to_process(args)[args.dirtype]
+    procdirs.sort()
+
+    assert len(procdirs) > 0, "no func directories found, somethign has gone wrong"
 
     sbatch = {}
     saved_handlers = []
 
-    for func in funcdirs:
+    for procdir in procdirs:
         if args.func_dirs is not None and func.split('/')[-1] not in args.func_dirs:
             logging.info(f'skipping {func} - not included in --func_dirs')
             continue
 
         if 'logfile' not in args_dict:
             logfile = get_logfile_name(
-                os.path.join(func, 'logs'),
+                os.path.join(procdir, 'logs'),
                 stepname
             )
         print(f'LOGGING to {logfile}')
@@ -145,18 +150,18 @@ def run_preprocessing_step(script, args, args_dict):
         else:
             logging.info(f'running {script} via slurm')
 
-        args_dict['dir'] = func
-        args.dir = func
-        sbatch[func] = SlurmBatchJob(stepname, script, 
+        args_dict['dir'] = procdir
+        args.dir = procdir
+        sbatch[procdir] = SlurmBatchJob(stepname, script, 
                                      args_dict, local=args.local)
-        sbatch[func].run()
-        if hasattr(sbatch[func], 'saved_handlers'):
-            saved_handlers.extend(sbatch[func].saved_handlers)
+        sbatch[procdir].run()
+        if hasattr(sbatch[procdir], 'saved_handlers'):
+            saved_handlers.extend(sbatch[procdir].saved_handlers)
 
     output = {}
-    for func, job in sbatch.items():
+    for procdir, job in sbatch.items():
         job.wait()
-        output[func] = job.status()
+        output[procdir] = job.status()
 
     _ = remove_existing_file_handlers()
     if len(saved_handlers) > 0:
@@ -166,32 +171,6 @@ def run_preprocessing_step(script, args, args_dict):
 
     logging.info(f'Completed step: {stepname}')
     return(output)
-
-
-# def run_temporal_mean_brain_pre():
-
-#     for funcanat, dirtype in zip(funcanats, dirtypes):
-#         directory = os.path.join(funcanat, "imaging")
-
-#         if dirtype == "func":
-#             files = ["functional_channel_1.nii", "functional_channel_2.nii"]
-#         if dirtype == "anat":
-#             files = ["anatomy_channel_1.nii", "anatomy_channel_2.nii"]
-
-#         args = {"logfile": logfile, "directory": directory, "files": files}
-#         script = "make_mean_brain.py"
-#         job_id = brainsss.sbatch(
-#             jobname="meanbrn",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=1,
-#             mem=2,
-#             nice=nice,
-#             nodes=nodes,
-#         )
-#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
 # def run_motion_correction():
@@ -439,6 +418,14 @@ def process_fly(args):
             'dir': args.process,
             'cores': 2,
             'dirtype': 'func'
+        }
+
+    if args.motion_correction is not None:
+        workflow_dict['motion_correction.py'] = {
+            'basedir': args.basedir,
+            'dir': args.process,
+            'cores': 8,
+            'dirtype': args.motion_correction
         }
 
     for script, step_args_dict in workflow_dict.items():
