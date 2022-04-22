@@ -16,10 +16,10 @@ def make_empty_h5(directory, file, brain_dims, save_type="curr_dir", stepsize=No
         "parent_dir",
     ], "save_type must be either curr_dir or parent_dir"
     if save_type == "curr_dir":
-        moco_dir = os.path.join(directory, "moco")
+        moco_dir = os.path.join(directory, "preproc")
     elif save_type == "parent_dir":
         directory = os.path.dirname(directory)  # go back one directory
-        moco_dir = os.path.join(directory, "moco")
+        moco_dir = os.path.join(directory, "preproc")
 
     if not os.path.exists(moco_dir):
         os.mkdir(moco_dir)
