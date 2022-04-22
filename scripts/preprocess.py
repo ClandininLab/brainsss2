@@ -372,13 +372,14 @@ def process_fly(args):
             'cores': 2
         }
 
-    if set(args.temporal_mean).intersection({'both', 'pre'}):
-        workflow_dict['make_mean_brain.py'] = {
-            'basedir': args.basedir,
-            'dir': args.process,
-            'cores': 4,
-            'dirtype': 'func'
-        }
+    # leaving this out - mean will be computed automatically by motcorr
+    # if set(args.temporal_mean).intersection({'both', 'pre'}):
+    #     workflow_dict['make_mean_brain.py'] = {
+    #         'basedir': args.basedir,
+    #         'dir': args.process,
+    #         'cores': 4,
+    #         'dirtype': 'func'
+    #     }
 
     if args.motion_correction is not None:
         workflow_dict['motion_correction.py'] = {
