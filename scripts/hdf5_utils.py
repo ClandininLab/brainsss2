@@ -5,7 +5,7 @@ import os
 import h5py
 
 
-def make_empty_h5(directory, file, brain_dims, save_type="curr_dir", stepsize=None):
+def make_empty_h5(directory, file, brain_dims, save_type="parent_dir", stepsize=None):
     """for optimal speed, using chunk dim4 equal to dimension 4 of data chunks"""
     if stepsize is None:
         chunks = True
