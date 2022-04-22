@@ -1,4 +1,7 @@
 # logging utils
+
+# pyright: reportMissingImports=false
+
 import os
 from time import strftime
 import logging
@@ -15,9 +18,9 @@ def get_logfile_name(logdir, logtype, flystring=''):
 
 
 def remove_existing_file_handlers():
-    l = logging.getLogger()
+    logger = logging.getLogger()
     saved_handlers = []
-    for h in l.handlers:
+    for h in logger.handlers:
         print(h)
         if isinstance(h, logging.FileHandler):
             saved_handlers.append(h)
@@ -34,7 +37,7 @@ def reinstate_file_handlers(saved_handlers):
     saved_handlers: list
         list of saved file handlers
     """
-    
+
     for h in list(set(saved_handlers)):
         logging.getLogger().addHandler(h)
 
@@ -128,9 +131,6 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
 
     if "verbose" not in args:
         setattr(args, "verbose", False)
-
-    #setattr(args, 'flystring', get_flystring(args))
-
 
     #  RP: replace custom code with logging.basicConfig
     setattr(args, 'file_handler', logging.FileHandler(args.logfile))
