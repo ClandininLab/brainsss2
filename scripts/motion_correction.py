@@ -15,39 +15,48 @@ from make_mean_brain import make_mean_brain
 import datetime
 from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
 from hdf5_utils import make_empty_h5, get_chunk_boundaries
+from argparse_utils import add_moco_arguments
+# THIS A HACK FOR DEVELOPMENT
+sys.path.insert(0, os.path.realpath("../brainsss"))
+sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
+from argparse_utils import (
+    get_base_parser,
+    add_moco_arguments,
+)
 from logging_utils import setup_logging
+import logging
 
 
-def parse_args(input):
-    parser = argparse.ArgumentParser(description='run motion correction')
-    parser.add_argument('-d', '--dir', type=str,
-        help='directory containing func or anat data', required=True)
-    parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
-    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
-    parser.add_argument('-t', '--type_of_transform', type=str, default='SyN',
-        help='type of transform to use')
-    parser.add_argument('-i', '--interpolation_method', type=str, default='linear')
-    parser.add_argument('--output_format', type=str, choices=['h5', 'nii'],
-        default='h5', help='output format for registered image data')
-    parser.add_argument('--flow_sigma', type=int, default=3,
-        help='flow sigma for registration - higher sigma focuses on coarser features')
-    parser.add_argument('--total_sigma', type=int, default=0,
-        help='total sigma for registration - higher values will restrict the amount of deformation allowed')
-    parser.add_argument('--meanbrain_n_frames', type=int, default=None,
-        help='number of frames to average over when computing mean/fixed brain')
-    parser.add_argument('-o', '--overwrite', action='store_true', help='overwrite existing files')
-    parser.add_argument('--save_nii', action='store_true', help='save nifti files')
+def parse_args(input, allow_unknown=True):
+    parser = get_base_parser('moco')
 
-    args = parser.parse_args(input)
-    return(args)
+    parser = add_moco_arguments(parser)
 
+    # need to add this manually to procesing steps in order to make required
+    parser.add_argument(
+        '-d',
+        '--dir', 
+        type=str,
+        help='func directory',
+        required=True)
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+
+    return args
 
 def load_data(args):
     """determine directory type and load data"""
-    files = [f.as_posix() for f in Path(args.dir).glob('*_channel*.nii') if 'mean' not in f.stem]
+    if args.dir.split('/')[-1] != 'imaging':
+        datadir = os.path.join(args.dir, 'imaging')
+    logging.info(f'Loading data from {datadir}')
+    files = [f.as_posix() for f in Path(datadir).glob('*_channel*.nii') if 'mean' not in f.stem]
     files.sort()
-    if args.verbose:
-        logging.info(f'Data files: {files}')
+    logging.info(f'Data files: {files}')
     assert len(files) in [1, 2], 'Must have exactly one or two data files in directory'
     assert 'channel_1' in files[0], 'data for first channel must be named channel_1'
     if len(files) == 1:
@@ -63,8 +72,7 @@ def load_data(args):
         scantype = 'anat'
     else:
         raise ValueError('Could not determine scan type')
-    if args.verbose:
-        logging.info(f'Scan type: {scantype}')
+    logging.info(f'Scan type: {scantype}')
 
     setattr(args, 'scantype', scantype)
 
@@ -114,27 +122,28 @@ def setup_h5_datasets(args, files):
 
     brain_dims = nib.load(files['channel_1']).shape
     moco_dir, h5_files['channel_1'] = make_empty_h5(
-        args.dir, h5_file_names['channel_1'], brain_dims, stepsize=args.stepsize)
+        args.moco_output_dir, h5_file_names['channel_1'], brain_dims, stepsize=args.stepsize)
     logging.info(f"Created empty hdf5 file: {h5_file_names['channel_1']}")
 
     if 'channel_2' in files:
         h5_file_names['channel_2'] = os.path.basename(files['channel_2']).replace(
             '.nii', '_moco.h5')
         moco_dir, h5_files['channel_2'] = make_empty_h5(
-            args.dir, h5_file_names['channel_2'], brain_dims, stepsize=args.stepsize)
+            args.moco_output_dir, h5_file_names['channel_2'], brain_dims, stepsize=args.stepsize)
         logging.info(f"Created empty hdf5 file: {h5_file_names['channel_2']}")
     return h5_files
 
 
 def create_moco_output_dir(args):
-    setattr(args, 'moco_output_dir', os.path.join(args.dir, 'moco'))
+    setattr(args, 'moco_output_dir', os.path.join(args.dir, 'preproc'))
 
-    if os.path.exists(args.moco_output_dir) and args.overwrite:
-        if args.verbose:
-            print('removing existing moco output directory')
-        shutil.rmtree(args.moco_output_dir)
-    elif os.path.exists(args.moco_output_dir) and not args.overwrite:
-        raise ValueError(f'{args.moco_output_dir} already exists, use --overwrite to overwrite')
+    # NOTE: this might be a good idea to enable in the future, not sure...
+    # if os.path.exists(args.moco_output_dir) and args.overwrite:
+    #     if args.verbose:
+    #         print('removing existing moco output directory')
+    #     shutil.rmtree(args.moco_output_dir)
+    # elif os.path.exists(args.moco_output_dir) and not args.overwrite:
+    #     raise ValueError(f'{args.moco_output_dir} already exists, use --overwrite to overwrite')
 
     if not os.path.exists(args.moco_output_dir):
         os.mkdir(args.moco_output_dir)
@@ -246,23 +255,21 @@ def run_motion_correction(args, files, h5_files):
 
 
 def save_motion_parameters(args, motion_parameters):
-    moco_dir = os.path.join(args.dir, 'moco')
-    assert os.path.exists(moco_dir), 'something went terribly wrong, moco dir does not exist'
+    assert os.path.exists(args.moco_output_dir), 'something went terribly wrong, moco dir does not exist'
     motion_df = pd.DataFrame(motion_parameters, columns=['tx', 'ty', 'tz', 'rx', 'ry', 'rz'])
-    motion_file = os.path.join(moco_dir, 'motion_parameters.csv')
+    motion_file = os.path.join(args.moco_output_dir, 'motion_parameters.csv')
     motion_df.to_csv(motion_file, index=False)
     return(motion_file)
 
 
 def save_motcorr_settings_to_json(args, files, h5_files, nii_files=None):
-    moco_dir = os.path.join(args.dir, 'moco')
-    assert os.path.exists(moco_dir), 'something went terribly wrong, moco dir does not exist'
+    assert os.path.exists(args.moco_output_dir), 'something went terribly wrong, moco dir does not exist'
     args_dict = vars(args)
     args_dict['files'] = files
     args_dict['h5_files'] = h5_files
     if args.save_nii:
         args_dict['nii_files'] = nii_files
-    with open(os.path.join(moco_dir, 'moco_settings.json'), 'w') as f:
+    with open(os.path.join(args.moco_output_dir, 'moco_settings.json'), 'w') as f:
         json.dump(vars(args), f, indent=4)
 
 
@@ -274,11 +281,10 @@ def moco_plot(args, motion_file):
     # Get voxel resolution for figure
     x_res, y_res, z_res = get_dataset_resolution(args.dir)
 
-    moco_dir = os.path.join(args.dir, 'moco')
-    assert os.path.exists(moco_dir), 'something went terribly wrong, moco dir does not exist'
+    assert os.path.exists(args.moco_output_dir), 'something went terribly wrong, moco dir does not exist'
 
     # Save figure of motion over time - separate columns for translation and rotation
-    save_file = os.path.join(moco_dir, 'motion_correction.png')
+    save_file = os.path.join(args.moco_output_dir, 'motion_correction.png')
     plt.figure(figsize=(12, 6))
     plt.subplot(1, 2, 1)
     plt.plot(motion_parameters.iloc[:, :3])
@@ -299,6 +305,7 @@ def moco_plot(args, motion_file):
 
 def h5_to_nii(h5_path):
     nii_savefile = h5_path.replace('h5', 'nii')
+    assert nii_savefile != h5_path, 'h5_to_nii: nii_savefile is the same as h5_path'
     with h5py.File(h5_path, 'r+') as h5_file:
         image_array = h5_file.get("data")[:].astype('uint16')
 
