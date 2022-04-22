@@ -67,7 +67,6 @@ def add_preprocess_arguments(parser):
     parser.add_argument(
         "--motion_correction", 
         help="run motion correction (func, anat, or both - defaults to func)",
-        default='func',
         choices=['func', 'anat', 'both']
     )
     parser.add_argument("--correlation", action="store_true", help="???")
