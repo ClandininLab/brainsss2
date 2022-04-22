@@ -1,8 +1,9 @@
+# pyright: reportMissingImports=false
+
 import os
 import sys
 import numpy as np
 import pandas as pd
-import argparse
 import nibabel as nib
 import h5py
 import json
@@ -10,21 +11,15 @@ import ants
 import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
-import shutil
 from make_mean_brain import make_mean_brain
 import datetime
 from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
 from hdf5_utils import make_empty_h5, get_chunk_boundaries
-from argparse_utils import add_moco_arguments
 # THIS A HACK FOR DEVELOPMENT
 sys.path.insert(0, os.path.realpath("../brainsss"))
 sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
-from argparse_utils import (
-    get_base_parser,
-    add_moco_arguments,
-)
-from logging_utils import setup_logging
-import logging
+from argparse_utils import get_base_parser, add_moco_arguments # noqa
+from logging_utils import setup_logging # noqa
 
 
 def parse_args(input, allow_unknown=True):
@@ -35,7 +30,7 @@ def parse_args(input, allow_unknown=True):
     # need to add this manually to procesing steps in order to make required
     parser.add_argument(
         '-d',
-        '--dir', 
+        '--dir',
         type=str,
         help='func directory',
         required=True)
@@ -49,6 +44,7 @@ def parse_args(input, allow_unknown=True):
 
     return args
 
+
 def load_data(args):
     """determine directory type and load data"""
     if args.dir.split('/')[-1] != 'imaging':
@@ -57,7 +53,8 @@ def load_data(args):
     files = [f.as_posix() for f in Path(datadir).glob('*_channel*.nii') if 'mean' not in f.stem]
     files.sort()
     logging.info(f'Data files: {files}')
-    assert len(files) in [1, 2], 'Must have exactly one or two data files in directory'
+    assert len(files) in {1, 2}, 'Must have exactly one or two data files in directory'
+
     assert 'channel_1' in files[0], 'data for first channel must be named channel_1'
     if len(files) == 1:
         logging.info('Only one channel found, no mirror will be used')
@@ -76,9 +73,11 @@ def load_data(args):
 
     setattr(args, 'scantype', scantype)
 
-    files_dict = {}
-    files_dict['channel_1'] = files[0]
-    files_dict['channel_2'] = files[1] if len(files) == 2 else None
+    files_dict = {
+        'channel_1': files[0],
+        'channel_2': files[1] if len(files) == 2 else None
+    }
+
     return(files_dict, args)
 
 
@@ -98,11 +97,10 @@ def get_mean_brain(args, file):
     if not os.path.exists(meanbrain_file):
         if args.verbose:
             print(f'making mean brain for {meanbrain_file}')
-        make_mean_brain(args)
+        make_mean_brain(args, file)
     img = nib.load(meanbrain_file)
     meanbrain = img.get_fdata(dtype='float32')
-    meanbrain_ants = ants.from_numpy(meanbrain)
-    return(meanbrain_ants)
+    return ants.from_numpy(meanbrain)
 
 
 def setup_h5_datasets(args, files):
@@ -191,7 +189,7 @@ def apply_moco_parameters_to_channel_2(args, files,
 
     # setup chunking into smaller parts (for memory)
     chunk_boundaries = get_chunk_boundaries(args, n_timepoints)
-    for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+    for (chunk_start, chunk_end) in chunk_boundaries:
         with h5py.File(h5_files['channel_2'], 'a') as f:
             f['data'][..., chunk_start:chunk_end] = ch2_data[..., chunk_start:chunk_end]
 
@@ -223,7 +221,7 @@ def run_motion_correction(args, files, h5_files):
     # loop through chunks
     for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
         if args.verbose:
-            logging.info('processing chunk {} of {}'.format(i + 1, len(chunk_boundaries)))
+            logging.info(f'processing chunk {i + 1} of {len(chunk_boundaries)}')
         # get chunk data
         chunkdata = ch1_data[..., chunk_start:chunk_end]
         chunkdata_ants = ants.from_numpy(chunkdata)
@@ -247,7 +245,7 @@ def run_motion_correction(args, files, h5_files):
 
         # save results from chunk
         if args.verbose:
-            logging.info('saving chunk {} of {}'.format(i + 1, len(chunk_boundaries)))
+            logging.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
         with h5py.File(h5_files['channel_1'], 'a') as f:
             f['data'][..., chunk_start:chunk_end] = mytx['motion_corrected'].numpy()
 

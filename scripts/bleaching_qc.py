@@ -1,18 +1,18 @@
+# pyright: reportMissingImports=false
+
 import numpy as np
 import sys
 import os
 import matplotlib.pyplot as plt
 import nibabel as nib
 from pathlib import Path
+import logging
 # THIS A HACK FOR DEVELOPMENT
 sys.path.insert(0, os.path.realpath("../brainsss"))
 sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
-from argparse_utils import (
-    get_base_parser,
-    add_fictrac_qc_arguments,
-)
-from logging_utils import setup_logging
-import logging
+from argparse_utils import get_base_parser # noqa
+from logging_utils import setup_logging # noqa
+
 
 def parse_args(input, allow_unknown=True):
     parser = get_base_parser('bleaching_qc')
@@ -20,7 +20,7 @@ def parse_args(input, allow_unknown=True):
     # need to add this manually to procesing steps in order to make required
     parser.add_argument(
         '-d',
-        '--dir', 
+        '--dir',
         type=str,
         help='func directory',
         required=True)
@@ -47,7 +47,7 @@ def load_data(args):
             data_mean[file] = np.mean(brain, axis=(0, 1, 2))
             del brain
         else:
-            print(f"Not found (skipping){file:.>{width-20}}")
+            print(f"Not found (skipping){file}")
     return data_mean
 
 
