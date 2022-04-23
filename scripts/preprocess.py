@@ -305,6 +305,7 @@ def process_fly(args):
     if args.motion_correction is not None:
         workflow_dict['motion_correction.py'] = {
             'basedir': args.basedir,
+            'type_of_transform': args.type_of_transform,
             'dir': args.process,
             # use longer run with fewer cores if not using normal queue
             # need to retest this with the new moco model
