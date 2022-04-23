@@ -219,23 +219,24 @@ def run_motion_correction(args, files, h5_files):
         chunkdata_ants = ants.from_numpy(chunkdata)
 
         # run moco on chunk
-        logging.info(f'moco on chunk {i + 1}')
         mytx = ants.motion_correction(image=chunkdata_ants, fixed=ch1_meanbrain,
             verbose=args.verbose, type_of_transform=args.type_of_transform,
             total_sigma=args.total_sigma, flow_sigma=args.flow_sigma)
+        assert mytx is not None, 'ants.motioncorrection failed'
         transform_files = transform_files + mytx['motion_parameters']
 
         logging.info(f'get motion parameters on chunk {i + 1}')
         # extract rigid body transform parameters (translation/rotation)
         if motion_parameters is None:
+            # TODO: get_dataset_resolution is failing...
             motion_parameters = get_motion_parameters_from_transforms(
                 mytx['motion_parameters'],
-                get_dataset_resolution(args.dir))[1]
+                get_dataset_resolution(os.path.join(args.dir, 'imaging')))[1]
         else:
             motion_parameters = np.vstack((motion_parameters,
                 get_motion_parameters_from_transforms(
                     mytx['motion_parameters'],
-                    get_dataset_resolution(args.dir))[1]))
+                    get_dataset_resolution(os.path.join(args.dir, 'imaging')))[1]))
 
         # save results from chunk
         logging.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
@@ -260,8 +261,10 @@ def save_motcorr_settings_to_json(args, files, h5_files, nii_files=None):
     args_dict['h5_files'] = h5_files
     if args.save_nii:
         args_dict['nii_files'] = nii_files
+    if 'file_handler' in args_dict:
+        del args_dict['file_handler']
     with open(os.path.join(args.moco_output_dir, 'moco_settings.json'), 'w') as f:
-        json.dump(vars(args), f, indent=4)
+        json.dump(args_dict, f, indent=4)
 
 
 def moco_plot(args, motion_file):
@@ -270,7 +273,9 @@ def moco_plot(args, motion_file):
     motion_parameters = pd.read_csv(motion_file)
 
     # Get voxel resolution for figure
-    x_res, y_res, z_res = get_dataset_resolution(args.dir)
+    x_res, y_res, z_res = get_dataset_resolution(
+        os.path.join(args.dir, 'imaging')
+    )
 
     assert os.path.exists(args.moco_output_dir), 'something went terribly wrong, moco dir does not exist'
 
