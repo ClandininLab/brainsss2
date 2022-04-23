@@ -310,7 +310,10 @@ def process_fly(args):
             # use longer run with fewer cores if not using normal queue
             # need to retest this with the new moco model
             'time_hours': 48 if args.partition == 'normal' else 96,
-            'cores': min(8 if args.partition == 'normal' else 4, get_max_slurm_cpus()),
+            'cores': min(
+                args.cores,
+                8 if args.partition == 'normal' else 4,
+                get_max_slurm_cpus()),
             'dirtype': args.motion_correction
         }
 
