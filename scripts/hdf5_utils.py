@@ -7,12 +7,17 @@ import nibabel as nib
 import numpy as np
 
 
-def make_empty_h5(file, brain_dims, stepsize=None):
+def make_empty_h5(file, brain_dims, affine=None, stepsize=None):
     """for optimal speed, using chunk dim4 equal to dimension 4 of data chunks"""
     if stepsize is None:
         chunks = True
     else:
         chunks = (brain_dims[0], brain_dims[1], brain_dims[2], stepsize)
+
+    if affine is None:
+        affine = np.eye(4)
+    else:
+        assert affine.shape == (4, 4), 'affine must be 4 x 4'
 
     directory = os.path.dirname(file)
     if not os.path.exists(directory):
@@ -20,7 +25,9 @@ def make_empty_h5(file, brain_dims, stepsize=None):
 
     with h5py.File(file, "w") as f:
         _ = f.create_dataset("data", brain_dims, dtype="float32", chunks=chunks)
-    return directory, os.path.basename(savefile)
+        _ = f.create_dataset("affine", data=affine)
+
+    return directory, os.path.basename(file)
 
 
 def get_chunk_boundaries(stepsize, n_timepoints):
@@ -40,6 +47,11 @@ def h5_to_nii(file):
     print(f'loading data from h5 file: {file}')
     with h5py.File(file, 'r+') as h5_file:
         image_array = h5_file.get("data")[:].astype('float32')
+        if 'affine' in h5_file:
+            affine = h5_file['affine'][:]
+            print('using affine from h5 file:', affine)
+        else:
+            affine = np.eye(len(image_array.shape))
 
     print(f'saving to nii file {nii_savefile}')
-    nib.Nifti1Image(image_array, np.eye(4)).to_filename(nii_savefile)
+    nib.Nifti1Image(image_array, affine=affine).to_filename(nii_savefile)
