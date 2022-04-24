@@ -26,7 +26,21 @@ def parse_args(input, allow_unknown=True):
 
 
 def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
-
+    """
+    create and save temporal mean image to/from nii/h5
+    
+    Parameters
+    ----------
+    file : str
+        h5 or nii file
+    stepsize : int
+        stepsize for chunking
+    verbose : bool
+        verbose output
+    outfile_type : str
+        output file type (nii or h5)
+        defaults to same as input file
+    """
     if 'h5' in file:
         infile_type = 'h5'
     elif 'nii' in file:
