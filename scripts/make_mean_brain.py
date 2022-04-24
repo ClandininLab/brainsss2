@@ -2,14 +2,17 @@ import os
 import sys
 import numpy as np
 import nibabel as nib
+import nilearn.image
 import h5py
 import argparse
+from make_mean_h5 import make_mean_h5
 from pathlib import Path
-# THIS A HACK FOR DEVELOPMENT
-sys.path.insert(0, os.path.realpath("../brainsss"))
-sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
-from logging_utils import setup_logging
 import logging
+# THIS A HACK FOR DEVELOPMENT
+sys.path.insert(0, os.path.realpath("../brainsss"))  # noqa
+sys.path.insert(0, os.path.realpath("../brainsss/scripts")) # noqa
+from logging_utils import setup_logging  # noqa
+
 
 def parse_args(input, allow_unknown=True):
     parser = argparse.ArgumentParser(
@@ -93,9 +96,15 @@ if __name__ == "__main__":
     logging.info(f"found files: {files}")
 
     for file in files:
+        if '.nii' in file:
+            meanbrain_file = file.replace('.nii', '_mean.nii')
+            assert meanbrain_file != file, "meanbrain_file should not be the same as the file"
 
-        meanbrain, brainshape = make_mean_brain(args, file)
-        logging.info(
-            f"generated mean brain from {file} with original shape {brainshape}"
-        )
-        save_mean_brain(args, file)
+            logging.info(f'making mean brain for {meanbrain_file}')
+            nilearn.image.mean_img(file).to_filename(meanbrain_file)
+        elif '.h5' in file or '.hdf5' in file:
+            meanbrain_file = file.replace('.h5', '_mean.h5')
+            assert meanbrain_file != file, "meanbrain_file should not be the same as the file"
+
+            logging.info(f'making mean brain for {meanbrain_file}')
+            make_mean_h5(file, meanbrain_file)
