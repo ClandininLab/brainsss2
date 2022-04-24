@@ -15,6 +15,7 @@ import datetime
 import nilearn.image
 from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
 from hdf5_utils import make_empty_h5, get_chunk_boundaries
+from make_mean_h5 import make_mean_h5
 # THIS A HACK FOR DEVELOPMENT
 sys.path.insert(0, os.path.realpath("../brainsss"))
 sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
@@ -91,6 +92,7 @@ def set_stepsize(args, scantype_stepsize_dict=None):
 def get_mean_brain(args, file):
     """get mean brain for channel 1"""
     assert 'channel_1' in file, 'file must be channel_1'
+    assert '.nii' in file, 'file must be nifti'
     meanbrain_file = file.replace('.nii', '_mean.nii')
     if not os.path.exists(meanbrain_file):
         logging.info(f'making mean brain for {meanbrain_file}')
@@ -117,14 +119,14 @@ def setup_h5_datasets(args, files):
 
     brain_dims = nib.load(files['channel_1']).shape
     moco_dir, h5_files['channel_1'] = make_empty_h5(
-        args.moco_output_dir, h5_file_names['channel_1'], brain_dims, stepsize=args.stepsize)
+        h5_file_names['channel_1'], brain_dims, stepsize=args.stepsize)
     logging.info(f"Created empty hdf5 file: {h5_file_names['channel_1']}")
 
     if 'channel_2' in files:
         h5_file_names['channel_2'] = os.path.basename(files['channel_2']).replace(
             '.nii', '_moco.h5')
         moco_dir, h5_files['channel_2'] = make_empty_h5(
-            args.moco_output_dir, h5_file_names['channel_2'], brain_dims, stepsize=args.stepsize)
+            h5_file_names['channel_2'], brain_dims, stepsize=args.stepsize)
         logging.info(f"Created empty hdf5 file: {h5_file_names['channel_2']}")
     return h5_files
 
@@ -181,7 +183,7 @@ def apply_moco_parameters_to_channel_2(args, files,
     logging.info('Saving channel 2 data')
 
     # setup chunking into smaller parts (for memory)
-    chunk_boundaries = get_chunk_boundaries(args, n_timepoints)
+    chunk_boundaries = get_chunk_boundaries(args.stepsize, n_timepoints)
     for (chunk_start, chunk_end) in chunk_boundaries:
         with h5py.File(h5_files['channel_2'], 'a') as f:
             f['data'][..., chunk_start:chunk_end] = ch2_data[..., chunk_start:chunk_end]
@@ -203,7 +205,7 @@ def run_motion_correction(args, files, h5_files):
     n_timepoints = ch1_img.shape[-1]
 
     # setup chunking into smaller parts (for memory)
-    chunk_boundaries = get_chunk_boundaries(args, n_timepoints)
+    chunk_boundaries = get_chunk_boundaries(args.stepsize, n_timepoints)
 
     # load full data
     logging.info('loading full data from channel 1')
@@ -356,6 +358,9 @@ if __name__ == '__main__':
 
     logging.info('plotting motion')
     moco_plot(args, motion_file)
+
+    logging.info('saving mean channel 1 file')
+    make_mean_h5(h5_files['channel_1'], save_nifti=True)
 
     if args.save_nii:
         logging.info('saving nifti')
