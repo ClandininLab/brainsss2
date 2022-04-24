@@ -15,7 +15,7 @@ import datetime
 import nilearn.image
 from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
 from hdf5_utils import make_empty_h5, get_chunk_boundaries
-from make_mean_h5 import make_mean_h5
+from imgmean import imgmean
 # THIS A HACK FOR DEVELOPMENT
 sys.path.insert(0, os.path.realpath("../brainsss"))
 sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
@@ -112,22 +112,33 @@ def setup_h5_datasets(args, files):
     if args.verbose:
         logging.info(f'Creating channel_1 h5 file: {h5_file_names["channel_1"]}')
 
+    # assume same affine for both channels
+    affine = nib.load(files['channel_1']).affine
+
     # full paths to file names
     h5_files = {
         'channel_1': None,
         'channel_2': None}
 
     brain_dims = nib.load(files['channel_1']).shape
-    moco_dir, h5_files['channel_1'] = make_empty_h5(
-        h5_file_names['channel_1'], brain_dims, stepsize=args.stepsize)
-    logging.info(f"Created empty hdf5 file: {h5_file_names['channel_1']}")
+    moco_dir, filename = make_empty_h5(
+        os.path.join(args.moco_output_dir, h5_file_names['channel_1']),
+        brain_dims,
+        affine=affine,
+        stepsize=args.stepsize)
+    h5_files['channel_1'] = os.path.join(moco_dir, filename)
+    logging.info(f"Created empty hdf5 file: {h5_files['channel_1']}")
 
     if 'channel_2' in files:
         h5_file_names['channel_2'] = os.path.basename(files['channel_2']).replace(
             '.nii', '_moco.h5')
-        moco_dir, h5_files['channel_2'] = make_empty_h5(
-            h5_file_names['channel_2'], brain_dims, stepsize=args.stepsize)
-        logging.info(f"Created empty hdf5 file: {h5_file_names['channel_2']}")
+        moco_dir, filename = make_empty_h5(
+            os.path.join(args.moco_output_dir, h5_file_names['channel_2']),
+            brain_dims,
+            affine=affine,
+            stepsize=args.stepsize)
+        h5_files['channel_2'] = os.path.join(moco_dir, filename)
+        logging.info(f"Created empty hdf5 file: {h5_files['channel_2']}")
     return h5_files
 
 
@@ -360,7 +371,7 @@ if __name__ == '__main__':
     moco_plot(args, motion_file)
 
     logging.info('saving mean channel 1 file')
-    make_mean_h5(h5_files['channel_1'], save_nifti=True)
+    imgmean(h5_files['channel_1'], outfile_type='h5')
 
     if args.save_nii:
         logging.info('saving nifti')
