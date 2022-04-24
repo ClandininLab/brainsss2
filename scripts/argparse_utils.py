@@ -165,7 +165,7 @@ def add_highpassfilter_arguments(parser):
     parser.add_argument(
         "--hpf_filename",
         default='preproc/functional_channel_2_moco.h5',
-        type=float,
-        help="sigma for gaussian filter"
+        type=str,
+        help="filename for filtering"
     )
     return(parser)
