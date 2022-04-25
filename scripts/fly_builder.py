@@ -13,6 +13,7 @@ from lxml import etree, objectify
 from openpyxl import load_workbook, Workbook
 import brainsss
 import logging
+import nibabel as nib
 # THIS A HACK FOR DEVELOPMENT
 sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
@@ -21,12 +22,19 @@ from logging_utils import setup_logging, remove_existing_file_handlers
 import datetime
 from argparse_utils import get_base_parser, add_builder_arguments
 from preprocess_utils import dict_to_args_list # noqa
+from brainsss.utils import get_resolution, load_timestamps
 
 
 def parse_args(input, allow_unknown=True):
     parser = get_base_parser('flybuilder')
 
     parser = add_builder_arguments(parser)
+
+    parser.add_argument(
+        "-b", "--basedir",
+        type=str,
+        help="base directory for fly data",
+        required=True)
 
     if allow_unknown:
         args, unknown = parser.parse_known_args()
@@ -309,9 +317,17 @@ def copy_bruker_data(source, destination, folder_type, print):
             if ".nii" in item and folder_type == "func":
                 # '_' is from channel numbers my tiff to nii adds
                 item = "functional_" + item.split("_")[1] + "_" + item.split("_")[2]
+                target_item = os.path.join(destination, item)
+                copy_nifti_file(source_item, target_item)
+                continue
+
             # Rename anatomy file to anatomy_channel_x.nii
             if ".nii" in item and folder_type == "anat":
                 item = "anatomy_" + item.split("_")[1] + "_" + item.split("_")[2]
+                target_item = os.path.join(destination, item)
+                copy_nifti_file(source_item, target_item)
+                continue
+
             # Special copy for photodiode since it goes in visual folder
             if ".csv" in item:
                 item = "photodiode.csv"
@@ -342,7 +358,7 @@ def copy_bruker_data(source, destination, folder_type, print):
             if ".xml" in item and folder_type == "func" and "Voltage" not in item:
                 item = "functional.xml"
                 target_item = os.path.join(destination, item)
-                copy_file(source_item, target_item, print)
+                copy_file(source_item, target_item)
                 # Create json file
                 create_imaging_json(target_item, print)
                 continue
@@ -356,12 +372,33 @@ def copy_bruker_data(source, destination, folder_type, print):
 
             # Actually copy the file
             target_item = os.path.join(destination, item)
-            copy_file(source_item, target_item, print)
+            copy_file(source_item, target_item)
 
 
-def copy_file(source, target, print):
+def copy_file(source, target):
     logging.info(f'Copy file {source} to {target}')
     copyfile(source, target)
+
+def copy_nifti_file(source, target):
+    """copy nifti file and set header info"""
+    # from luke:
+    # the array is shape (256, 128, 49, 3384).
+    # Axis 1: Goes laterally across the brain. Starts on the left side of the brain as if you are the fly.
+    # Axis 2: Dorsal-Ventral axis. Starts at dorsal
+    # Axis 3: Posterior-Anterior axis. Starts at posterior.
+    # Axis 4: time
+    logging.info(f'Copying nifti file {source} to {target}')
+    xmlfile = source.split('_channel')[0] + '.xml'
+    resolution = list(get_resolution(xmlfile))
+    timestamps = load_timestamps(os.path.dirname(xmlfile), os.path.basename(xmlfile))
+    # resolution.append(np.diff(timestamps[:, 0])[0]/1000)
+    resolution.append(1)
+    img = nib.load(source)
+    img.header.set_qform(np.diag(np.array(resolution)/1000))
+    img.header.set_xyzt_units(xyz='mm', t='sec')
+    img.header.set_zooms([i/1000 for i in resolution[:3]] + [np.diff(timestamps[:, 0])[0]/1000])
+    #copyfile(source, target)
+    img.to_filename(target)
 
 
 def copy_fictrac(func_dir, args):
