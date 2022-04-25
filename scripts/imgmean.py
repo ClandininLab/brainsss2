@@ -64,72 +64,56 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
     if infile_type == 'h5':
         print('compute mean of h5 file')
         with h5py.File(file, 'r') as f:
-            data = f['data']
 
-            print('data shape: ', data.shape)
-            meandata = np.zeros(data.shape[:3])
-
-            for slice in range(data.shape[-2]):
-                if verbose:
-                    print(f'processing slice {slice + 1} of {data.shape[-2]}')
-                meandata[:, :, slice] = np.mean(data[:, :, slice, :], axis=-1)
+            # convert immediately to nibabel image
+            img = nib.Nifti1Image(f['data'], affine=np.eye(4))
+            meanimg = nilearn.image.mean_img(img)
 
             if 'qform' in f:
-                qform = f['qform'][:]
+                img.header.set_qform(f['qform'][:])
             else:
                 print('no qform found in h5 file')
-                qform = None
 
             if 'zooms' in f:
-                zooms = f['zooms'][:]
+                img.header.set_zooms = f['zooms'][:3]
             else:
                 print('no zooms found in h5 file')
-                zooms = None
 
             if 'xyzt_units' in f:
                 # hdf saves to byte strings
-                xyzt_units = [i.decode('utf-8') for i in f['xyzt_units'][:]]
+                img.header.set_xyzt_units(xyz=f['xyzt_units'][0].decode('utf-8'))
             else:
                 print('no xyzt_units found in h5 file')
-                xyzt_units = None
-            if verbose:
-                print('zooms', zooms)
-                print('xyzt_units', xyzt_units)
-                print('qform', qform)
+
     else:
         img = nib.load(file)
         qform = img.header.get_qform()
         zooms = img.header.get_zooms()
         xyzt_units = img.header.get_xyzt_units()
         meanimg = nilearn.image.mean_img(file)
-        meandata = meanimg.get_fdata()
 
-    print(f'image mean: {np.mean(meandata)}')
+    print(f'image mean: {np.mean(meanimg.get_fdata())}')
+    print(meanimg.header)
 
-    brain_dims = meandata.shape
+    brain_dims = meanimg.shape
     if stepsize is None:
         chunks = True
     else:
         chunks = (brain_dims[0], brain_dims[1], brain_dims[2], stepsize)
 
     if outfile_type == 'h5':
+        print("saving to h5")
         with h5py.File(meanfile, 'w') as f:
-            f.create_dataset('data', data=meandata, dtype="float32", chunks=chunks)
+            f.create_dataset('data', data=meanimg.get_fdata(), dtype="float32", chunks=chunks)
             if qform is not None:
-                f.create_dataset('qform', data=qform)
+                f.create_dataset('qform', data=meanimg.header.get_qform())
             if zooms is not None:
-                f.create_dataset('zooms', data=zooms)
+                f.create_dataset('zooms', data=meanimg.header.get_zooms())
             if xyzt_units is not None:
-                f.create_dataset('xyzt_units', data=xyzt_units)
+                f.create_dataset('xyzt_units', data=meanimg.header.xyzt_units())
 
     else:
-        meanimg = nib.Nifti1Image(meandata, affine=None)
-        if qform is not None:
-            meanimg.header.set_qform(qform)
-        if zooms is not None:
-            meanimg.header.set_zooms(zooms[:3])
-        if xyzt_units is not None:
-            meanimg.header.set_xyzt_units(xyz=xyzt_units[0], t=xyzt_units[1])
+        print('saving to nii')
         meanimg.to_filename(meanfile)
     return(meanfile)
 
