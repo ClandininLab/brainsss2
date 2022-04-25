@@ -70,15 +70,36 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
                 if verbose:
                     print(f'processing slice {slice + 1} of {data.shape[-2]}')
                     meandata[:, :, slice] = np.mean(data[:, :, slice, :], axis=-1)
-            if 'affine' in f:
-                affine = f['affine'][:]
+
+            if 'qform' in f:
+                qform = f['qform'][:]
             else:
-                print('no affine found in h5 file')
-                affine = None
+                print('no qform found in h5 file')
+                qform = None
+
+            if 'zooms' in f:
+                zooms = f['zooms'][:]
+            else:
+                print('no zooms found in h5 file')
+                zooms = None
+
+            if 'xyzt_units' in f:
+                # hdf saves to byte strings
+                xyzt_units =  [i.decode('utf-8') for i in f['xyzt_units'][:]]
+            else:
+                print('no xyzt_units found in h5 file')
+                xyzt_units = None
+            if verbose:
+                print('zooms', zooms)
+                print('xyzt_units', xyzt_units)
+                print('qform', qform)
     else:
+        img = nib.load(file)
+        qform = img.header.get_qform()
+        zooms = img.header.get_zooms()
+        xyzt_units = img.header.get_xyzt_units()
         meanimg = nilearn.image.mean_img(file)
         meandata = meanimg.get_fdata()
-        affine = meanimg.affine
 
     brain_dims = meandata.shape
     if stepsize is None:
@@ -89,11 +110,23 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
     if outfile_type == 'h5':
         with h5py.File(meanfile, 'w') as f:
             f.create_dataset('data', data=meandata, dtype="float32", chunks=chunks)
-            if affine is not None:
-                f.create_dataset('affine', data=affine)
+            if qform is not None:
+                f.create_dataset('qform', data=qform)
+            if zooms is not None:
+                f.create_dataset('zooms', data=zooms)
+            if xyzt_units is not None:
+                f.create_dataset('xyzt_units', data=xyzt_units)
+            
 
     else:
-        nib.Nifti1Image(meandata, affine=affine).to_filename(meanfile)
+        meanimg = nib.Nifti1Image(meandata, affine=None)
+        if qform is not None:
+            meanimg.header.set_qform(qform)
+        if zooms is not None:
+            meanimg.header.set_zooms(zooms[:3])
+        if xyzt_units is not None:
+            meanimg.header.set_xyzt_units(xyz=xyzt_units[0], t=xyzt_units[1])
+        meanimg.to_filename(meanfile)
     return(meanfile)
 
 if __name__ == "__main__":
