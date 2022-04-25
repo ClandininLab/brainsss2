@@ -302,7 +302,7 @@ def process_fly(args):
     #         'dirtype': 'func'
     #     }
 
-    if args.motion_correction is not None:
+    if args.motion_correction == 'func' or args.motion_correction == 'both':
         workflow_dict['motion_correction.py'] = {
             'basedir': args.basedir,
             'type_of_transform': args.type_of_transform,
@@ -314,7 +314,22 @@ def process_fly(args):
                 args.cores,
                 8 if args.partition == 'normal' else 4,
                 get_max_slurm_cpus()),
-            'dirtype': args.motion_correction
+            'dirtype': 'func'
+        }
+
+    if args.motion_correction == 'anat' or args.motion_correction == 'both':
+        workflow_dict['motion_correction.py'] = {
+            'basedir': args.basedir,
+            'type_of_transform': args.type_of_transform,
+            'dir': args.process,
+            # use longer run with fewer cores if not using normal queue
+            # need to retest this with the new moco model
+            'time_hours': 48 if args.partition == 'normal' else 96,
+            'cores': min(
+                args.cores,
+                8 if args.partition == 'normal' else 4,
+                get_max_slurm_cpus()),
+            'dirtype': 'anat'
         }
 
     if args.highpass:
