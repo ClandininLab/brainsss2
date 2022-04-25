@@ -8,6 +8,7 @@ import sys
 import nibabel as nib
 import nilearn.image
 
+
 def parse_args(input, allow_unknown=True):
     parser = argparse.ArgumentParser(
         description="make mean brain for a single h5 file"
@@ -21,7 +22,8 @@ def parse_args(input, allow_unknown=True):
     )
     parser.add_argument('--stepsize', type=int, default=None,
                         help="stepsize for chunking")
-
+    parser.add_argument('--outfile_type', type=str, choices=['h5', 'nii'], default=None)
+    parser.add_argument('-v', '--verbose', action='store_true', default=False)
     return parser.parse_args()
 
 
@@ -49,7 +51,7 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
         raise ValueError(f"Unknown file type: {file}")
 
     if outfile_type is not None:
-        assert outfile_type in ['nii', 'h5'], f"outfile_type must be either 'nii' or 'h5'"
+        assert outfile_type in ['nii', 'h5'], "outfile_type must be either 'nii' or 'h5'"
     else:
         outfile_type = infile_type
 
@@ -63,13 +65,14 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
         print('compute mean of h5 file')
         with h5py.File(file, 'r') as f:
             data = f['data']
+
             print('data shape: ', data.shape)
             meandata = np.zeros(data.shape[:3])
 
             for slice in range(data.shape[-2]):
                 if verbose:
                     print(f'processing slice {slice + 1} of {data.shape[-2]}')
-                    meandata[:, :, slice] = np.mean(data[:, :, slice, :], axis=-1)
+                meandata[:, :, slice] = np.mean(data[:, :, slice, :], axis=-1)
 
             if 'qform' in f:
                 qform = f['qform'][:]
@@ -85,7 +88,7 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
 
             if 'xyzt_units' in f:
                 # hdf saves to byte strings
-                xyzt_units =  [i.decode('utf-8') for i in f['xyzt_units'][:]]
+                xyzt_units = [i.decode('utf-8') for i in f['xyzt_units'][:]]
             else:
                 print('no xyzt_units found in h5 file')
                 xyzt_units = None
@@ -100,6 +103,8 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
         xyzt_units = img.header.get_xyzt_units()
         meanimg = nilearn.image.mean_img(file)
         meandata = meanimg.get_fdata()
+
+    print(f'image mean: {np.mean(meandata)}')
 
     brain_dims = meandata.shape
     if stepsize is None:
@@ -116,7 +121,6 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
                 f.create_dataset('zooms', data=zooms)
             if xyzt_units is not None:
                 f.create_dataset('xyzt_units', data=xyzt_units)
-            
 
     else:
         meanimg = nib.Nifti1Image(meandata, affine=None)
@@ -129,8 +133,9 @@ def imgmean(file, stepsize=None, verbose=False, outfile_type=None):
         meanimg.to_filename(meanfile)
     return(meanfile)
 
+ 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
     print(f'making mean brain for {args.file}')
-    make_mean_from_h5(args.file, args.stepsize, args.verbose)
+    imgmean(args.file, args.stepsize, args.verbose, args.outfile_type)
