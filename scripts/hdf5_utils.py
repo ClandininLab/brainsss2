@@ -7,17 +7,24 @@ import nibabel as nib
 import numpy as np
 
 
-def make_empty_h5(file, brain_dims, affine=None, stepsize=None):
+def make_empty_h5(file, brain_dims, qform=None,
+                  xyzt_units=None, zooms=None, stepsize=None):
     """for optimal speed, using chunk dim4 equal to dimension 4 of data chunks"""
     if stepsize is None:
         chunks = True
     else:
         chunks = (brain_dims[0], brain_dims[1], brain_dims[2], stepsize)
 
-    if affine is None:
-        affine = np.eye(4)
+    if qform is None:
+        qform = np.eye(4)
     else:
-        assert affine.shape == (4, 4), 'affine must be 4 x 4'
+        assert qform.shape == (4, 4), 'affine must be 4 x 4'
+
+    if zooms is None:
+        zooms = np.ones(len(brain_dims))
+
+    if xyzt_units is None:
+        xyzt_units = ['mm', 'sec']
 
     directory = os.path.dirname(file)
     if not os.path.exists(directory):
@@ -25,7 +32,9 @@ def make_empty_h5(file, brain_dims, affine=None, stepsize=None):
 
     with h5py.File(file, "w") as f:
         _ = f.create_dataset("data", brain_dims, dtype="float32", chunks=chunks)
-        _ = f.create_dataset("affine", data=affine)
+        _ = f.create_dataset("qform", data=qform)
+        _ = f.create_dataset("zooms", data=qform)
+        _ = f.create_dataset("xyzt_units", data=qform)
 
     return directory, os.path.basename(file)
 
