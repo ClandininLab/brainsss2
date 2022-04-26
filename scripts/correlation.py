@@ -1,3 +1,5 @@
+# pyright: reportMissingImports=false
+
 import os
 import sys
 import numpy as np
@@ -8,24 +10,28 @@ import brainsss
 import scipy
 import datetime
 from columnwise_corrcoef_perf import AlmightyCorrcoefEinsumOptimized
-from logging_utils import setup_logging
 import logging
 from nilearn.plotting import plot_stat_map
+# THIS A HACK FOR DEVELOPMENT
+sys.path.insert(0, os.path.realpath("../brainsss"))
+sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
+from argparse_utils import get_base_parser # noqa
+from logging_utils import setup_logging # noqa
 
 
 def parse_args(input):
-    parser = argparse.ArgumentParser(description='temporally highpass filter an hdf5 file')
+    parser = argparse.ArgumentParser(description='compute correlation between neural data and behavior')
     parser.add_argument('-d', '--dir', type=str,
         help='func directory to be analyzed', required=True)
     parser.add_argument('-f', '--file', type=str, help='file to process',
-        default='moco/functional_channel_2_moco_highpass.h5')
+        default='preproc/functional_channel_2_moco_hpf.h5')
     parser.add_argument('--bg_img', type=str, help='background image for plotting',
         default='imaging/functional_channel_1_mean.nii')
     parser.add_argument('-b', '--behavior', type=str,
         help='behavior(s) to analyze (add + or - as suffix to limit values',
         required=True, nargs='+')
     # TODO: also allow mask image or threshold value
-    parser.add_argument('-m', '--maskpct', default=None, type=float,
+    parser.add_argument('-m', '--maskpct', default=90, type=float,
         help='percentage (1-100) of image to include in mask')
     parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
@@ -39,7 +45,7 @@ def parse_args(input):
 def setup_mask(args, brain):
     if args.maskpct is not None:
         meanbrain = np.mean(brain, axis=3)
-        maskthresh = scipy.stats.scoreatpercentile(meanbrain, args.maskpct)
+        maskthresh = scipy.stats.scoreatpercentile(meanbrain, 100 - args.maskpct)
         mask = meanbrain > maskthresh
         logging.info(f'Mask threshold for {args.maskpct} percent:: {maskthresh}')
     else:
@@ -58,8 +64,11 @@ def load_brain(args):
     logging.info(f'loading brain file: {full_load_path}')
     with h5py.File(full_load_path, 'r') as hf:
         brain = hf['data'][:]
+        qform = hf['qform'][:]
+        zooms = hf['zooms'][:]
+        xyzt_units = [i.decode('utf-8') for i in hf['xyzt_units'][:]]
     logging.info(f'brain shape: {brain.shape}')
-    return(brain)
+    return(brain, qform, zooms, xyzt_units)
 
 
 def get_transformed_data_slice(args, brain, mask, z):
@@ -70,9 +79,21 @@ def get_transformed_data_slice(args, brain, mask, z):
     return(zdata.transpose(2, 0, 1).reshape(brain.shape[3], -1), zmask)
 
 
-def save_corrdata(args, corr_brain, behavior):
+def save_corrdata(args, corr_brain, behavior, qform=None, zooms=None, xyzt_units=None):
     save_file = os.path.join(args.outdir, f'corr_{behavior}.nii')
-    nib.Nifti1Image(corr_brain, np.eye(4)).to_filename(save_file)
+    img = nib.Nifti1Image(corr_brain, None)
+    if qform is not None:
+        img.header.set_qform(qform)
+        img.header.set_sform(qform)
+    else:
+        img.header.set_qform(np.eye(4))
+        img.header.set_sform(np.eye(4))
+
+    if zooms is not None:
+        img.header.set_zooms(zooms[:3])
+    if xyzt_units is not None:
+        img.header.set_xyzt_units(xyz=xyzt_units[0], t=xyzt_units[1])
+    img.to_filename(save_file)
     logging.info(f"Saved {save_file}")
     return(save_file)
 
@@ -102,7 +123,8 @@ if __name__ == "__main__":
 
     fictrac_raw, expt_len = load_fictrac_data(args)
 
-    brain = load_brain(args)
+    logging.info('loading data from h5 file')
+    brain, qform, zooms, xyzt_units = load_brain(args)
 
     mask = setup_mask(args, brain)
 
@@ -131,7 +153,7 @@ if __name__ == "__main__":
             # interpolate fictrac to match the timestamps of this slice
             fictrac_interp = brainsss.smooth_and_interp_fictrac(
                 fictrac_raw, args.fps, args.resolution, expt_len,
-                behavior_name, timestamps=timestamps, z=z)[:, np.newaxis]
+                behavior, timestamps=timestamps, z=z)[:, np.newaxis]
 
             if behavior_transform is not None:
                 fictract_interp = transform_behavior(fictrac_interp, behavior_transform)
@@ -143,7 +165,9 @@ if __name__ == "__main__":
             cc_full[zmask == True] = cc  # noqa: E712
             corr_brain[:, :, z] = cc_full.reshape(brain.shape[0], brain.shape[1])
 
-        save_file = save_corrdata(args, corr_brain, behavior)
+        save_file = save_corrdata(
+            args, corr_brain, behavior,
+            qform, zooms, xyzt_units)
         logging.info(f'job completed: {datetime.datetime.now()}')
 
         plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
