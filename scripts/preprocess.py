@@ -272,21 +272,21 @@ def process_fly(args):
     # the specific files used in each step are built into the workflow components
     # so we don't need to track and pass output to input at each step ala nipype
     # but it means that the steps cannot be reordered and expected to run properly
-    if args.fictrac_qc:
+    if args.fictrac_qc or args.run_all:
         workflow_dict['fictrac_qc.py'] = {
             "fps": 100,
             'basedir': args.basedir,
             'dir': args.process
         }
 
-    if args.STB:
+    if args.STB or args.run_all:
         workflow_dict['stim_triggered_avg_beh.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
             'cores': 2
         }
 
-    if args.bleaching_qc:
+    if args.bleaching_qc or args.run_all:
         workflow_dict['bleaching_qc.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
@@ -302,7 +302,7 @@ def process_fly(args):
     #         'dirtype': 'func'
     #     }
 
-    if args.motion_correction == 'func' or args.motion_correction == 'both':
+    if args.motion_correction == 'func' or args.motion_correction == 'both' or args.run_all:
         workflow_dict['motion_correction.py'] = {
             'basedir': args.basedir,
             'type_of_transform': args.type_of_transform,
@@ -325,6 +325,7 @@ def process_fly(args):
             # use longer run with fewer cores if not using normal queue
             # need to retest this with the new moco model
             'time_hours': 48 if args.partition == 'normal' else 96,
+            'stepsize': 4,
             'cores': min(
                 args.cores,
                 8 if args.partition == 'normal' else 4,
@@ -332,7 +333,7 @@ def process_fly(args):
             'dirtype': 'anat'
         }
 
-    if args.highpass:
+    if args.highpass or args.run_all:
         workflow_dict['temporal_high_pass_filter.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
