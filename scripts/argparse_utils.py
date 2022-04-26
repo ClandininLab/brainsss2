@@ -147,14 +147,15 @@ def add_moco_arguments(parser):
     parser.add_argument('--interpolation_method', type=str, default='linear')
     parser.add_argument('--output_format', type=str, choices=['h5', 'nii'],
         default='h5', help='output format for registered image data')
-    parser.add_argument('--flow_sigma', type=int, default=3,
+    parser.add_argument('--flow_sigma', type=float, default=3,
         help='flow sigma for registration - higher sigma focuses on coarser features')
-    parser.add_argument('--total_sigma', type=int, default=0,
+    parser.add_argument('--total_sigma', type=float, default=0,
         help='total sigma for registration - higher values will restrict the amount of deformation allowed')
     parser.add_argument('--meanbrain_n_frames', type=int, default=None,
         help='number of frames to average over when computing mean/fixed brain')
     parser.add_argument('--stepsize', type=int, help='stepsize for chunking registration')
     parser.add_argument('--save_nii', action='store_true', help='save nifti files')
+    parser.add_argument('--use_existing', action='store_true', help='use existing transforms')
     return(parser)
 
 
