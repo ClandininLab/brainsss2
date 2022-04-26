@@ -77,6 +77,8 @@ def load_data(args):
         'channel_1': files[0],
         'channel_2': files[1] if len(files) == 2 else None
     }
+    if scantype == 'anat':
+        files_dict['channel_2'] = None
 
     return(files_dict, args)
 
@@ -126,7 +128,7 @@ def setup_h5_datasets(args, files):
     h5_files = {'channel_2': None, 'channel_1': os.path.join(moco_dir, filename)}
     logging.info(f"Created empty hdf5 file: {h5_files['channel_1']}")
 
-    if 'channel_2' in files:
+    if 'channel_2' in files and files['channel_2'] is not None:
         h5_file_names['channel_2'] = os.path.basename(files['channel_2']).replace(
             '.nii', '_moco.h5')
         moco_dir, filename = make_empty_h5(
@@ -167,12 +169,15 @@ def apply_moco_parameters_to_channel_2(args, files,
     # load ch1 image to get dimensions for chunking
     ch2_img = ants.image_read(files['channel_2'], reorient=False)
     n_timepoints = ch2_img.shape[-1]
+    spacing, direction = ch2_img.spacing, ch2_img.direction
+    del ch2_img
+
+    ch2_img = nib.load(files['channel_2'])
     # assert n_timepoints == len(transform_files), 'number of transform files must match number of timepoints'
 
     ch1_meanbrain = get_mean_brain(args, files['channel_1'])
 
-    # load full data
-    ch2_data = ch2_img[...]
+    corrected_data = np.zeros(ch2_img.shape, dtype='float32')
 
     # overwrite existing data in place to prevent need for additional memory
     for timepoint in range(n_timepoints):
@@ -183,18 +188,18 @@ def apply_moco_parameters_to_channel_2(args, files,
             logging.warning(f'No transform file for timepoint {timepoint}')
             continue
         # apply transform
-        moving_img = ants.from_numpy(ch2_img[..., timepoint])
-        moving_img.set_spacing(ch2_img.spacing[:3])
+        moving_img = ants.from_numpy(ch2_img.dataobj[..., timepoint].astype('float32'))
+        moving_img.set_spacing(spacing[:3])
         # for some reason ants.apply_transforms doesn't work with ch2_img.direction directly
-        direction = np.eye(3)
-        direction[np.diag_indices_from(direction)] = np.diag(ch2_img.direction[:3])
-        moving_img.set_direction(direction)
+        direction_vec = np.eye(3)
+        direction_vec[np.diag_indices_from(direction_vec)] = np.diag(direction[:3])
+        moving_img.set_direction(direction_vec)
         result = ants.apply_transforms(
             fixed=ch1_meanbrain,
             moving=moving_img,
             transformlist=transform,
             interpolator=args.interpolation_method)
-        ch2_data[..., timepoint] = result.numpy()
+        corrected_data[..., timepoint] = result.numpy()
     # save data
     logging.info('Saving channel 2 data')
 
@@ -202,7 +207,7 @@ def apply_moco_parameters_to_channel_2(args, files,
     chunk_boundaries = get_chunk_boundaries(args.stepsize, n_timepoints)
     for (chunk_start, chunk_end) in chunk_boundaries:
         with h5py.File(h5_files['channel_2'], 'a') as f:
-            f['data'][..., chunk_start:chunk_end] = ch2_data[..., chunk_start:chunk_end]
+            f['data'][..., chunk_start:chunk_end] = corrected_data[..., chunk_start:chunk_end]
 
 
 def run_motion_correction(args, files, h5_files):
@@ -218,6 +223,10 @@ def run_motion_correction(args, files, h5_files):
     # load ch1 image to get dimensions for chunking
     logging.info(f'opening file {files["channel_1"]}')
     ch1_img = ants.image_read(files['channel_1'], reorient=False, pixeltype='unsigned int')
+    spacing, direction = ch1_img.spacing, ch1_img.direction
+    del ch1_img
+
+    ch1_img = nib.load(files['channel_1'])
     logging.info(f'image loaded successfully {sys.getsizeof(ch1_img)/1e9} GB')
     n_timepoints = ch1_img.shape[-1]
 
@@ -230,16 +239,16 @@ def run_motion_correction(args, files, h5_files):
     for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
         logging.info(f'processing chunk {i + 1} of {len(chunk_boundaries)}')
         # get chunk data
-        chunkdata = ch1_img[..., chunk_start:chunk_end].astype('float32')
+        chunkdata = ch1_img.dataobj[..., chunk_start:chunk_end].astype('float32')
         chunkdata_ants = ants.from_numpy(
             chunkdata,
-            spacing=ch1_img.spacing,
-            direction=ch1_img.direction)
-        meandata = ch1_meanbrain[...].astype('float32')
-        meandata_ants = ants.from_numpy(
-            meandata,
-            spacing=ch1_meanbrain.spacing,
-            direction=ch1_meanbrain.direction)
+            spacing=spacing,
+            direction=direction)
+        # meandata = ch1_meanbrain[...].astype('float32')
+        # meandata_ants = ants.from_numpy(
+        #     meandata,
+        #     spacing=ch1_meanbrain.spacing,
+        #     direction=ch1_meanbrain.direction)
         # run moco on chunk
         mytx = ants.motion_correction(image=chunkdata_ants, fixed=ch1_meanbrain,
             verbose=args.verbose, type_of_transform=args.type_of_transform,
@@ -363,8 +372,14 @@ if __name__ == '__main__':
     logging.info('set up h5 datsets')
     h5_files = setup_h5_datasets(args, files)
 
-    logging.info('running motion correction')
-    transform_files, motion_parameters = run_motion_correction(args, files, h5_files)
+    if not args.use_existing:
+        logging.info('running motion correction')
+        transform_files, motion_parameters = run_motion_correction(args, files, h5_files)
+        with open (os.path.join(args.moco_output_dir, 'transform_files.json'), 'w') as f:
+            json.dump(transform_files, f, indent=4)
+    else:
+         with open (os.path.join(args.moco_output_dir, 'transform_files.json'), 'r') as f:
+            transform_files = json.load(f)
 
     if 'channel_2' in files:
         logging.info('applying motion correction for channel 2')
