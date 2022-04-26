@@ -54,12 +54,18 @@ if __name__ == "__main__":
 
     with h5py.File(args.file, "r") as hf:
         data = hf["data"]  # this doesn't actually LOAD the data - it is just a proxy
+        qform = hf['qform'][:]
+        zooms = hf['zooms'][:]
+        xyzt_units = hf['xyzt_units'][:]
         dims = np.shape(data)
         chunk_boundaries = get_chunk_boundaries(args.stepsize, dims[-2])
         logging.info(f"Data shape is {dims}")
 
         with h5py.File(save_file, "w") as f:
             dset = f.create_dataset("data", dims, dtype="float32", chunks=True)
+            f.create_dataset('qform', data=qform)
+            f.create_dataset('zooms', data=zooms)
+            f.create_dataset('xyzt_units', data=xyzt_units)
 
             for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
                 logging.info(f"Processing chunk {chunk_num} of {len(chunk_boundaries)}")
