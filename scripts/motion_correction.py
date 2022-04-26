@@ -395,7 +395,7 @@ if __name__ == '__main__':
     moco_plot(args, motion_file)
 
     logging.info('saving mean channel 1 file')
-    imgmean(h5_files['channel_1'], outfile_type='h5')
+    imgmean(h5_files['channel_1'], outfile_type='nii')
 
     if args.save_nii:
         logging.info('saving nifti')
