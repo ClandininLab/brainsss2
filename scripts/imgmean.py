@@ -91,7 +91,12 @@ def imgmean(file, verbose=False, outfile_type=None):
     else:
         print('computing mean of nii file')
         img = nib.load(file)
+        # print('original image header:', img.header)
         meanimg = nilearn.image.mean_img(file)
+        meanimg.header.set_qform(img.header.get_qform())
+        meanimg.header.set_sform(img.header.get_sform())
+        meanimg.header.set_xyzt_units(xyz=img.header.get_xyzt_units()[0])
+        meanimg.header.set_zooms(img.header.get_zooms()[:3])
 
     print(f'image mean: {np.mean(meanimg.get_fdata())}')
     print(meanimg.header)
@@ -111,7 +116,7 @@ def imgmean(file, verbose=False, outfile_type=None):
         print('saving to nii')
         meanimg.to_filename(meanfile)
         print('doublecheck:', meanimg.header)
-    return(meanimg)
+    return(meanfile)
 
 
 if __name__ == "__main__":
