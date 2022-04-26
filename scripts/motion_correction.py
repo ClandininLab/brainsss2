@@ -375,10 +375,10 @@ if __name__ == '__main__':
     if not args.use_existing:
         logging.info('running motion correction')
         transform_files, motion_parameters = run_motion_correction(args, files, h5_files)
-        with open (os.path.join(args.moco_output_dir, 'transform_files.json'), 'w') as f:
+        with open(os.path.join(args.moco_output_dir, 'transform_files.json'), 'w') as f:
             json.dump(transform_files, f, indent=4)
     else:
-         with open (os.path.join(args.moco_output_dir, 'transform_files.json'), 'r') as f:
+        with open(os.path.join(args.moco_output_dir, 'transform_files.json'), 'r') as f:
             transform_files = json.load(f)
 
     if 'channel_2' in files:
