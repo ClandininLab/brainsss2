@@ -1,6 +1,5 @@
 # pyright: reportMissingImports=false
 import sys
-import numpy as np
 import argparse
 import nibabel as nib
 import h5py
