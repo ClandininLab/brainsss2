@@ -33,8 +33,8 @@ def make_empty_h5(file, brain_dims, qform=None,
     with h5py.File(file, "w") as f:
         _ = f.create_dataset("data", brain_dims, dtype="float32", chunks=chunks)
         _ = f.create_dataset("qform", data=qform)
-        _ = f.create_dataset("zooms", data=qform)
-        _ = f.create_dataset("xyzt_units", data=qform)
+        _ = f.create_dataset("zooms", data=zooms)
+        _ = f.create_dataset("xyzt_units", data=xyzt_units)
 
     return directory, os.path.basename(file)
 
