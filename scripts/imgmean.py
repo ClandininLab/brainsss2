@@ -7,11 +7,12 @@ import argparse
 import sys
 import nibabel as nib
 import nilearn.image
+from hdf5_utils import get_chunk_boundaries
 
 
 def parse_args(input, allow_unknown=True):
     parser = argparse.ArgumentParser(
-        description="make mean brain for a single h5 file"
+        description="make mean brain over time for a single h5 or nii file"
     )
     parser.add_argument(
         "-f",
@@ -20,7 +21,7 @@ def parse_args(input, allow_unknown=True):
         help="h5 file",
         required=True,
     )
-    parser.add_argument('--stepsize', type=int, default=None,
+    parser.add_argument('--stepsize', type=int, default=50,
                         help="stepsize for chunking")
     parser.add_argument('--outfile_type', type=str, choices=['h5', 'nii'], default=None)
     parser.add_argument('-v', '--verbose', action='store_true', default=False)
@@ -90,16 +91,22 @@ def imgmean(file, verbose=False, outfile_type=None):
 
     else:
         print('computing mean of nii file')
-        img = nib.load(file)
+        img = nib.load(file, mmap='r')
         # print('original image header:', img.header)
-        meanimg = nilearn.image.mean_img(file)
+        # try using dataobj to get the data without loading the whole image
+        meanimg = nib.Nifti1Image(np.zeros(img.shape[:3]), img.affine)
+        chunk_boundaries = get_chunk_boundaries(args.stepsize, img.shape[-1])
+        
+        nchunks = len(chunk_boundaries)
+        for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+            meanimg.dataobj[:, :, :] += np.mean(img.dataobj[:, :, :, chunk_start:chunk_end]) / nchunks
+        # meanimg = nilearn.image.mean_img(file)
         meanimg.header.set_qform(img.header.get_qform())
         meanimg.header.set_sform(img.header.get_sform())
         meanimg.header.set_xyzt_units(xyz=img.header.get_xyzt_units()[0])
         meanimg.header.set_zooms(img.header.get_zooms()[:3])
 
-    print(f'image mean: {np.mean(meanimg.get_fdata())}')
-    print(meanimg.header)
+    logging.info(f'image mean: {np.mean(meanimg.get_fdata())}')
 
     if verbose:
         print(f'saving mean of {file} to file {meanfile}')
@@ -115,7 +122,6 @@ def imgmean(file, verbose=False, outfile_type=None):
     else:
         print('saving to nii')
         meanimg.to_filename(meanfile)
-        print('doublecheck:', meanimg.header)
     return(meanfile)
 
 
