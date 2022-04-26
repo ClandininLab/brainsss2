@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     print(f'converting {args.file} to {args.outfile}')
 
-    with h5py.File(args.file, 'r+') as f:
+    with h5py.File(args.file, 'r') as f:
         image_array = f.get("data")[:].astype('float32')
 
         if 'qform' in f:
@@ -42,9 +42,10 @@ if __name__ == '__main__':
             print('no xyzt_units found in h5 file')
             xyzt_units = None
 
-    img = nib.Nifti1Image(image_array, np.eye(4))
+    img = nib.Nifti1Image(image_array, None)
     if qform is not None:
         img.header.set_qform(qform)
+        img.header.set_sform(qform)
     if zooms is not None:
         img.header.set_zooms(zooms[:3])
     if xyzt_units is not None:
