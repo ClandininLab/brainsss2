@@ -14,15 +14,14 @@ from openpyxl import load_workbook, Workbook
 import brainsss
 import logging
 import nibabel as nib
+import datetime
 # THIS A HACK FOR DEVELOPMENT
 sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
-
-from logging_utils import setup_logging, remove_existing_file_handlers
-import datetime
-from argparse_utils import get_base_parser, add_builder_arguments
+from logging_utils import setup_logging, remove_existing_file_handlers # noqa
+from argparse_utils import get_base_parser, add_builder_arguments # noqa
 from preprocess_utils import dict_to_args_list # noqa
-from brainsss.utils import get_resolution, load_timestamps
+from brainsss.utils import get_resolution, load_timestamps # noqa
 
 
 def parse_args(input, allow_unknown=True):
@@ -119,14 +118,14 @@ def build_fly(args):
                 rmtree(os.path.join(args.destination_dir))
 
             os.mkdir(args.destination_dir)
-            
+
             # print(f'\n*Building {likely_fly_folder} as fly number {new_fly_number}*')
             print(
                 f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   '}"
             )
 
             # put log file into fly directory
-            #args = setup_logging(args, logtype='flybuilder',
+            # args = setup_logging(args, logtype='flybuilder',
             #    logdir=os.path.join(args.destination_dir, "logs"))
 
             # print(f'Using logger: {logging.getLogger()}')
@@ -372,6 +371,7 @@ def copy_bruker_data(source, destination, folder_type, print):
 
             # Actually copy the file
             target_item = os.path.join(destination, item)
+            print('copying using copy_file')
             copy_file(source_item, target_item)
 
 
@@ -379,8 +379,10 @@ def copy_file(source, target):
     logging.info(f'Copy file {source} to {target}')
     copyfile(source, target)
 
-def copy_nifti_file(source, target):
-    """copy nifti file and set header info"""
+
+def copy_nifti_file(source, target, stepsize=4):
+    """copy nifti file and set header info
+    - copy in chunks to prevent memory overload"""
     # from luke:
     # the array is shape (256, 128, 49, 3384).
     # Axis 1: Goes laterally across the brain. Starts on the left side of the brain as if you are the fly.
@@ -393,11 +395,15 @@ def copy_nifti_file(source, target):
     timestamps = load_timestamps(os.path.dirname(xmlfile), os.path.basename(xmlfile))
     # resolution.append(np.diff(timestamps[:, 0])[0]/1000)
     resolution.append(1)
-    img = nib.load(source)
-    img.header.set_qform(np.diag(np.array(resolution)/1000))
+    affine = np.diag(np.array(resolution) / 1000)
+    orig_img = nib.load(source, mmap='r')
+
+    img = nib.Nifti1Image(orig_img.dataobj, affine=None)
+    img.header.set_qform(affine, code=2)
+    img.header.set_sform(affine, code=2)
     img.header.set_xyzt_units(xyz='mm', t='sec')
-    img.header.set_zooms([i/1000 for i in resolution[:3]] + [np.diff(timestamps[:, 0])[0]/1000])
-    #copyfile(source, target)
+    img.header.set_zooms([i / 1000 for i in resolution[:3]] + [np.diff(timestamps[:, 0])[0] / 1000])
+    logging.info(f"saving to target: {target}")
     img.to_filename(target)
 
 
