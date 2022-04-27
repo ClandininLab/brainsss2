@@ -33,6 +33,7 @@ from argparse_utils import ( # noqa
     add_moco_arguments
 )  # noqa
 from slurm import SlurmBatchJob  # noqa
+from imgmean import imgmean  # noqa
 
 
 def get_max_slurm_cpus():
@@ -313,9 +314,13 @@ def process_fly(args):
         }
 
     if args.correlation:
-        #             time=2,
-        #             cores=4,
-        logging.warning('correlation not yet implemented!')
+        workflow_dict['correlation.py'] = {
+            'basedir': args.basedir,
+            'dir': args.process,
+            'cores': 4,
+            'time_hours': 1,
+            'behavior': ['RotLabX', 'RotLabY', 'RotLabZ','RotLabY+', 'RotLabY-'],
+        }
 
     if args.STA:
         #             time=4,
