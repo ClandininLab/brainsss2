@@ -1,6 +1,7 @@
 # create and save mean image to/from nii/h5
 # pyright: reportMissingImports=false
 
+import logging
 import h5py
 import numpy as np
 import argparse
@@ -28,7 +29,7 @@ def parse_args(input, allow_unknown=True):
     return parser.parse_args()
 
 
-def imgmean(file, verbose=False, outfile_type=None):
+def imgmean(file, verbose=False, outfile_type=None, stepsize=50):
     """
     create and save temporal mean image to/from nii/h5
 
@@ -65,7 +66,12 @@ def imgmean(file, verbose=False, outfile_type=None):
 
             # convert immediately to nibabel image
             img = nib.Nifti1Image(f['data'], affine=f['qform'][:])
-            meanimg = nilearn.image.mean_img(img)
+            meanimg = nib.Nifti1Image(np.zeros(img.shape[:3]), affine=f['qform'][:])
+            chunk_boundaries = get_chunk_boundaries(stepsize, img.shape[-1])
+
+            nchunks = len(chunk_boundaries)
+            for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
+                meanimg.dataobj[:, :, :] += np.mean(img.dataobj[:, :, :, chunk_start:chunk_end], axis=-1) / nchunks
 
             if 'qform' in f:
                 meanimg.header.set_qform(f['qform'][:])
@@ -95,11 +101,11 @@ def imgmean(file, verbose=False, outfile_type=None):
         # print('original image header:', img.header)
         # try using dataobj to get the data without loading the whole image
         meanimg = nib.Nifti1Image(np.zeros(img.shape[:3]), img.affine)
-        chunk_boundaries = get_chunk_boundaries(args.stepsize, img.shape[-1])
-        
+        chunk_boundaries = get_chunk_boundaries(stepsize, img.shape[-1])
+
         nchunks = len(chunk_boundaries)
         for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
-            meanimg.dataobj[:, :, :] += np.mean(img.dataobj[:, :, :, chunk_start:chunk_end]) / nchunks
+            meanimg.dataobj[:, :, :] += np.mean(img.dataobj[:, :, :, chunk_start:chunk_end], axis=-1) / nchunks
         # meanimg = nilearn.image.mean_img(file)
         meanimg.header.set_qform(img.header.get_qform())
         meanimg.header.set_sform(img.header.get_sform())
