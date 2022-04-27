@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.realpath("../brainsss"))
 sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
 from argparse_utils import get_base_parser, add_moco_arguments # noqa
 from logging_utils import setup_logging # noqa
+from h5_to_nii import h5_to_nii
 
 
 def parse_args(input, allow_unknown=True):
@@ -200,6 +201,7 @@ def apply_moco_parameters_to_channel_2(args, files,
             transformlist=transform,
             interpolator=args.interpolation_method)
         corrected_data[..., timepoint] = result.numpy()
+        print('mean channel 2 slice signal: ', np.mean(result.numpy()))
     # save data
     logging.info('Saving channel 2 data')
 
@@ -328,21 +330,6 @@ def moco_plot(args, motion_file):
 
     plt.savefig(save_file, bbox_inches='tight', dpi=300)
     return(None)
-
-
-def h5_to_nii(h5_path):
-    nii_savefile = h5_path.replace('h5', 'nii')
-    assert nii_savefile != h5_path, 'h5_to_nii: nii_savefile is the same as h5_path'
-    with h5py.File(h5_path, 'r+') as h5_file:
-        image_array = h5_file.get("data")[:].astype('uint16')
-
-    nifti1_limit = (2**16 / 2)
-    if np.any(np.array(image_array.shape) >= nifti1_limit):  # Need to save as nifti2
-        nib.save(nib.Nifti2Image(image_array, np.eye(4)), nii_savefile)
-    else:  # Nifti1 is OK
-        nib.save(nib.Nifti1Image(image_array, np.eye(4)), nii_savefile)
-
-    return nii_savefile
 
 
 def save_nii(args, h5_files):
