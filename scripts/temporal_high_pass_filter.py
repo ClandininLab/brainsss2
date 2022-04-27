@@ -62,7 +62,7 @@ if __name__ == "__main__":
         logging.info(f"Data shape is {dims}")
 
         with h5py.File(save_file, "w") as f:
-            dset = f.create_dataset("data", dims, dtype="float32", chunks=True)
+            f.create_dataset("data", dims, dtype="float32", chunks=True)
             f.create_dataset('qform', data=qform)
             f.create_dataset('zooms', data=zooms)
             f.create_dataset('xyzt_units', data=xyzt_units)
@@ -84,5 +84,6 @@ if __name__ == "__main__":
                 )  # need to add back in mean to preserve offset
 
                 f["data"][:, :, chunk_start:chunk_end, :] = chunk_high_pass
+                logging.info(f'mean of saved chunk {np.mean(f["data"][:, :, chunk_start:chunk_end, :])}')
 
     logging.info("high pass done")
