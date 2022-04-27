@@ -142,7 +142,7 @@ def add_fictrac_qc_arguments(parser):
 
 
 def add_moco_arguments(parser):
-    parser.add_argument('--type_of_transform', type=str, default='SyN',
+    parser.add_argument('--type_of_transform', type=str, default='BOLDRigid',
         help='type of transform to use')
     parser.add_argument('--interpolation_method', type=str, default='linear')
     parser.add_argument('--output_format', type=str, choices=['h5', 'nii'],
