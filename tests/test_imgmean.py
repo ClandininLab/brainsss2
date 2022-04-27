@@ -81,6 +81,15 @@ def test_imgmean_h5_to_nii(filled_h5_dataset, dataset):
     assert np.allclose(img.get_fdata(), np.mean(dataset, axis=-1))
 
 
+def test_imgmean_nii_to_nii(nii_file, dataset):
+    meanfile = imgmean(nii_file, 
+        outfile_type='nii', verbose=True)
+    assert os.path.exists(meanfile)
+    img = nib.load(meanfile)
+    assert img.shape == data_shape[:3]
+    assert np.allclose(img.get_fdata(), np.mean(dataset, axis=-1))
+
+
 def test_imgmean_h5_to_h5(filled_h5_dataset, dataset, qform):
     meanfile = imgmean(filled_h5_dataset, outfile_type='h5', verbose=True)
     assert os.path.exists(meanfile)
