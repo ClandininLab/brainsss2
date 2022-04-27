@@ -17,21 +17,29 @@ sys.path.insert(0, os.path.realpath("../brainsss"))
 sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
 from argparse_utils import get_base_parser # noqa
 from logging_utils import setup_logging # noqa
+from imgmean import imgmean
 
 
-def parse_args(input):
+def parse_args(input, allow_unknown=True):
+    parser = get_base_parser('correlation between activity and behavior')
+
+
+    parser.add_argument(
+        "-b", "--basedir",
+        type=str,
+        help="base directory for fly data",
+        required=True)
     parser = argparse.ArgumentParser(description='compute correlation between neural data and behavior')
     parser.add_argument('-d', '--dir', type=str,
         help='func directory to be analyzed', required=True)
     parser.add_argument('-f', '--file', type=str, help='file to process',
         default='preproc/functional_channel_2_moco_hpf.h5')
-    parser.add_argument('--bg_img', type=str, help='background image for plotting',
-        default='imaging/functional_channel_1_mean.nii')
+    parser.add_argument('--bg_img', type=str, help='background image for plotting')
     parser.add_argument('-b', '--behavior', type=str,
         help='behavior(s) to analyze (add + or - as suffix to limit values',
         required=True, nargs='+')
     # TODO: also allow mask image or threshold value
-    parser.add_argument('-m', '--maskpct', default=90, type=float,
+    parser.add_argument('-m', '--maskpct', default=10, type=float,
         help='percentage (1-100) of image to include in mask')
     parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
@@ -39,13 +47,20 @@ def parse_args(input):
     parser.add_argument('--resolution', type=float, default=10, help='resolution of fictrac data')
     parser.add_argument('-o', '--outdir', type=str, help='directory to save output')
     parser.add_argument('--corrthresh', type=float, default=0.1, help='correlation threshold for plotting')
-    return(parser.parse_args(input))
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+    return args
 
 
 def setup_mask(args, brain):
     if args.maskpct is not None:
         meanbrain = np.mean(brain, axis=3)
-        maskthresh = scipy.stats.scoreatpercentile(meanbrain, 100 - args.maskpct)
+        maskthresh = scipy.stats.scoreatpercentile(meanbrain, args.maskpct)
         mask = meanbrain > maskthresh
         logging.info(f'Mask threshold for {args.maskpct} percent:: {maskthresh}')
     else:
@@ -118,6 +133,15 @@ if __name__ == "__main__":
         os.mkdir(args.outdir)
 
     setup_logging(args, logtype='correlation')
+
+    if args.bg_img is None:
+        args.bg_img = os.path.join(args.dir, 'preproc/functional_channel_1_moco_mean.nii')
+    if not os.path.exists(args.bg_img):
+        baseimg = os.path.join(args.dir, 'preproc/functional_channel_1_moco.h5')
+        logging.warning(f'Background image {args.bg_img} does not exist - trying to create mean from {baseimg}')
+        assert os.path.exists(baseimg), 'base image for mean anat does not exist'
+        imgmean(baseimg, outfile_type='nii')
+        assert os.path.exists(args.bg_img), 'mean image still does not exist'
 
     timestamps = brainsss.load_timestamps(os.path.join(args.dir, 'imaging'))
 
