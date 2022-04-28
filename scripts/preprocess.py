@@ -38,7 +38,12 @@ from imgmean import imgmean  # noqa
 
 def get_max_slurm_cpus():
     """get the max number of cpus for slurm"""
-    return int(run_shell_command("sinfo -h -o %C").strip().split('/')[-1])
+    try:
+        cmdout = run_shell_command("sinfo -h -o %C")
+        maxcores = int(cmdout.strip().split('/')[-1])
+    except:
+        maxcores = 1
+    return maxcores
 
 
 def parse_args(input):
