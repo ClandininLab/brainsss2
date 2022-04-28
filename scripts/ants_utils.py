@@ -1,7 +1,10 @@
 import ants
 import os
 import numpy as np
-from brainsss.utils import get_resolution
+import sys
+# THIS A HACK FOR DEVELOPMENT
+sys.path.insert(0, os.path.realpath("../brainsss"))
+from utils import get_resolution
 
 
 def ants_affine_to_distance(affine):
@@ -28,15 +31,14 @@ def get_dataset_resolution(datadir):
     )
     assert os.path.exists(xmlfile), "xml file not found"
 
-    resolution = get_resolution(xmlfile)
-    return resolution
+    return get_resolution(xmlfile)
 
 
-def get_motion_parameters_from_transforms(transformlist, resolution):
+def get_motion_parameters_from_transforms(transformlist, resolution=None):
     """only gets rigid body transform parameters
 
     transformlist: list of transform files
-    resolution: resolution of the image (in microns)"""
+    resolution: unused, vestigial"""
     transform_parameters = np.zeros((len(transformlist), 12))
     motion_parameters = np.zeros((len(transformlist), 6))
     for idx, t in enumerate(transformlist):
