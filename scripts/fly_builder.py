@@ -11,7 +11,7 @@ from shutil import copyfile, rmtree
 from xml.etree import ElementTree as ET
 from lxml import etree, objectify
 from openpyxl import load_workbook, Workbook
-import brainsss
+#import brainsss
 import logging
 import nibabel as nib
 import datetime
@@ -21,7 +21,7 @@ sys.path.append("../brainsss/scripts")
 from logging_utils import setup_logging, remove_existing_file_handlers # noqa
 from argparse_utils import get_base_parser, add_builder_arguments # noqa
 from preprocess_utils import dict_to_args_list # noqa
-from brainsss.utils import get_resolution, load_timestamps # noqa
+from utils import get_resolution, load_timestamps, sort_nicely # noqa
 
 
 def parse_args(input, allow_unknown=True):
@@ -77,7 +77,7 @@ def build_fly(args):
     # get fly folders in flagged directory and sort to ensure correct fly order
     logging.info(f"Building flies from {args.import_path}")
     likely_fly_folders = os.listdir(args.import_path)
-    brainsss.utils.sort_nicely(likely_fly_folders)
+    sort_nicely(likely_fly_folders)
     likely_fly_folders = [i for i in likely_fly_folders if "fly" in i]
     logging.info(f"Found fly folders: {likely_fly_folders}")
     if args.fly_dirs is not None:
@@ -205,7 +205,7 @@ def add_date_to_fly(args):
         if "func" in x
     ]
     if len(func_folders) > 0:
-        brainsss.utils.sort_nicely(func_folders)
+        sort_nicely(func_folders)
         func_folder = func_folders[0]
         # Get full xml file path
         xml_file = os.path.join(func_folder, "imaging", "functional.xml")
@@ -216,7 +216,7 @@ def add_date_to_fly(args):
             for x in os.listdir(args.destination_dir)
             if "anat" in x
         ]
-        brainsss.utils.sort_nicely(anat_folders)
+        sort_nicely(anat_folders)
         anat_folder = anat_folders[0]
         # Get full xml file path
         xml_file = os.path.join(anat_folder, "imaging", "anatomy.xml")
@@ -402,7 +402,7 @@ def copy_nifti_file(source, target, stepsize=4):
     img.header.set_qform(affine, code=2)
     img.header.set_sform(affine, code=2)
     img.header.set_xyzt_units(xyz='mm', t='sec')
-    img.header.set_zooms([i / 1000 for i in resolution[:3]] + [np.diff(timestamps[:, 0])[0] / 1000])
+    img.header.set_zooms([i for i in resolution[:3]] + [np.diff(timestamps[:, 0])[0] / 1000])
     logging.info(f"saving to target: {target}")
     img.to_filename(target)
 
@@ -724,7 +724,7 @@ def add_fly_to_xlsx(args):
     func_folders = [
         os.path.join(args.destination_dir, x) for x in os.listdir(args.destination_dir) if "func" in x
     ]
-    brainsss.utils.sort_nicely(func_folders)
+    sort_nicely(func_folders)
     for func_folder in func_folders:
 
         # TRY TO LOAD EXPT METADATA
