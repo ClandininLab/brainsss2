@@ -263,13 +263,11 @@ def run_motion_correction(args, files, h5_files):
         if motion_parameters is None:
             # TODO: get_dataset_resolution is failing...
             motion_parameters = get_motion_parameters_from_transforms(
-                mytx['motion_parameters'],
-                get_dataset_resolution(os.path.join(args.dir, 'imaging')))[1]
+                mytx['motion_parameters'])[1]
         else:
             motion_parameters = np.vstack((motion_parameters,
                 get_motion_parameters_from_transforms(
-                    mytx['motion_parameters'],
-                    get_dataset_resolution(os.path.join(args.dir, 'imaging')))[1]))
+                    mytx['motion_parameters'])[1]))
 
         # save results from chunk
         logging.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
