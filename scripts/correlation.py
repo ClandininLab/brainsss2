@@ -6,7 +6,6 @@ import numpy as np
 import argparse
 import h5py
 import nibabel as nib
-import brainsss
 import scipy
 import datetime
 from columnwise_corrcoef_perf import AlmightyCorrcoefEinsumOptimized
@@ -17,12 +16,13 @@ sys.path.insert(0, os.path.realpath("../brainsss"))
 sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
 from argparse_utils import get_base_parser # noqa
 from logging_utils import setup_logging # noqa
+from fictrac import load_fictrac, smooth_and_interp_fictrac
 from imgmean import imgmean
+from utils import load_timestamps
 
 
 def parse_args(input, allow_unknown=True):
     parser = get_base_parser('correlation between activity and behavior')
-
 
     parser.add_argument(
         "-b", "--basedir",
@@ -69,7 +69,7 @@ def setup_mask(args, brain):
 
 
 def load_fictrac_data(args):
-    fictrac_raw = brainsss.load_fictrac(os.path.join(args.dir, 'fictrac'))
+    fictrac_raw = load_fictrac(os.path.join(args.dir, 'fictrac'))
     expt_len = (fictrac_raw.shape[0] / args.fps) * 1000
     return(fictrac_raw, expt_len)
 
@@ -143,7 +143,7 @@ if __name__ == "__main__":
         imgmean(baseimg, outfile_type='nii')
         assert os.path.exists(args.bg_img), 'mean image still does not exist'
 
-    timestamps = brainsss.load_timestamps(os.path.join(args.dir, 'imaging'))
+    timestamps = load_timestamps(os.path.join(args.dir, 'imaging'))
 
     fictrac_raw, expt_len = load_fictrac_data(args)
 
@@ -175,7 +175,7 @@ if __name__ == "__main__":
                 logging.info(F"Processing slice {z}: {np.sum(zmask)} voxels")
 
             # interpolate fictrac to match the timestamps of this slice
-            fictrac_interp = brainsss.smooth_and_interp_fictrac(
+            fictrac_interp = smooth_and_interp_fictrac(
                 fictrac_raw, args.fps, args.resolution, expt_len,
                 behavior, timestamps=timestamps, z=z)[:, np.newaxis]
 
