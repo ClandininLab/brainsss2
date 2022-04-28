@@ -5,7 +5,11 @@ import nibabel as nib
 import h5py
 
 
-def h5_to_nii(file, outfile):
+def h5_to_nii(file, outfile=None):
+    if outfile is None:
+        outfile = file.replace('.h5', '.nii')
+        assert outfile != file, 'Output file cannot be the same as input file'
+    print(f'converting {args.file} to {args.outfile}')
     with h5py.File(file, 'r') as f:
         image_array = f.get("data")[:].astype('float32')
 
@@ -52,8 +56,5 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
     assert 'h5' in args.file, 'file must be h5'
-    if args.outfile is None:
-        args.outfile = args.file.replace('h5', 'nii')
 
-    print(f'converting {args.file} to {args.outfile}')
     h5_to_nii(args.file, args.outfile)
