@@ -34,6 +34,12 @@ def parse_args(input, allow_unknown=True):
         type=str,
         help="base directory for fly data",
         required=True)
+    parser.add_argument(
+        "--func_dirs",
+        type=str,
+        nargs='+',
+        help="specific func dirs to process"
+    )
 
     if allow_unknown:
         args, unknown = parser.parse_known_args()
