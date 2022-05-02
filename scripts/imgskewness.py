@@ -30,7 +30,7 @@ def parse_args(input, allow_unknown=True):
     return parser.parse_args()
 
 
-def imgskewness(file, verbose=False, outfile_type=None, stepsize=50):
+def imgskewness(file, absolute=True, verbose=False, outfile_type=None, stepsize=50):
     """
     create and save temporal skewness image to/from nii/h5
 
@@ -58,7 +58,7 @@ def imgskewness(file, verbose=False, outfile_type=None, stepsize=50):
     else:
         outfile_type = infile_type
 
-    if args.absolute:
+    if absolute:
         skewfile = file.replace(f".{infile_type}", f"_absoluteskew.{outfile_type}")
     else:
         skewfile = file.replace(f".{infile_type}", f"_skew.{outfile_type}")
@@ -116,7 +116,7 @@ def imgskewness(file, verbose=False, outfile_type=None, stepsize=50):
     if verbose:
         print(f'saving mean of {file} to file {skewfile}')
 
-    if args.absolute:
+    if absolute:
         skewness = nib.Nifti1Image(np.abs(skewness.dataobj),
             affine=skewness.affine, header=skewness.header)
 
@@ -138,4 +138,4 @@ if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
     print(f'making skewness image for {args.file}')
-    skewimg = imgskewness(args.file, args.verbose, args.outfile_type)
+    skewimg = imgskewness(args.file, args.absolute, args.verbose, args.outfile_type)
