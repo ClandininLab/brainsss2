@@ -279,7 +279,7 @@ def copy_fly(args):
                 copy_bruker_data(source_expt_folder, imaging_destination, "anat", print)
 
             elif "func" in item:
-                if item.split('/')[-1] not in args.func_dirs:
+                if args.func_dirs is not None and item.split('/')[-1] not in args.func_dirs:
                     logging.info(f"Skipping {item} - not in args.func_dirs")
                     continue
                 # Make imaging folder and copy
