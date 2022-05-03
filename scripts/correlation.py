@@ -61,21 +61,19 @@ def parse_args(input, allow_unknown=True):
 
 def setup_mask(args, brain, meanbrainfile,
                maskfile, cleanup=4):
-    if args.maskpct is not None:
-        meanimg = nib.load(meanbrainfile)
-        meanbrain = meanimg.get_fdata()
-        maskthresh = scipy.stats.scoreatpercentile(meanbrain, args.maskpct)
-        meanimg_ants = ants.from_nibabel(meanimg)
-        mask_ants = ants.get_mask(meanimg_ants,
-            low_thresh=maskthresh, high_thresh=np.inf, 
-            cleanup=cleanup)
-        logging.info(f'Mask threshold for {args.maskpct} percent:: {maskthresh}')
-        maskimg = ants.to_nibabel(mask_ants)
-        maskimg.to_filename(maskfile)
-        mask = mask_ants[:, :, :]
-    else:
-        mask = np.ones(brain.shape[:3], dtype=bool)
-    return(mask)
+    if args.maskpct is None:
+        return np.ones(brain.shape[:3], dtype=bool)
+    meanimg = nib.load(meanbrainfile)
+    meanbrain = meanimg.get_fdata()
+    maskthresh = scipy.stats.scoreatpercentile(meanbrain, args.maskpct)
+    meanimg_ants = ants.from_nibabel(meanimg)
+    mask_ants = ants.get_mask(meanimg_ants,
+        low_thresh=maskthresh, high_thresh=np.inf,
+        cleanup=cleanup)
+    logging.info(f'Mask threshold for {args.maskpct} percent:: {maskthresh}')
+    maskimg = ants.to_nibabel(mask_ants)
+    maskimg.to_filename(maskfile)
+    return mask_ants[:, :, :]
 
 
 def load_fictrac_data(args):
