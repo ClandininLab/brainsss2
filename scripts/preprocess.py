@@ -319,13 +319,14 @@ def process_fly(args):
             'time_hours': 4,
         }
 
-    if args.correlation:
+    if args.correlation or args.run_all:
         workflow_dict['correlation.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
             'cores': 4,
             'time_hours': 1,
-            'behavior': ['RotLabX', 'RotLabY', 'RotLabZ','RotLabY+', 'RotLabY-'],
+            'behavior': ['dRotLabX', 'dRotLabY', 'dRotLabZ', 
+                         'dRotLabY+', 'dRotLabY-'],
         }
 
     if args.STA:
