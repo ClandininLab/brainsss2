@@ -8,6 +8,7 @@ import h5py
 import nibabel as nib
 import scipy
 import datetime
+import ants
 from columnwise_corrcoef_perf import AlmightyCorrcoefEinsumOptimized
 import logging
 from nilearn.plotting import plot_stat_map
@@ -39,9 +40,9 @@ def parse_args(input, allow_unknown=True):
         help='behavior(s) to analyze (add + or - as suffix to limit values',
         required=True, nargs='+')
     # TODO: also allow mask image or threshold value
-    parser.add_argument('-m', '--maskpct', default=10, type=float,
+    parser.add_argument('-m', '--maskpct', default=50, type=float,
         help='percentage (1-100) of image to include in mask')
-    parser.add_argument('-l', '--logdir', type=str, help='directory to save log file')
+    parser.add_argument('-l', '--logfile', type=str, help='directory to save log file')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument('--fps', type=float, default=100, help='frame rate of fictrac camera')
     parser.add_argument('--resolution', type=float, default=10, help='resolution of fictrac data')
@@ -57,12 +58,20 @@ def parse_args(input, allow_unknown=True):
     return args
 
 
-def setup_mask(args, brain):
+def setup_mask(args, brain, meanbrainfile,
+               maskfile, cleanup=4):
     if args.maskpct is not None:
-        meanbrain = np.mean(brain, axis=3)
+        meanimg = nib.load(meanbrainfile)
+        meanbrain = meanimg.get_fdata()
         maskthresh = scipy.stats.scoreatpercentile(meanbrain, args.maskpct)
-        mask = meanbrain > maskthresh
+        meanimg_ants = ants.from_nibabel(meanimg)
+        mask_ants = ants.get_mask(meanimg_ants,
+            low_thresh=maskthresh, high_thresh=np.inf, 
+            cleanup=cleanup)
         logging.info(f'Mask threshold for {args.maskpct} percent:: {maskthresh}')
+        maskimg = ants.to_nibabel(mask_ants)
+        maskimg.to_filename(maskfile)
+        mask = mask_ants[:, :, :]
     else:
         mask = np.ones(brain.shape[:3], dtype=bool)
     return(mask)
@@ -88,14 +97,14 @@ def load_brain(args):
 
 def get_transformed_data_slice(args, brain, mask, z):
     zdata = brain[:, :, z, :]
-    zmask = mask[:, :, z].reshape(np.prod(brain.shape[:2]))
+    zmask = mask[:, :, z].reshape(np.prod(brain.shape[:2])).astype('bool')
     if zmask.sum() == 0:
         return(None, zmask)
     return(zdata.transpose(2, 0, 1).reshape(brain.shape[3], -1), zmask)
 
 
 def save_corrdata(args, corr_brain, behavior, qform=None, zooms=None, xyzt_units=None):
-    save_file = os.path.join(args.outdir, f'corr_{behavior}.nii')
+    save_file = os.path.join(args.outdir, f'{args.outstem}_corr_{behavior}.nii')
     img = nib.Nifti1Image(corr_brain, None)
     if qform is not None:
         img.header.set_qform(qform)
@@ -132,7 +141,10 @@ if __name__ == "__main__":
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
 
-    setup_logging(args, logtype='correlation')
+    setattr(args, 'outstem', os.path.basename(args.file).replace('.h5', ''))
+
+    setup_logging(args, logtype='correlation',
+        logfile=args.logfile)
 
     if args.bg_img is None:
         args.bg_img = os.path.join(args.dir, 'preproc/functional_channel_1_moco_mean.nii')
@@ -150,34 +162,49 @@ if __name__ == "__main__":
     logging.info('loading data from h5 file')
     brain, qform, zooms, xyzt_units = load_brain(args)
 
-    mask = setup_mask(args, brain)
+    meanbrainfile = imgmean(os.path.join(args.dir, args.file),
+        outfile_type='nii')
+
+    maskfile = meanbrainfile.replace('mean.', 'mask.')
+    if os.path.exists(maskfile):
+        logging.info('loading existing mask')
+        mask = nib.load(maskfile).get_fdata()
+    else:
+        logging.info('creating mask')
+        mask = setup_mask(args, brain,
+            meanbrainfile, maskfile)
 
     for behavior in args.behavior:
-
-        logging.info(f"Performing Correlation on {args.file}; behavior: {behavior}")
 
         if behavior[-1] in ['+', '-']:
             behavior_name = behavior[:-1]  # name without sign, for use in loading fictrac data
             behavior_transform = behavior[-1]
             logging.info(f'Transforming behavior {behavior_name}: {behavior_transform} values only')
         else:
+            behavior_name = behavior
             behavior_transform = None
+
+        if behavior_name not in fictrac_raw.columns:
+            logging.warning(f'behavior {behavior} not found in fictrac data')
+            continue
+
+        logging.info(f"Performing Correlation on {args.file}; behavior: {behavior}")
 
         corr_brain = np.zeros((brain.shape[:3]))
 
+        # loop over slices to save memory
         for z in range(brain.shape[2]):
 
             zdata_trans, zmask = get_transformed_data_slice(args, brain, mask, z)
             if zdata_trans is None:
-                logging.info(f'Skipping slice {z} because it has no brain')
+                logging.info(f'Skipping slice {z} because it has no in-mask voxels')
                 continue
-            else:
-                logging.info(F"Processing slice {z}: {np.sum(zmask)} voxels")
 
+            logging.info(F"Processing slice {z}: {np.sum(zmask)} voxels")
             # interpolate fictrac to match the timestamps of this slice
             fictrac_interp = smooth_and_interp_fictrac(
                 fictrac_raw, args.fps, args.resolution, expt_len,
-                behavior, timestamps=timestamps, z=z)[:, np.newaxis]
+                behavior_name, timestamps=timestamps, z=z)[:, np.newaxis]
 
             if behavior_transform is not None:
                 fictract_interp = transform_behavior(fictrac_interp, behavior_transform)
@@ -197,4 +224,4 @@ if __name__ == "__main__":
         plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
             display_mode='z', threshold=args.corrthresh, draw_cross=False,
             cut_coords=np.arange(8, 49, 8), title=f'Correlation: {behavior}',
-            output_file=os.path.join(args.outdir, f'corr_{behavior}.png'))
+            output_file=os.path.join(args.outdir, f'{args.outstem}_corr_{behavior}.png'))
