@@ -411,7 +411,8 @@ def copy_nifti_file(source, target, stepsize=4):
     img.header.set_qform(affine, code=2)
     img.header.set_sform(affine, code=2)
     img.header.set_xyzt_units(xyz='mm', t='sec')
-    img.header.set_zooms([i for i in resolution[:3]] + [np.diff(timestamps[:, 0])[0] / 1000])
+    img.header.set_zooms(list(resolution[:3]) + [np.diff(timestamps[:, 0])[0] / 1000])
+
     logging.info(f"saving to target: {target}")
     img.to_filename(target)
 
