@@ -48,6 +48,7 @@ def parse_args(input, allow_unknown=True):
     parser.add_argument('--resolution', type=float, default=10, help='resolution of fictrac data')
     parser.add_argument('-o', '--outdir', type=str, help='directory to save output')
     parser.add_argument('--corrthresh', type=float, default=0.1, help='correlation threshold for plotting')
+    parser.add_argument('--outstem', type=str, help='output stem')
 
     if allow_unknown:
         args, unknown = parser.parse_known_args()
@@ -104,7 +105,7 @@ def get_transformed_data_slice(args, brain, mask, z):
 
 
 def save_corrdata(args, corr_brain, behavior, qform=None, zooms=None, xyzt_units=None):
-    save_file = os.path.join(args.outdir, f'{args.outstem}_corr_{behavior}.nii')
+    save_file = os.path.join(args.outdir, f'{args.outstem}_corr-{behavior}.nii')
     img = nib.Nifti1Image(corr_brain, None)
     if qform is not None:
         img.header.set_qform(qform)
@@ -141,7 +142,8 @@ if __name__ == "__main__":
     if not os.path.exists(args.outdir):
         os.mkdir(args.outdir)
 
-    setattr(args, 'outstem', os.path.basename(args.file).replace('.h5', ''))
+    if args.outstem is None:
+        setattr(args, 'outstem', os.path.basename(args.file).replace('.h5', ''))
 
     setup_logging(args, logtype='correlation',
         logfile=args.logfile)
@@ -224,4 +226,4 @@ if __name__ == "__main__":
         plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
             display_mode='z', threshold=args.corrthresh, draw_cross=False,
             cut_coords=np.arange(8, 49, 8), title=f'Correlation: {behavior}',
-            output_file=os.path.join(args.outdir, f'{args.outstem}_corr_{behavior}.png'))
+            output_file=os.path.join(args.outdir, f'{args.outstem}_corr-{behavior}.png'))
