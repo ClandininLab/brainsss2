@@ -12,15 +12,15 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
 import datetime
-from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
-from hdf5_utils import make_empty_h5, get_chunk_boundaries
-from imgmean import imgmean
 # THIS A HACK FOR DEVELOPMENT
 sys.path.insert(0, os.path.realpath("../brainsss"))
 sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
 from argparse_utils import get_base_parser, add_moco_arguments # noqa
 from logging_utils import setup_logging # noqa
 from h5_to_nii import h5_to_nii
+from ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
+from hdf5_utils import make_empty_h5, get_chunk_boundaries
+from imgmean import imgmean
 
 
 def parse_args(input, allow_unknown=True):
@@ -237,6 +237,8 @@ def run_motion_correction(args, files, h5_files):
 
     motion_parameters = None
     transform_files = []
+    FD = np.zeros(n_timepoints)
+
     # loop through chunks
     for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
         logging.info(f'processing chunk {i + 1} of {len(chunk_boundaries)}')
@@ -273,15 +275,19 @@ def run_motion_correction(args, files, h5_files):
         logging.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
         with h5py.File(h5_files['channel_1'], 'a') as f:
             f['data'][..., chunk_start:chunk_end] = mytx['motion_corrected'].numpy()
+        FD[chunk_start:chunk_end] = mytx['FD']
+    return(transform_files, motion_parameters, FD)
 
-    return(transform_files, motion_parameters)
 
-
-def save_motion_parameters(args, motion_parameters):
+def save_motion_parameters(args, motion_parameters, FD):
     assert os.path.exists(args.moco_output_dir), 'something went terribly wrong, moco dir does not exist'
     motion_df = pd.DataFrame(motion_parameters, columns=['tx', 'ty', 'tz', 'rx', 'ry', 'rz'])
     motion_file = os.path.join(args.moco_output_dir, 'motion_parameters.csv')
     motion_df.to_csv(motion_file, index=False)
+    FD_df = pd.DataFrame(FD, columns=['FD'])
+    FD_file = os.path.join(args.moco_output_dir, 'framewise_displacement.csv')
+    FD_df.to_csv(FD_file, index=False)
+
     return(motion_file)
 
 
@@ -359,7 +365,7 @@ if __name__ == '__main__':
 
     if not args.use_existing:
         logging.info('running motion correction')
-        transform_files, motion_parameters = run_motion_correction(args, files, h5_files)
+        transform_files, motion_parameters, FD = run_motion_correction(args, files, h5_files)
         with open(os.path.join(args.moco_output_dir, 'transform_files.json'), 'w') as f:
             json.dump(transform_files, f, indent=4)
     else:
@@ -374,7 +380,7 @@ if __name__ == '__main__':
     save_motcorr_settings_to_json(args, files, h5_files)
 
     logging.info('saving motion parameters')
-    motion_file = save_motion_parameters(args, motion_parameters)
+    motion_file = save_motion_parameters(args, motion_parameters, FD)
 
     logging.info('plotting motion')
     moco_plot(args, motion_file)
