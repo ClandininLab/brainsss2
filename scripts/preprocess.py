@@ -11,9 +11,9 @@ import datetime
 
 from pathlib import Path
 
-from argparse_utils import add_moco_arguments
 sys.path.append("../brainsss")
 sys.path.append("../brainsss/scripts")
+from argparse_utils import add_moco_arguments
 from logging_utils import setup_logging, get_logfile_name  # noqa
 from collections import OrderedDict # noqa
 from logging_utils import remove_existing_file_handlers, reinstate_file_handlers # noqa
