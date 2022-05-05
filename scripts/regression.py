@@ -63,7 +63,8 @@ def parse_args(input, allow_unknown=True):
     parser.add_argument('--dct_bases', type=int, default=8, help='number of dct bases to use')
     parser.add_argument('--confound_files', type=str, nargs='+', help='confound files')
     parser.add_argument('--overwrite', action='store_true', help='overwrite existing output')
-    parser.add_argument('--save-residuals', action='store_true', help='save model residuals')
+    parser.add_argument('--save-residuals', action='store_true',
+        help='save model residuals - NOT YET IMPLEMENTED')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
         if unknown is not None:
@@ -115,7 +116,7 @@ def save_desmtx(args, X, confound_names=None):
     if confound_names is not None:
         colnames += confound_names
     df = pd.DataFrame(X, columns=colnames)
-    outfile = os.path.join(args.outdir, f'{args.label}_desmtx.cxv')
+    outfile = os.path.join(args.outdir, f'{args.label}_desmtx.csv')
     df.to_csv(outfile, index=False)
     logging.info(f'Saved design matrix to {outfile}')
 
@@ -212,6 +213,7 @@ if __name__ == "__main__":
 
     if args.outdir is None:
         args.outdir = os.path.join(args.dir, 'regression', args.label)
+
     args = setup_logging(args, logtype='regression',
         logdir=args.outdir)
 
