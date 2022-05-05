@@ -40,6 +40,7 @@ def parse_args(input, allow_unknown=True):
         nargs='+',
         help="specific func dirs to process"
     )
+    parser.add_argument('--outstem', type=str, help='output stem')
 
     if allow_unknown:
         args, unknown = parser.parse_known_args()
