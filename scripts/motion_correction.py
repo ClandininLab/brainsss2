@@ -201,7 +201,6 @@ def apply_moco_parameters_to_channel_2(args, files,
             transformlist=transform,
             interpolator=args.interpolation_method)
         corrected_data[..., timepoint] = result.numpy()
-        print('mean channel 2 slice signal: ', np.mean(result.numpy()))
     # save data
     logging.info('Saving channel 2 data')
 
@@ -237,7 +236,6 @@ def run_motion_correction(args, files, h5_files):
 
     motion_parameters = None
     transform_files = []
-    FD = np.zeros(n_timepoints)
 
     # loop through chunks
     for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
@@ -275,16 +273,15 @@ def run_motion_correction(args, files, h5_files):
         logging.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
         with h5py.File(h5_files['channel_1'], 'a') as f:
             f['data'][..., chunk_start:chunk_end] = mytx['motion_corrected'].numpy()
-        FD[chunk_start:chunk_end] = mytx['FD']
-    return(transform_files, motion_parameters, FD)
+    return(transform_files, motion_parameters)
 
 
-def save_motion_parameters(args, motion_parameters, FD):
+def save_motion_parameters(args, motion_parameters):
     assert os.path.exists(args.moco_output_dir), 'something went terribly wrong, moco dir does not exist'
     motion_df = pd.DataFrame(motion_parameters, columns=['tx', 'ty', 'tz', 'rx', 'ry', 'rz'])
     motion_file = os.path.join(args.moco_output_dir, 'motion_parameters.csv')
     motion_df.to_csv(motion_file, index=False)
-    FD_df = pd.DataFrame(FD, columns=['FD'])
+    FD_df = pd.DataFrame(get_framewise_displacement(motion_parameters), columns=['FD'])
     FD_file = os.path.join(args.moco_output_dir, 'framewise_displacement.csv')
     FD_df.to_csv(FD_file, index=False)
 
@@ -343,6 +340,18 @@ def save_nii(args, h5_files):
         logging.info(f'converting {h5_file} to nifti')
         _ = h5_to_nii(h5_file)
     return(None)
+
+
+def get_framewise_displacement(motion_parameters, radius=1):
+    """Calculate framewise displacement
+    - radius of 1 is a guess value for fly brain
+    based on pilot examination"""
+    
+    fd = np.zeros(motion_parameters.shape[0])
+    diff = np.diff(motion_parameters, axis=0)
+    diff[:, 3:] *= radius
+    fd[1:] = diff.sum(axis=1)
+    return fd
 
 
 if __name__ == '__main__':
