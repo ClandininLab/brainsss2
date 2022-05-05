@@ -1,16 +1,13 @@
 from setuptools import setup
 
 setup(
-    name='brainsss',
+    name='brainsss2',
     version='0.0.1',
     long_description="""
-    This package performs preprocessing and analysis of 
-    volumetric neural data on sherlock. At its core, brainsss is a wrapper to 
-    interface with Slurm via python. It can handle complex submission of batches of 
-    jobs with job dependencies and makes it easy to pass variables between jobs. 
-    It also has full logging of job progress, output, and errors.
+    This package is meant for preprocessing and analysis of 2-photon
+    imaging data.  It is a refactor of https://github.com/ClandininLab/brainsss/
     """,
-    packages=['brainsss'],
+    packages=['brainsss2'],
     scripts=['scripts/preprocess.py',
         'scripts/fictrac_qc.py'],
     include_package_data=True,
