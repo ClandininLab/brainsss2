@@ -1,6 +1,6 @@
 # refactor of slurm utils
 import argparse
-from preprocess_utils import dict_to_args_list, dict_to_namespace
+from brainsss2.preprocess_utils import dict_to_args_list, dict_to_namespace
 import subprocess
 import logging
 import time

@@ -2,9 +2,7 @@ import ants
 import os
 import numpy as np
 import sys
-# THIS A HACK FOR DEVELOPMENT
-sys.path.insert(0, os.path.realpath("../brainsss"))
-from utils import get_resolution
+from brainsss2.utils import get_resolution
 
 
 def ants_affine_to_distance(affine):

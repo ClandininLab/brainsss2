@@ -90,39 +90,7 @@ mean_similarity['orig'] = compute_similarity_to_mean(
     orig_ants,
     mean_ants)
 
-
-# %% [markdown]
-# run SyN with default regularization
-
-# %%
-moco_results['SyN_default'] = ants.motion_correction(
-    image=orig_ants,
-    fixed=mean_ants,
-    verbose=True,
-    type_of_transform='SyN')
-
-# %%
-motpars['SyN_default'] = get_motion_parameters_from_transforms(
-    moco_results['SyN_default']['motion_parameters'])[1]
-plot_motpars(motpars['SyN_default'])
-
-# %%
-mean_similarity['SyN_default'] = compute_similarity_to_mean(
-    moco_results['SyN_default']['motion_corrected'],
-    mean_ants)
-
-
-# %%
-for model in ['orig', 'Rigid', 'SyN_default']:
-    plt.plot(mean_similarity[model], 
-    label=f'{model}: {np.mean(mean_similarity[model]):.3f}')
-
-plt.title('Similarity to mean image')
-plt.legend()
-
-# %% [markdown]
-
-# ## Test 2: SyN with different levels of regularization
+# ## Test SyN with different levels of regularization
 # The default is flow_sigma=3, total_sigma=0.
 # These are probably too low
 
@@ -197,11 +165,14 @@ def get_warp_laplacian(warpfile, meanimg):
 
 roughness = {}
 for model in moco_results:
-    if model == 'Rigid' or 'Elastic' in model:
+    if model.find('Syn') == 0:):
         continue
     if model not in roughness:
-        warpimgs[model] = moco_results[model]['motion_parameters'][high_motion_timepoint][0]
-        roughness[model] = get_warp_laplacian(warpimgs[model], mean_ants)
+        tmp_roughness = 0
+        for timepoint in range(len(moco_results[model]['motion_parameters']))
+            warpimg = moco_results[model]['motion_parameters'][timepoint][0]
+            tmp_roughness+= get_warp_laplacian(warping, mean_ants)
+        roughness[model] = tmp_roughness / len(moco_results[model]['motion_parameters'])
     print(model, roughness[model])
 
 # %%

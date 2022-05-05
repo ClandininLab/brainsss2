@@ -4,7 +4,7 @@ import numpy as np
 import argparse
 import nibabel as nib
 import h5py
-from hdf5_utils import get_chunk_boundaries
+from brainsss2.hdf5_utils import get_chunk_boundaries
 
 if __name__ == '__main__':
 

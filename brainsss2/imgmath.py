@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import argparse
 import nibabel as nib
-from hdf5_utils import get_chunk_boundaries
+from brainsss2.hdf5_utils import get_chunk_boundaries
 import sys
 from nibabel.processing import smooth_image
 

@@ -8,32 +8,31 @@ import sys
 import os
 import logging
 import datetime
-
 from pathlib import Path
 
-sys.path.append("../brainsss")
-sys.path.append("../brainsss/scripts")
-from argparse_utils import add_moco_arguments
-from logging_utils import setup_logging, get_logfile_name  # noqa
+from brainsss2.argparse_utils import add_moco_arguments
+from brainsss2.logging_utils import (
+    setup_logging,
+    get_logfile_name,
+    remove_existing_file_handlers,
+    reinstate_file_handlers
+  )  # noqa
 from collections import OrderedDict # noqa
-from logging_utils import remove_existing_file_handlers, reinstate_file_handlers # noqa
-# THIS A HACK FOR DEVELOPMENT
-sys.path.insert(0, '../brainsss')
-from preprocess_utils import ( # noqa
+from brainsss2.preprocess_utils import ( # noqa
     load_user_settings_from_json,
     setup_modules,
     dict_to_args_list,
     run_shell_command
 )  # noqa
-from argparse_utils import ( # noqa
+from brainsss2.argparse_utils import ( # noqa
     get_base_parser,
     add_builder_arguments,
     add_preprocess_arguments,
     add_fictrac_qc_arguments,
     add_moco_arguments
 )  # noqa
-from slurm import SlurmBatchJob  # noqa
-from imgmean import imgmean  # noqa
+from brainsss2.slurm import SlurmBatchJob  # noqa
+from brainsss2.imgmath import imgmath  # noqa
 
 
 def get_max_slurm_cpus():

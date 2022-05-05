@@ -2,21 +2,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
-# THIS A HACK FOR DEVELOPMENT
-sys.path.append("../brainsss")
-sys.path.append("../brainsss/scripts")
-from logging_utils import setup_logging
+from brainsss2.logging_utils import setup_logging
 import logging
-from visual import (
+from brainsss2.visual import (
     load_photodiode,
     get_stimulus_metadata,
     extract_stim_times_from_pd,
 )
-from argparse_utils import (
+from brainsss2.argparse_utils import (
     get_base_parser,
     add_fictrac_qc_arguments,
 )
-from fictrac import smooth_and_interp_fictrac, load_fictrac
+from brainsss2.fictrac import smooth_and_interp_fictrac, load_fictrac
 
 
 def parse_args(input, allow_unknown=True):

@@ -7,7 +7,7 @@ from time import strftime
 import logging
 import pyfiglet
 import datetime
-from git_utils import get_current_git_hash
+from brainsss2.git_utils import get_current_git_hash
 
 
 def get_logfile_name(logdir, logtype, flystring=''):

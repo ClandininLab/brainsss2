@@ -8,21 +8,24 @@ import nibabel as nib
 import h5py
 sys.path.append("../brainsss")
 sys.path.append("../scripts")
-from imgmean import imgmean
-from hdf5_utils import make_empty_h5, h5_to_nii
+from imgmath import imgmath  # noqa
+from hdf5_utils import make_empty_h5, h5_to_nii  # noqa
 
 
 data_shape = (4, 4, 4, 3)
 
+
 @pytest.fixture
 def qform():
     affine = np.eye(len(data_shape))
-    affine[0, 0] = -1 # test non-identity affine
+    affine[0, 0] = -1  # test non-identity affine
     return affine
+
 
 @pytest.fixture
 def zooms(qform):
     return(np.abs(np.diag(qform)))
+
 
 @pytest.fixture
 def dataset():
@@ -64,25 +67,62 @@ def test_niifile_smoke(nii_file):
     assert nii_file is not None
 
 
-
 def test_imgmean_nii_smoke(nii_file):
-    imgmean(nii_file, verbose=True)
+    imgmath(nii_file, 'mean', verbose=True)
+
+
+def test_imgstd_nii_smoke(nii_file):
+    imgmath(nii_file, 'std', verbose=True)
+
+
+def test_tsnr_nii_smoke(nii_file):
+    imgmath(nii_file, 'std', verbose=True)
+
+
+def test_smooth_nii_smoke(nii_file):
+    imgmath(nii_file, 'smooth', fwhm=5, verbose=True)
 
 
 def test_imgmean_h5_smoke(filled_h5_dataset):
-    imgmean(filled_h5_dataset, verbose=True)
+    imgmath(filled_h5_dataset, 'mean', verbose=True)
+
+
+def test_imgstd_h5_smoke(filled_h5_dataset):
+    imgmath(filled_h5_dataset, 'std', verbose=True)
 
 
 def test_imgmean_h5_to_nii(filled_h5_dataset, dataset):
-    meanfile = imgmean(filled_h5_dataset, outfile_type='nii', verbose=True)
+    meanfile = imgmath(filled_h5_dataset, 'mean',
+                       outfile_type='nii', verbose=True)
     assert os.path.exists(meanfile)
     img = nib.load(meanfile)
     assert img.shape == data_shape[:3]
     assert np.allclose(img.get_fdata(), np.mean(dataset, axis=-1))
 
 
+def test_imgstd_h5_to_nii(filled_h5_dataset, dataset):
+    stdfile = imgmath(filled_h5_dataset, 'std',
+                      outfile_type='nii', verbose=True)
+    assert os.path.exists(stdfile)
+    img = nib.load(stdfile)
+    assert img.shape == data_shape[:3]
+    assert np.allclose(img.get_fdata(), np.std(dataset, axis=-1))
+
+
+def test_tsnr_h5_to_nii(filled_h5_dataset, dataset):
+    tsnrfile = imgmath(filled_h5_dataset, 'tsnr',
+                       outfile_type='nii', verbose=True)
+    assert os.path.exists(tsnrfile)
+    img = nib.load(tsnrfile)
+    assert img.shape == data_shape[:3]
+    assert np.allclose(
+        img.get_fdata(),
+        np.mean(dataset, axis=-1) / np.std(dataset, axis=-1)
+    )
+
+
 def test_imgmean_nii_to_nii(nii_file, dataset):
-    meanfile = imgmean(nii_file, 
+    meanfile = imgmath(nii_file, 'mean',
         outfile_type='nii', verbose=True)
     assert os.path.exists(meanfile)
     img = nib.load(meanfile)
@@ -90,8 +130,18 @@ def test_imgmean_nii_to_nii(nii_file, dataset):
     assert np.allclose(img.get_fdata(), np.mean(dataset, axis=-1))
 
 
+def test_imgstd_nii_to_nii(nii_file, dataset):
+    stdfile = imgmath(nii_file, 'std',
+        outfile_type='nii', verbose=True)
+    assert os.path.exists(stdfile)
+    img = nib.load(stdfile)
+    assert img.shape == data_shape[:3]
+    assert np.allclose(img.get_fdata(), np.std(dataset, axis=-1))
+
+
 def test_imgmean_h5_to_h5(filled_h5_dataset, dataset, qform):
-    meanfile = imgmean(filled_h5_dataset, outfile_type='h5', verbose=True)
+    meanfile = imgmath(filled_h5_dataset, 'mean',
+                       outfile_type='h5', verbose=True)
     assert os.path.exists(meanfile)
     with h5py.File(meanfile, "r") as f:
         assert 'data' in f
@@ -101,9 +151,11 @@ def test_imgmean_h5_to_h5(filled_h5_dataset, dataset, qform):
         assert f['data'].shape == data_shape[:3]
         assert np.allclose(f['data'][...], np.mean(dataset, axis=-1))
         assert np.allclose(f['qform'][...], qform)
+
 
 def test_imgmean_nii_to_h5(nii_file, dataset, qform):
-    meanfile = imgmean(nii_file, outfile_type='h5', verbose=True)
+    meanfile = imgmath(nii_file, 'mean',
+                       outfile_type='h5', verbose=True)
     assert os.path.exists(meanfile)
     with h5py.File(meanfile, "r") as f:
         assert 'data' in f
@@ -113,7 +165,6 @@ def test_imgmean_nii_to_h5(nii_file, dataset, qform):
         assert f['data'].shape == data_shape[:3]
         assert np.allclose(f['data'][...], np.mean(dataset, axis=-1))
         assert np.allclose(f['qform'][...], qform)
-
 
 
 if __name__ == "__main__":
@@ -134,7 +185,7 @@ if __name__ == "__main__":
         f.create_dataset('xyzt_units', data=xyzt_units)
 
     filled_h5_dataset = h5_file
-    meanfile = imgmean(filled_h5_dataset, outfile_type='nii', verbose=True)
+    meanfile = imgmath(filled_h5_dataset, 'mean', outfile_type='nii', verbose=True)
     assert os.path.exists(meanfile)
     img = nib.load(meanfile)
     assert img.shape == data_shape[:3]

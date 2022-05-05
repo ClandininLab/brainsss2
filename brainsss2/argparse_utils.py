@@ -42,7 +42,7 @@ def add_preprocess_arguments(parser):
     group.add_argument("--build", help="build_flies", action="store_true")
     group.add_argument("--process", type=str, help="fly directory to process")
     parser.add_argument(
-        "--build-only", action="store_true", help="don't process after building"
+        "--build_only", action="store_true", help="don't process after building"
     )
     parser.add_argument(
         '--local',

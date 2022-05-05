@@ -2,15 +2,13 @@
 
 # pyright: reportMissingImports=false
 
-from preprocess_utils import dict_to_args_list
 import subprocess
 import logging
 import time
 import os
 import sys
-sys.path.insert(0, "../brainsss")
-sys.path.insert(0, "../brainsss/scripts")
-from logging_utils import remove_existing_file_handlers  # noqa
+from brainsss2.logging_utils import remove_existing_file_handlers  # noqa
+from brainsss2.preprocess_utils import dict_to_args_list
 
 # set up module level logging
 logger = logging.getLogger('SlurmBatchJob')
