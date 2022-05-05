@@ -1,15 +1,14 @@
 # spatially smooth nii/h5
 # pyright: reportMissingImports=false
 
-import logging
 import h5py
 import numpy as np
 import argparse
 import sys
 import nibabel as nib
-import nilearn.image
 from hdf5_utils import get_chunk_boundaries
 from nibabel.processing import smooth_image
+
 
 def parse_args(input, allow_unknown=True):
     parser = argparse.ArgumentParser(
@@ -146,6 +145,6 @@ def imgsmooth(file, fwhm, verbose=False, outfile_type=None, stepsize=50):
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
-    print(f'making mean brain for {args.file}')
+    print(f'making smoothed brain for {args.file}')
     smoothed_img = imgsmooth(args.file, args.fwhm, 
         args.verbose, args.outfile_type, args.stepsize)
