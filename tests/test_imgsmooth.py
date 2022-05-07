@@ -10,7 +10,6 @@ from brainsss2.imgmath import imgmath  # noqa
 from brainsss2.hdf5_utils import make_empty_h5, h5_to_nii  # noqa
 
 
-
 data_shape = (4, 4, 4, 3)
 
 
@@ -76,10 +75,6 @@ def test_imgstd_nii_smoke(nii_file):
 
 def test_tsnr_nii_smoke(nii_file):
     imgmath(nii_file, 'std', verbose=True)
-
-
-def test_smooth_nii_smoke(nii_file):
-    imgmath(nii_file, 'smooth', fwhm=5, verbose=True)
 
 
 def test_imgmean_h5_smoke(filled_h5_dataset):

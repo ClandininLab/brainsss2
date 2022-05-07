@@ -1,17 +1,11 @@
 # pyright: reportMissingImports=false
 
-import sys
 import os
-import shutil
-from pathlib import Path
 import pytest
 import numpy as np
 import nibabel as nib
 import h5py
-sys.path.append("../brainsss")
-sys.path.append("../scripts")
-from imgmean import imgmean
-from hdf5_utils import make_empty_h5, h5_to_nii
+from brainsss2.hdf5_utils import make_empty_h5, h5_to_nii
 
 
 data_shape = (4, 4, 4, 3)
@@ -47,9 +41,9 @@ def filled_h5_dataset(affine):
 def test_empty_h5_creation(empty_h5_dataset):
     with h5py.File(empty_h5_dataset, "r") as f:
         assert 'data' in f
-        assert 'affine' in f
+        assert 'qform' in f
         assert f['data'].shape == data_shape
-        assert f['affine'].shape == (len(data_shape), len(data_shape))
+        assert f['qform'].shape == (len(data_shape), len(data_shape))
 
 
 def test_filled_h5_creation(filled_h5_dataset):

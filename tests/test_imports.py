@@ -6,12 +6,6 @@ import sys
 import os
 
 def test_imports():
-    if os.path.exists('brainsss'):
-        sys.path.append('brainsss')
-    elif os.path.exists('../brainsss'):
-        sys.path.append('../brainsss')
-    else:
-        raise Exception('brainsss directory not found')
-    import fictrac
-    import utils
-    import visual
+    import brainsss2.fictrac
+    import brainsss2.utils
+    import brainsss2.visual
