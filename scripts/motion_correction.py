@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     if not args.use_existing:
         logging.info('running motion correction')
-        transform_files, motion_parameters, FD = run_motion_correction(args, files, h5_files)
+        transform_files, motion_parameters = run_motion_correction(args, files, h5_files)
         with open(os.path.join(args.moco_output_dir, 'transform_files.json'), 'w') as f:
             json.dump(transform_files, f, indent=4)
     else:
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     save_motcorr_settings_to_json(args, files, h5_files)
 
     logging.info('saving motion parameters')
-    motion_file = save_motion_parameters(args, motion_parameters, FD)
+    motion_file = save_motion_parameters(args, motion_parameters)
 
     logging.info('plotting motion')
     moco_plot(args, motion_file)
