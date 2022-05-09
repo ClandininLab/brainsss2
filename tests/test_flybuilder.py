@@ -6,9 +6,7 @@ import os
 import pytest
 import numpy as np
 import nibabel as nib
-sys.path.append("../brainsss")
-sys.path.append("../scripts")
-from fly_builder import copy_nifti_file # noqa
+from brainsss2.fly_builder import copy_nifti_file # noqa
 
 
 @pytest.fixture
