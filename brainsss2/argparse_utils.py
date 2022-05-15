@@ -155,10 +155,11 @@ def add_moco_arguments(parser):
         help='number of frames to average over when computing mean/fixed brain')
     parser.add_argument('--stepsize', type=int, help='stepsize for chunking registration')
     parser.add_argument('--save_nii', action='store_true', help='save nifti files')
-    parser.add_argument('--downsample_anat', action='store_true',
-        help='downsample anat to lower res before moco')
-    parser.add_argument('--anat_res', type=float, default=2,
-        help='resolution to downsample anat to before moco')
+    parser.add_argument('--downsample', action='store_true',
+        help='downsample to lower res before moco')
+    parser.add_argument('--new_resolution', type=float, default=2.,
+        help='resolution to downsample to before moco')
+    parser.add_argument('--dirtype', type=str, choices=['func', 'anat'])
     parser.add_argument('--use_existing', action='store_true', help='use existing transforms')
     return(parser)
 
