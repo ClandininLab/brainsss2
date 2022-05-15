@@ -1,4 +1,4 @@
-from logging_utils import get_flystring
+from brainsss2.logging_utils import get_flystring
 import argparse
 
 

@@ -2,27 +2,49 @@
 
 import pytest
 import json
-from preprocess_utils import (
-    parse_args,
+from brainsss2.preprocess_utils import (
     dict_to_args_list,
     load_user_settings_from_json,
     setup_modules,
     default_modules
 )
+from brainsss2.argparse_utils import ( # noqa
+    get_base_parser,
+    add_builder_arguments,
+    add_preprocess_arguments,
+    add_fictrac_qc_arguments,
+    add_moco_arguments
+)  # noqa
 
 
 @pytest.fixture
 def args():
-    return parse_args(['-d', '/tmp/test'])
+    parser = get_base_parser('preprocess')
+
+    parser.add_argument(
+        "-b", "--basedir",
+        type=str,
+        help="base directory for fly data",
+        required=True)
+
+    parser = add_builder_arguments(parser)
+
+    parser = add_preprocess_arguments(parser)
+
+    parser = add_fictrac_qc_arguments(parser)
+
+    parser = add_moco_arguments(parser)
+
+    return parser.parse_args(['-b', '/tmp/test'])
 
 
 def test_dict_to_args_list():
     d = {'a': '1', 'b': 2, 'c': [1, 2, 3]}
-    assert dict_to_args_list(d) == ['--a 1', '--b 2', '--c 1', '--c 2', '--c 3']
+    assert dict_to_args_list(d) == ['--a', '1', '--b', '2', '--c', '1', '2', '3']
 
 
 def test_parse_args(args):
-    assert args.target_dir == '/tmp/test'
+    assert args.basedir == '/tmp/test'
 
 
 def test_load_settings_from_file(args):
