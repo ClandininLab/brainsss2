@@ -47,5 +47,12 @@ print(ch1_meanbrain.mean())
 #mytx = ants.motion_correction(image=chunkdata_ants, fixed=ch1_meanbrain,
 #    verbose=True, type_of_transform='SyN')
 
-tpdata = ants.slice_image()
-ants.registration()
+tpdata = ch1_img.dataobj[..., 0].astype('float32').squeeze()
+tpdata_ants = ants.from_numpy(
+    tpdata,
+    spacing=ch1_meanbrain.spacing,
+    direction=ch1_meanbrain.direction)
+
+
+antsreg = ants.registration(fixed=ch1_meanbrain, moving=tpdata_ants,
+    type_of_transform='Rigid', verbose=True)
