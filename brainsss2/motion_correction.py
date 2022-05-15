@@ -16,6 +16,7 @@ from brainsss2.h5_to_nii import h5_to_nii
 from brainsss2.ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
 from brainsss2.hdf5_utils import make_empty_h5, get_chunk_boundaries
 from brainsss2.imgmath import imgmath
+from brainsss2.resample_img import resample_img
 
 
 def parse_args(input, allow_unknown=True):
@@ -59,7 +60,7 @@ def load_data(args):
 
     # NOTE: should probably be using "scantype" thbroughout instead of "datatype"
     # since the latter is quite confusing as each scan includes both func and anat data
-    
+
     if args.dirtype == 'func':
         assert 'functional' in files[0], 'dirtype is func but no functional data'
     elif args.dirtype == 'anat':
@@ -71,6 +72,15 @@ def load_data(args):
         'channel_2': files[1] if len(files) == 2 else None
     }
     if args.dirtype == 'anat':
+        if args.downsample:
+            new_res_file = os.path.join(
+                args.moco_output_dir,
+                os.path.basename(files_dict['channel_1']).replace(
+                    '.nii', f'_res-{args.new_resolution:.1f}mu.nii'))
+            files_dict['channel_1'] = resample_img(
+                files_dict['channel_1'],
+                res=args.new_resolution,
+                newfile=new_res_file)
         files_dict['channel_2'] = None
 
     return(files_dict, args)
