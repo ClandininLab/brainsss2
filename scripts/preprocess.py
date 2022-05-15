@@ -302,6 +302,7 @@ def process_fly(args):
             # need to retest this with the new moco model
             'time_hours': 48 if args.partition == 'normal' else 96,
             'stepsize': 4,
+            'downsample': True,
             'cores': min(
                 args.cores,
                 8 if args.partition == 'normal' else 4,
@@ -323,7 +324,7 @@ def process_fly(args):
             'dir': args.process,
             'cores': 4,
             'time_hours': 1,
-            'behavior': ['dRotLabX', 'dRotLabY', 'dRotLabZ', 
+            'behavior': ['dRotLabX', 'dRotLabY', 'dRotLabZ',
                          'dRotLabY+', 'dRotLabY-'],
         }
 
