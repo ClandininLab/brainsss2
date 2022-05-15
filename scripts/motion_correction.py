@@ -28,11 +28,12 @@ if __name__ == '__main__':
 
     args = setup_logging(args, logtype='moco')
 
+    args = create_moco_output_dir(args)
+
     files, args = load_data(args)
 
     logging.info(f'files: {files}')
 
-    args = create_moco_output_dir(args)
 
     if args.stepsize is None:
         args = set_stepsize(args)
