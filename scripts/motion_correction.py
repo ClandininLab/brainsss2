@@ -50,7 +50,7 @@ if __name__ == '__main__':
         with open(os.path.join(args.moco_output_dir, 'transform_files.json'), 'r') as f:
             transform_files = json.load(f)
 
-    if 'channel_2' in files:
+    if 'channel_2' in files and files['channel_2'] is not None:
         logging.info('applying motion correction for channel 2')
         apply_moco_parameters_to_channel_2(args, files, h5_files, transform_files)
 
