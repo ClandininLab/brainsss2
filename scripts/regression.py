@@ -15,6 +15,7 @@ import scipy
 import datetime
 import logging
 import shutil
+import ants
 from nilearn.plotting import plot_stat_map
 from sklearn.linear_model import LinearRegression
 from statsmodels.api import add_constant
@@ -23,13 +24,11 @@ import scipy.stats
 from statsmodels.stats.multitest import fdrcorrection
 
 # THIS A HACK FOR DEVELOPMENT
-sys.path.insert(0, os.path.realpath("../brainsss"))
-sys.path.insert(0, os.path.realpath("../brainsss/scripts"))
-from argparse_utils import get_base_parser # noqa
-from logging_utils import setup_logging # noqa
-from fictrac import load_fictrac, smooth_and_interp_fictrac
-from imgmean import imgmean
-from utils import load_timestamps
+from brainsss2.argparse_utils import get_base_parser # noqa
+from brainsss2.logging_utils import setup_logging # noqa
+from brainsss2.fictrac import load_fictrac, smooth_and_interp_fictrac
+from brainsss2.imgmath import imgmath
+from brainsss2.utils import load_timestamps
 
 
 def parse_args(input, allow_unknown=True):
@@ -45,11 +44,11 @@ def parse_args(input, allow_unknown=True):
         help='func directory to be analyzed', required=True)
     parser.add_argument('--label', type=str, help='model label', required=True)
     parser.add_argument('-f', '--file', type=str, help='file to process',
-        default='preproc/functional_channel_2_moco_hpf.h5')
+        default='preproc/functional_channel_2_moco.h5')
     parser.add_argument('--bg_img', type=str, help='background image for plotting')
     parser.add_argument('-b', '--behavior', type=str,
         help='behavior(s) to include in model',
-        required=True, nargs='+')
+        nargs='+')
     # TODO: also allow mask image or threshold value
     parser.add_argument('-m', '--maskpct', default=10, type=float,
         help='percentage (1-100) of image to include in mask')
@@ -74,15 +73,21 @@ def parse_args(input, allow_unknown=True):
     return args
 
 
-def setup_mask(args, brain):
-    if args.maskpct is not None:
-        meanbrain = np.mean(brain, axis=3)
-        maskthresh = scipy.stats.scoreatpercentile(meanbrain, args.maskpct)
-        mask = meanbrain > maskthresh
-        logging.info(f'Mask threshold for {args.maskpct} percent:: {maskthresh}')
-    else:
-        mask = np.ones(brain.shape[:3], dtype=bool)
-    return(mask)
+def setup_mask(args, brain, meanbrainfile,
+               maskfile, cleanup=4):
+    if args.maskpct is None:
+        return np.ones(brain.shape[:3], dtype=bool)
+    meanimg = nib.load(meanbrainfile)
+    meanbrain = meanimg.get_fdata()
+    maskthresh = scipy.stats.scoreatpercentile(meanbrain, args.maskpct)
+    meanimg_ants = ants.from_nibabel(meanimg)
+    mask_ants = ants.get_mask(meanimg_ants,
+        low_thresh=maskthresh, high_thresh=np.inf,
+        cleanup=cleanup)
+    logging.info(f'Mask threshold for {args.maskpct} percent:: {maskthresh}')
+    maskimg = ants.to_nibabel(mask_ants)
+    maskimg.to_filename(maskfile)
+    return mask_ants[:, :, :].astype('int')
 
 
 def load_fictrac_data(args):
@@ -108,11 +113,11 @@ def get_transformed_data_slice(zdata, zmask):
         return(None, zmask)
     zmask_vec = zmask.reshape(np.prod(zmask.shape))
     zdata_mat = zdata.reshape((np.prod(zmask.shape), zdata.shape[-1]))
-    return(zdata_mat[zmask_vec], zmask_vec)
+    return(zdata_mat[zmask_vec == 1], zmask_vec)
 
 
 def save_desmtx(args, X, confound_names=None):
-    colnames = args.behavior
+    colnames = args.behavior if args.behavior is not None else []
     if confound_names is not None:
         colnames += confound_names
     df = pd.DataFrame(X, columns=colnames)
@@ -159,7 +164,24 @@ def save_regressiondata(
             img.header.set_zooms(zooms[:3])
             img.header.set_xyzt_units(xyz=xyzt_units[0], t=xyzt_units[1])
             img.to_filename(save_file)
-            save_files[(k, i)] = save_file
+            cut_coords = np.arange(8, 49, 8) * zooms[2]
+            if '1-p' in k:
+                plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
+                    display_mode='z', threshold=.05, draw_cross=False,
+                    cut_coords=cut_coords,
+                    title=f'Regression fdr p: {args.behavior[i]}',
+                    output_file=os.path.join(
+                        args.outdir, f'1-p_{args.behavior[i]}.png'))
+            elif k == 'rsquared':
+                save_files[k] = save_file
+                plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
+                    display_mode='z', threshold=.05, draw_cross=False,
+                    cut_coords=cut_coords,
+                    title='Regression r-squared',
+                    output_file=os.path.join(
+                        args.outdir, 'rsquared.png'))
+            else:
+                save_files[(k, args.behavior[i])] = save_file
 
             logging.info(f"Saved {k} to {save_file}")
     return(save_files)
@@ -237,7 +259,7 @@ if __name__ == "__main__":
         baseimg = os.path.join(args.dir, 'preproc/functional_channel_1_moco.h5')
         logging.warning(f'Background image {args.bg_img} does not exist - trying to create mean from {baseimg}')
         assert os.path.exists(baseimg), 'base image for mean anat does not exist'
-        imgmean(baseimg, outfile_type='nii')
+        imgmath(baseimg, 'mean', outfile_type='nii')
         assert os.path.exists(args.bg_img), 'mean image still does not exist'
 
     timestamps = load_timestamps(os.path.join(args.dir, 'imaging'))
@@ -247,17 +269,29 @@ if __name__ == "__main__":
     logging.info('loading data from h5 file')
     brain, qform, zooms, xyzt_units = load_brain(args)
 
-    mask = setup_mask(args, brain)
+    maskfile = args.bg_img.replace('mean.', 'mask.')
+    assert maskfile != args.bg_img, 'maskfile should not be the same as the bg_img'
+    if os.path.exists(maskfile):
+        logging.info('loading existing mask')
+        mask = nib.load(maskfile).get_fdata().astype('int')
+    else:
+        logging.info('creating mask')
+        mask = setup_mask(args, brain,
+            args.bg_img, maskfile)
 
     logging.info(f"Performing regression on {args.file}")
-    logging.info(f'behaviors: {args.behavior}')
+    if args.behavior is not None:
+        # change variable to use an empty list for confound only
+        behaviors = args.behavior
+        logging.info(f'behaviors: {behaviors}')
+    else:
+        behaviors = []
+        logging.info('confound modeling only')
 
-    results = {
-        'beta': np.zeros(list(brain.shape[:-1]) + [len(args.behavior)]),
-        'tstat': np.zeros(list(brain.shape[:-1]) + [len(args.behavior)]),
-        'rsquared': np.zeros(brain.shape[:-1])
-
-    }
+    results = {'rsquared': np.zeros(brain.shape[:-1])}
+    if args.behavior is not None:
+        results['beta'] = np.zeros(list(brain.shape[:-1]) + [len(args.behavior)])
+        results['tstat'] = np.zeros(list(brain.shape[:-1]) + [len(args.behavior)])
 
     confound_regressors, confound_names = setup_confounds(args, brain)
     if len(confound_names) > 0:
@@ -266,13 +300,11 @@ if __name__ == "__main__":
     for z in range(brain.shape[2]):
 
         # setup model for each slice
-        logging.info(f'setting up model for slice {z}')
         regressors = {}
-        for behavior in args.behavior:
+        for behavior in behaviors:
             if behavior[-1] in ['+', '-']:
                 behavior_name = behavior[:-1]  # name without sign, for use in loading fictrac data
                 behavior_transform = behavior[-1]
-                logging.info(f'Transforming behavior {behavior_name}: {behavior_transform} values only')
             else:
                 behavior_name = behavior
                 behavior_transform = None
@@ -286,7 +318,11 @@ if __name__ == "__main__":
 
             regressors[behavior] = fictrac_interp
 
-        X = np.concatenate([regressors[behavior] for behavior in args.behavior], axis=1)
+        if len(regressors) > 0:
+            X = np.concatenate(
+                [regressors[behavior] for behavior in args.behavior], axis=1)
+        else:
+            X = None
 
         zdata_trans, zmask_vec = get_transformed_data_slice(brain[:, :, z, :], mask[:, :, z])
         if zdata_trans is None:
@@ -299,7 +335,10 @@ if __name__ == "__main__":
         y = zdata_trans.T
         # add confound regressors
         if confound_regressors is not None:
-            X = np.hstack((X, confound_regressors))
+            if X is not None:
+                X = np.hstack((X, confound_regressors))
+            else:
+                X = confound_regressors
 
         lm.fit(X, y)
         predictions = lm.predict(X)
@@ -309,21 +348,22 @@ if __name__ == "__main__":
         MSE = squared_resids.sum(axis=0) / (df)
         XtX = np.dot(X_w_const.T, X_w_const)
 
-        for i in range(len(args.behavior)):
+        for i in range(len(behaviors)):
             slice_coefs = np.zeros(brain.shape[:2])
-            slice_coefs[mask[:, :, z]] = lm.coef_[:, i]
+            slice_coefs[mask[:, :, z] == 1] = lm.coef_[:, i]
             results['beta'][:, :, z, i] = slice_coefs
             slice_tstat = np.zeros(brain.shape[:2])
-            slice_tstat[mask[:, :, z]] = lm.coef_[:, i] / np.sqrt(MSE[i] * np.diag(XtX)[i])
+            slice_tstat[mask[:, :, z] == 1] = lm.coef_[:, i] / np.sqrt(MSE[i] * np.diag(XtX)[i])
             results['tstat'][:, :, z, i] = slice_tstat
 
         slice_rsquared = np.zeros(brain.shape[:2])
-        slice_rsquared[mask[:, :, z]] = r2_score(y, predictions, multioutput='raw_values')
+        slice_rsquared[mask[:, :, z] == 1] = r2_score(y, predictions, multioutput='raw_values')
         results['rsquared'][:, :, z] = slice_rsquared
 
-    results['pvalue'] = (1 - scipy.stats.t.cdf(x=np.abs(results['tstat']), df=df)) * 2
-    results['fdr_pvalue'] = fdrcorrection(
-        results['pvalue'].reshape(np.prod(results['pvalue'].shape)))[1].reshape(results['pvalue'].shape)
+    if 'tstat' in results:
+        results['pvalue'] = (1 - scipy.stats.t.cdf(x=np.abs(results['tstat']), df=df)) * 2
+        results['fdr_pvalue'] = fdrcorrection(
+            results['pvalue'].reshape(np.prod(results['pvalue'].shape)))[1].reshape(results['pvalue'].shape)
 
     logging.info('saving results')
     save_desmtx(args, X, confound_names)
@@ -333,10 +373,3 @@ if __name__ == "__main__":
         qform, zooms, xyzt_units)
 
     logging.info(f'job completed: {datetime.datetime.now()}')
-
-    # for k, file in save_files:
-    #     if k[0]
-    plot_stat_map(save_files, os.path.join(args.dir, args.bg_img),
-        display_mode='z', threshold=.05, draw_cross=False,
-        cut_coords=np.arange(8, 49, 8), title=f'Correlation: {behavior}',
-        output_file=os.path.join(args.outdir, f'corr_{behavior}.png'))
