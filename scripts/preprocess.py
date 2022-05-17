@@ -38,10 +38,10 @@ from brainsss2.imgmath import imgmath  # noqa
 
 def get_max_slurm_cpus():
     """get the max number of cpus for slurm"""
+    cmdout = run_shell_command("sinfo -h -o %C")
     try:
-        cmdout = run_shell_command("sinfo -h -o %C")
         maxcores = int(cmdout.strip().split('/')[-1])
-    except:
+    except AttributeError:
         maxcores = 1
     return maxcores
 
@@ -309,7 +309,6 @@ def process_fly(args):
             'dirtype': 'anat'
         }
 
-
     if args.smoothing or args.run_all:
         workflow_dict['smoothing'] = {
             'script': 'imgmath.py',
@@ -323,8 +322,6 @@ def process_fly(args):
             )
         }
         print('workflow_dict:', workflow_dict)
-
-
 
     if args.regression or args.run_all:
         workflow_dict['regression_XYZ'] = {
