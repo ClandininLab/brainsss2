@@ -72,7 +72,37 @@ def check_funcdir(funcdir):
 
     funcinfo['visual'] = check_visual(funcdir)
 
+    funcinfo['smoothing'] = check_smoothing(funcdir)
+
+    funcinfo['regression'] = check_regression(funcdir)
+
     return funcinfo
+
+
+def check_smoothing(funcdir):
+    preproc_dir = os.path.join(funcdir, 'preproc')
+    if not os.path.exists(preproc_dir):
+        return None
+
+    moco_files = [i.as_posix() for i in Path(preproc_dir).glob('functional_channel_2_moco_smooth-*.h5')]
+
+    if len(moco_files) == 0:
+        return None
+    else:
+        return({'files': {i: {} for i in moco_files}})
+
+
+def check_regression(funcdir):
+    regression_dir = os.path.join(funcdir, 'regression')
+    if not os.path.exists(regression_dir):
+        return None
+
+    reg_dirs = [i.as_posix() for i in Path(regression_dir).glob('model*')]
+
+    if len(reg_dirs) == 0:
+        return None
+    else:
+        return({'models': {i: {} for i in reg_dirs}})
 
 
 def check_moco(funcdir):
@@ -246,9 +276,19 @@ def check_all_status(flyinfo):
                     for file in dirinfo['moco']['files']:
                         print(f'    {os.path.basename(file)}')
 
+                if dirinfo['smoothing'] is None:
+                    print("No smoothed data found")
+                else:
+                    print("Smoothing complete")
+                    for file in dirinfo['smoothing']['files']:
+                        print(f'    {os.path.basename(file)}')
 
-
-
+            if dirinfo['regression'] is None:
+                print("No regression results found")
+            else:
+                print("Regression complete")
+                for file in dirinfo['regression']['models']:
+                    print(f'    {os.path.basename(file)}')
 
 
 if __name__ == "__main__":
