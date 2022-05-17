@@ -13,7 +13,5 @@ def get_current_git_hash(file=None, return_length=8):
         repo = git.Repo(path=script, search_parent_directories=True)
         print(repo)
         return repo.head.object.hexsha[:return_length]
-
     except Exception as e:
-        print(f'unable to obtain git hash: {e}')
         return None
