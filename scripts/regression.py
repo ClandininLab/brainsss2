@@ -8,7 +8,6 @@ import os
 import sys
 import numpy as np
 import pandas as pd
-import argparse
 import h5py
 import nibabel as nib
 import scipy
@@ -32,28 +31,20 @@ from brainsss2.utils import load_timestamps
 
 
 def parse_args(input, allow_unknown=True):
-    parser = get_base_parser('correlation between activity and behavior')
+    parser = get_base_parser('regression with movement')
 
-    parser.add_argument(
-        "-b", "--basedir",
-        type=str,
-        help="base directory for fly data",
-        required=True)
-    parser = argparse.ArgumentParser(description='compute correlation between neural data and behavior')
     parser.add_argument('-d', '--dir', type=str,
         help='func directory to be analyzed', required=True)
     parser.add_argument('--label', type=str, help='model label', required=True)
     parser.add_argument('-f', '--file', type=str, help='file to process',
-        default='preproc/functional_channel_2_moco.h5')
+        default='preproc/functional_channel_2_moco_smooth-2.0.h5')
     parser.add_argument('--bg_img', type=str, help='background image for plotting')
     parser.add_argument('-b', '--behavior', type=str,
         help='behavior(s) to include in model',
-        nargs='+')
+        nargs='+', default=[])
     # TODO: also allow mask image or threshold value
     parser.add_argument('-m', '--maskpct', default=10, type=float,
         help='percentage (1-100) of image to include in mask')
-    parser.add_argument('-l', '--logfile', type=str, help='directory to save log file')
-    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument('--fps', type=float, default=100, help='frame rate of fictrac camera')
     parser.add_argument('--resolution', type=float, default=10, help='resolution of fictrac data')
     parser.add_argument('-o', '--outdir', type=str, help='directory to save output')
@@ -137,7 +128,7 @@ def get_dct_mtx(X, ndims):
 
 
 def save_regressiondata(
-        args, results, behavior,
+        args, results,
         qform, zooms, xyzt_units):
     save_files = {}
     for k, result in results.items():
@@ -369,7 +360,7 @@ if __name__ == "__main__":
     save_desmtx(args, X, confound_names)
 
     save_files = save_regressiondata(
-        args, results, behavior,
+        args, results,
         qform, zooms, xyzt_units)
 
     logging.info(f'job completed: {datetime.datetime.now()}')
