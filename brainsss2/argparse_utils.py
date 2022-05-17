@@ -70,6 +70,7 @@ def add_preprocess_arguments(parser):
         choices=['func', 'anat', 'both']
     )
     parser.add_argument("--regression", action="store_true", help="run regression")
+    parser.add_argument("--smoothing", action="store_true", help="run spatial smoothing")
     parser.add_argument("--fictrac_qc", action="store_true", help="run fictrac QC")
     parser.add_argument("--bleaching_qc", action="store_true", help="run bleaching QC")
     parser.add_argument("--zscore", action="store_true", help="zscore functional data")
@@ -174,4 +175,10 @@ def add_highpassfilter_arguments(parser):
         type=str,
         help="filename for filtering"
     )
+    return(parser)
+
+
+def add_imgmath_arguments(parser):
+    parser.add_argument('--fwhm', type=float,
+        help='fwhm for smoothing')
     return(parser)
