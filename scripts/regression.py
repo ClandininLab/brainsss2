@@ -227,8 +227,7 @@ if __name__ == "__main__":
     if args.outdir is None:
         args.outdir = os.path.join(args.dir, 'regression', args.label)
 
-    args = setup_logging(args, logtype='regression',
-        logdir=args.outdir)
+    args = setup_logging(args, logtype='regression')
 
     logging.info(f'saving output to {args.outdir}')
 
@@ -240,9 +239,6 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
-
-    setup_logging(args, logtype='correlation',
-        logfile=args.logfile)
 
     if args.bg_img is None:
         args.bg_img = os.path.join(args.dir, 'preproc/functional_channel_1_moco_mean.nii')
