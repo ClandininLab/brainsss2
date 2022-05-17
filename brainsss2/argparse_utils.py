@@ -69,7 +69,7 @@ def add_preprocess_arguments(parser):
         help="run motion correction (func, anat, or both - defaults to func)",
         choices=['func', 'anat', 'both']
     )
-    parser.add_argument("--correlation", action="store_true", help="???")
+    parser.add_argument("--regression", action="store_true", help="run regression")
     parser.add_argument("--fictrac_qc", action="store_true", help="run fictrac QC")
     parser.add_argument("--bleaching_qc", action="store_true", help="run bleaching QC")
     parser.add_argument("--zscore", action="store_true", help="zscore functional data")
