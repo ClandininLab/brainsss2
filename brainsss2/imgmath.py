@@ -9,9 +9,39 @@ import nibabel as nib
 from brainsss2.hdf5_utils import get_chunk_boundaries
 import sys
 from nibabel.processing import smooth_image
+from brainsss2.argparse_utils import get_base_parser, add_imgmath_arguments
 
 
-def parse_args(input, allow_unknown=True, add_op=False):
+def parse_args(input, allow_unknown=True):
+    parser = get_base_parser('imgmath')
+
+    parser = add_imgmath_arguments(parser)
+
+    # need to add this manually to procesing steps in order to make required
+    parser.add_argument(
+        "-f",
+        "--file",
+        type=str,
+        help="input file",
+        required=True,
+    )
+    parser.add_argument('--stepsize', type=int, default=50,
+                        help="stepsize for chunking")
+    parser.add_argument('-o', '--operation', type=str,
+            help='operation to perform', required=True)
+    parser.add_argument('--outfile_type', type=str,
+        choices=['h5', 'nii'], default=None)
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+
+    return args
+
+
+def parse_args_old(input, allow_unknown=True, add_op=False):
     """add_op allows to enable -o just for this script"""
     parser = argparse.ArgumentParser(
         description="make mean brain over time for a single h5 or nii file"
@@ -31,7 +61,14 @@ def parse_args(input, allow_unknown=True, add_op=False):
     parser.add_argument('--outfile_type', type=str, choices=['h5', 'nii'], default=None)
     parser.add_argument('-v', '--verbose', action='store_true', default=False)
     parser.add_argument('--fwhm', type=float, help='fwhm for smoothing')
-    return parser.parse_args()
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+
+    return(args)
 
 
 def get_infile_type(file):
@@ -60,7 +97,7 @@ def img_from_h5(f):
 
 def nii_to_h5(outimg, outfile):
     with h5py.File(outfile, 'w') as f:
-        f.create_dataset('data', data=outimg.get_fdata(dtype='float32'), dtype="float32", chunks=True)
+        f.create_dataset('data', data=outimg.dataobj, dtype="float32", chunks=True)
         f.create_dataset('qform', data=outimg.header.get_qform())
         f.create_dataset('zooms', data=outimg.header.get_zooms())
         f.create_dataset('xyzt_units', data=outimg.header.get_xyzt_units())
@@ -94,7 +131,7 @@ def img_smooth(img, fwhm, stepsize=50):
         print(f'chunk {chunk_num+1}/{nchunks}')
         tmp_img = nib.Nifti1Image(img.dataobj[:, :, :, chunk_start:chunk_end],
             img.affine, img.header)
-        outimg.dataobj[:, :, :, chunk_start:chunk_end] += smooth_image(
+        outimg.dataobj[:, :, :, chunk_start:chunk_end] = smooth_image(
             tmp_img, fwhm=fwhm
         ).get_fdata(dtype='float32')
     return outimg
@@ -183,7 +220,7 @@ def imgmath(file, operation,
 
 
 if __name__ == "__main__":
-    args = parse_args(sys.argv[1:], add_op=True)
+    args = parse_args(sys.argv[1:])
 
     print(f'applying {args.operation} to {args.file}')
     _ = imgmath(args.file, args.operation,
