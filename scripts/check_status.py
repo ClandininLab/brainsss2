@@ -76,6 +76,8 @@ def check_funcdir(funcdir):
 
     funcinfo['regression'] = check_regression(funcdir)
 
+    funcinfo['STA'] = check_STA(funcdir)
+
     return funcinfo
 
 
@@ -90,6 +92,19 @@ def check_smoothing(funcdir):
         return None
     else:
         return({'files': {i: {} for i in moco_files}})
+
+
+def check_STA(funcdir):
+    STA_dir = os.path.join(funcdir, 'STA')
+    if not os.path.exists(STA_dir):
+        return None
+
+    sta_files = [i.as_posix() for i in Path(STA_dir).glob('sta*.npy')]
+
+    if len(sta_files) == 0:
+        return None
+    else:
+        return({'files': {i: {} for i in sta_files}})
 
 
 def check_regression(funcdir):
@@ -188,7 +203,7 @@ def check_visual(funcdir):
         visual_info[filetype] = filepath if os.path.exists(filepath) else None
     qc_dir = os.path.join(funcdir, 'QC')
     if not os.path.exists(qc_dir) or not os.path.exists(
-        os.path.join(qc_dir, 'stim_triggered_turning.png')):
+            os.path.join(qc_dir, 'stim_triggered_turning.png')):
         visual_info['STB'] = None
     else:
         visual_info['STB'] = os.path.join(qc_dir, 'stim_triggered_turning.png')
@@ -260,11 +275,11 @@ def check_all_status(flyinfo):
                 print("Bleaching QC not incomplete")
             elif dirtype == 'func':
                 print("Bleaching QC complete")
-            
+
             if dirinfo['moco'] is None:
                 print("No motion correction data found")
             else:
-                
+
                 moco_completed = dirinfo['moco']['completed']
                 for file, fileinfo in dirinfo['moco']['files'].items():
                     if not fileinfo['completed']:
@@ -288,6 +303,13 @@ def check_all_status(flyinfo):
             else:
                 print("Regression complete")
                 for file in dirinfo['regression']['models']:
+                    print(f'    {os.path.basename(file)}')
+
+            if dirinfo['STA'] is None:
+                print("No STA results found")
+            else:
+                print("STA complete")
+                for file in dirinfo['STA']['files']:
                     print(f'    {os.path.basename(file)}')
 
 
