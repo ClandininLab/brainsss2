@@ -329,11 +329,6 @@ def moco_plot(args, motion_file):
 
     motion_parameters = pd.read_csv(motion_file)
 
-    # Get voxel resolution for figure
-    x_res, y_res, z_res = get_dataset_resolution(
-        os.path.join(args.dir, 'imaging')
-    )
-
     assert os.path.exists(args.moco_output_dir), 'something went terribly wrong, moco dir does not exist'
 
     # Save figure of motion over time - separate columns for translation and rotation
