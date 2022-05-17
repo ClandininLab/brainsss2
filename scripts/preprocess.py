@@ -29,7 +29,8 @@ from brainsss2.argparse_utils import ( # noqa
     add_builder_arguments,
     add_preprocess_arguments,
     add_fictrac_qc_arguments,
-    add_moco_arguments
+    add_moco_arguments,
+    add_imgmath_arguments
 )  # noqa
 from brainsss2.slurm import SlurmBatchJob  # noqa
 from brainsss2.imgmath import imgmath  # noqa
@@ -61,6 +62,8 @@ def parse_args(input):
     parser = add_fictrac_qc_arguments(parser)
 
     parser = add_moco_arguments(parser)
+
+    parser = add_imgmath_arguments(parser)
 
     return parser.parse_args(input)
 
@@ -133,10 +136,10 @@ def run_preprocessing_step(script, args, args_dict):
     stepname = script.split(".")[0]
     logging.info(f"running {stepname}")
 
-    if 'dirtype' not in args and 'dirtype' not in args_dict:
-        args.dirtype = 'func'
-    elif 'dirtype' in args_dict:
+    if 'dirtype' in args_dict and args_dict['dirtype'] is not None:
         args.dirtype = args_dict['dirtype']
+    else:
+        args.dirtype = 'func'
 
     procdirs = get_dirs_to_process(args)[args.dirtype]
     procdirs.sort()
@@ -250,37 +253,32 @@ def process_fly(args):
     # so we don't need to track and pass output to input at each step ala nipype
     # but it means that the steps cannot be reordered and expected to run properly
     if args.fictrac_qc or args.run_all:
-        workflow_dict['fictrac_qc.py'] = {
+        workflow_dict['fictrac_qc'] = {
+            'script': 'fictrac_qc.py',
             "fps": 100,
             'basedir': args.basedir,
             'dir': args.process
         }
 
     if args.STB or args.run_all:
-        workflow_dict['stim_triggered_avg_beh.py'] = {
+        workflow_dict['stim_triggered_avg_beh'] = {
+            'script': 'stim_triggered_avg_beh.py',
             'basedir': args.basedir,
             'dir': args.process,
             'cores': 2
         }
 
     if args.bleaching_qc or args.run_all:
-        workflow_dict['bleaching_qc.py'] = {
+        workflow_dict['bleaching_qc'] = {
+            'script': 'bleaching_qc.py',
             'basedir': args.basedir,
             'dir': args.process,
             'cores': 2
         }
 
-    # leaving this out - mean will be computed automatically by motcorr
-    # if set(args.temporal_mean).intersection({'both', 'pre'}):
-    #     workflow_dict['make_mean_brain.py'] = {
-    #         'basedir': args.basedir,
-    #         'dir': args.process,
-    #         'cores': 4,
-    #         'dirtype': 'func'
-    #     }
-
     if args.motion_correction == 'func' or args.motion_correction == 'both' or args.run_all:
-        workflow_dict['motion_correction.py'] = {
+        workflow_dict['motion_correction_func'] = {
+            'script': 'motion_correction.py',
             'basedir': args.basedir,
             'type_of_transform': args.type_of_transform,
             'dir': args.process,
@@ -294,7 +292,8 @@ def process_fly(args):
         }
 
     if args.motion_correction in ['anat', 'both']:
-        workflow_dict['motion_correction.py'] = {
+        workflow_dict['motion_correction_anat'] = {
+            'script': 'motion_correction.py',
             'basedir': args.basedir,
             'type_of_transform': args.type_of_transform,
             'dir': args.process,
@@ -310,14 +309,44 @@ def process_fly(args):
             'dirtype': 'anat'
         }
 
+
+    if args.smoothing or args.run_all:
+        workflow_dict['smoothing'] = {
+            'script': 'imgmath.py',
+            'operation': 'smooth',
+            'basedir': args.basedir,
+            'fwhm': args.fwhm,
+            'dir': args.dir,
+            'file': os.path.join(
+                args.process,
+                'func_0/preproc/functional_channel_2_moco.h5'
+            )
+        }
+        print('workflow_dict:', workflow_dict)
+
+
+
     if args.regression or args.run_all:
-        workflow_dict['regression.py'] = {
+        workflow_dict['regression_XYZ'] = {
+            'script': 'regression.py',
             'basedir': args.basedir,
             'dir': args.process,
+            'overwrite': True,
             'cores': 4,
+            'label': 'model001_dRotLabXYZ',
+            'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1,
-            'behavior': ['dRotLabX', 'dRotLabY', 'dRotLabZ',
-                         'dRotLabY+', 'dRotLabY-'],
+            'behavior': ['dRotLabX+', 'dRotLabX-', 'dRotLabY', 'dRotLabZ+', 'dRotLabZ-'],
+        }
+        workflow_dict['regression_confound'] = {
+            'script': 'regression.py',
+            'basedir': args.basedir,
+            'overwrite': True,
+            'dir': args.process,
+            'cores': 4,
+            'label': 'model000_confound',
+            'confound_files': 'preproc/framewise_displacement.csv',
+            'time_hours': 1
         }
 
     if args.STA:
@@ -333,10 +362,10 @@ def process_fly(args):
     # if 'post' in args.temporal_mean or 'both' in args.temporal_mean:
     #     mean_brain_post_output = run_temporal_mean_brain_post()
 
-    for script, step_args_dict in workflow_dict.items():
-        logging.info(f'running step: {script}')
+    for stepname, step_args_dict in workflow_dict.items():
+        logging.info(f'running step: {step_args_dict["script"]}')
         args.dir = args.process
-        run_preprocessing_step(script, args, step_args_dict)
+        run_preprocessing_step(step_args_dict['script'], args, step_args_dict)
 
 
 def setup_build_dirs(args):
