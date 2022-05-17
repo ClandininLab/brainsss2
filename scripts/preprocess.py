@@ -310,16 +310,8 @@ def process_fly(args):
             'dirtype': 'anat'
         }
 
-    if args.highpass or args.run_all:
-        workflow_dict['temporal_high_pass_filter.py'] = {
-            'basedir': args.basedir,
-            'dir': args.process,
-            'cores': 2,
-            'time_hours': 4,
-        }
-
-    if args.correlation or args.run_all:
-        workflow_dict['correlation.py'] = {
+    if args.regression or args.run_all:
+        workflow_dict['regression.py'] = {
             'basedir': args.basedir,
             'dir': args.process,
             'cores': 4,
