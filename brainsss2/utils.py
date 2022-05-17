@@ -4,11 +4,11 @@ import h5py
 import json
 import datetime
 import pyfiglet
-from time import time
 from time import sleep
 import numpy as np
 from xml.etree import ElementTree as ET
 import subprocess
+import logging
 
 # only imports on linux, which is fine since only needed for sherlock
 try:
@@ -180,173 +180,6 @@ def get_job_status(job_id, logfile, should_print=False):
     return status
 
 
-def wait_for_job(job_id, logfile, com_path):
-    printlog = getattr(Printlog(logfile=logfile), "print_to_log")
-    # printlog(f'Waiting for job {job_id}')
-    while True:
-        status = get_job_status(job_id, logfile)
-        if status in ["COMPLETED", "CANCELLED", "TIMEOUT", "FAILED", "OUT_OF_MEMORY"]:
-            status = get_job_status(job_id, logfile, should_print=True)
-            com_file = os.path.join(com_path, job_id + ".out")
-            try:
-                with open(com_file, "r") as f:
-                    output = f.read()
-            except:
-                output = None
-            return output
-        else:
-            sleep(5)
-
-
-def print_progress_table(
-    progress, logfile, start_time, print_header=False, print_footer=False
-):
-    printlog = getattr(Printlog(logfile=logfile), "print_to_log")
-
-    fly_print, expt_print, total_vol, complete_vol = [], [], [], []
-    for funcanat in progress:
-        fly_print.append(funcanat.split("/")[-2])
-        expt_print.append(funcanat.split("/")[-1])
-        total_vol.append(progress[funcanat]["total_vol"])
-        complete_vol.append(progress[funcanat]["complete_vol"])
-        # printlog("{}, {}".format(progress[funcanat]['total_vol'], progress[funcanat]['complete_vol']))
-
-    total_vol_sum = np.sum([int(x) for x in total_vol])
-    complete_vol_sum = np.sum([int(x) for x in complete_vol])
-    # printlog("{}, {}".format(total_vol_sum, complete_vol_sum))
-    fraction_complete = complete_vol_sum / total_vol_sum
-    num_columns = len(fly_print)
-    column_width = int((120 - 20) / num_columns)
-    if column_width < 9:
-        column_width = 9
-
-    if print_header:
-        printlog(
-            (" " * 9) + "+" + "+".join([f"{'':-^{column_width}}"] * num_columns) + "+"
-        )
-        printlog(
-            (" " * 9)
-            + "|"
-            + "|".join([f"{fly:^{column_width}}" for fly in fly_print])
-            + "|"
-        )
-        printlog(
-            (" " * 9)
-            + "|"
-            + "|".join([f"{expt:^{column_width}}" for expt in expt_print])
-            + "|"
-        )
-        printlog(
-            (" " * 9)
-            + "|"
-            + "|".join([f"{str(vol)+' vols':^{column_width}}" for vol in total_vol])
-            + "|"
-        )
-        printlog(
-            "|ELAPSED "
-            + "+"
-            + "+".join([f"{'':-^{column_width}}"] * num_columns)
-            + "+"
-            + "REMAININ|"
-        )
-
-    def sec_to_hms(t):
-        secs = f"{np.floor(t%60):02.0f}"
-        mins = f"{np.floor((t/60)%60):02.0f}"
-        hrs = f"{np.floor((t/3600)%60):02.0f}"
-        return ":".join([hrs, mins, secs])
-
-    elapsed = time() - start_time
-    elapsed_hms = sec_to_hms(elapsed)
-    try:
-        remaining = elapsed / fraction_complete - elapsed
-    except ZeroDivisionError:
-        remaining = 0
-    remaining_hms = sec_to_hms(remaining)
-
-    single_bars = []
-    for funcanat in progress:
-        bar_string = progress_bar(
-            progress[funcanat]["complete_vol"],
-            progress[funcanat]["total_vol"],
-            column_width,
-        )
-        single_bars.append(bar_string)
-    fly_line = "|" + "|".join(single_bars) + "|"
-    # fly_line = '|' + '|'.join([F"{bar_string:^{column_width}}"]*num_columns) + '|'
-    fly_line = "|" + elapsed_hms + fly_line + remaining_hms + "|"
-    printlog(fly_line)
-
-    if print_footer:
-        printlog(
-            "|--------+"
-            + "+".join([f"{'':-^{column_width}}"] * num_columns)
-            + "+--------|"
-        )
-        # for funcanat in progress:
-        #    printlog("{} {} {}".format(funcanat, progress[funcanat]['complete_vol'], progress[funcanat]['total_vol']))
-
-
-def progress_bar(iteration, total, length, fill="█"):
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + "-" * (length - filledLength)
-    fraction = f"{str(iteration):^4}" + "/" + f"{str(total):^4}"
-    bar_string = f"{bar}"
-    return bar_string
-
-
-def moco_progress(progress_tracker, logfile, com_path):
-    ##############################################################################
-    ### Printing a progress bar every min until all moco_partial jobs complete ###
-    ##############################################################################
-    printlog = getattr(Printlog(logfile=logfile), "print_to_log")
-    print_header = True
-    start_time = time()
-    while True:
-
-        stati = []
-        ###############################
-        ### Get progress and status ###
-        ###############################
-        ### For each expt_dir, for each moco_partial job_id, get progress from slurm.out files, and status ###
-        for funcanat in progress_tracker:
-            complete_vol = 0
-            for job_id in progress_tracker[funcanat]["job_ids"]:
-                # Read com file
-                com_file = os.path.join(com_path, job_id + ".out")
-                try:
-                    with open(com_file, "r") as f:
-                        output = f.read()
-                        # complete_vol_partial = int(max(re.findall(r'\d+', output)))
-                        complete_vol_partial = max(
-                            [int(x) for x in re.findall(r"\d+", output)]
-                        )
-                except:
-                    complete_vol_partial = 0
-                complete_vol += complete_vol_partial
-            progress_tracker[funcanat]["complete_vol"] = complete_vol
-            stati.append(get_job_status(job_id, logfile))  # Track status
-
-        ############################
-        ### Print progress table ###
-        ############################
-        print_progress_table(progress_tracker, logfile, start_time, print_header)
-        print_header = False
-
-        ###############################################
-        ### Return if all jobs are done, else sleep ###
-        ###############################################
-        finished = ["COMPLETED", "CANCELLED", "TIMEOUT", "FAILED", "OUT_OF_MEMORY"]
-        if all([status in finished for status in stati]):
-            print_progress_table(progress_tracker, logfile, start_time)
-            print_progress_table(
-                progress_tracker, logfile, start_time, print_footer=True
-            )  # print final 100% complete line
-            return
-        else:
-            sleep(int(60 * 5))
-
-
 def tryint(s):
     try:
         return int(s)
@@ -414,12 +247,12 @@ def load_timestamps(directory, file="functional.xml"):
 
     """
     try:
-        print("Trying to load timestamp data from hdf5 file.")
+        logging.info("Trying to load timestamp data from hdf5 file.")
         with h5py.File(os.path.join(directory, "timestamps.h5"), "r") as hf:
             timestamps = hf["timestamps"][:]
 
     except:
-        print("Failed. Extracting frame timestamps from bruker xml file.")
+        logging.warning("Failed. Extracting frame timestamps from bruker xml file.")
         xml_file = os.path.join(directory, file)
         tree = ET.parse(xml_file)
         root = tree.getroot()
@@ -429,7 +262,7 @@ def load_timestamps(directory, file="functional.xml"):
         for sequence in sequences:
             frames = sequence.findall("Frame")
             for frame in frames:
-                filename = frame.findall("File")[0].get("filename")
+                # filename = frame.findall("File")[0].get("filename")
                 time = float(frame.get("relativeTime"))
                 timestamps.append(time)
         timestamps = np.multiply(timestamps, 1000)
@@ -443,7 +276,6 @@ def load_timestamps(directory, file="functional.xml"):
         with h5py.File(os.path.join(directory, "timestamps.h5"), "w") as hf:
             hf.create_dataset("timestamps", data=timestamps)
 
-    print("Success.")
     return timestamps
 
 
