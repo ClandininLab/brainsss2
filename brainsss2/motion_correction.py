@@ -13,7 +13,7 @@ import logging
 from brainsss2.argparse_utils import get_base_parser, add_moco_arguments # noqa
 from brainsss2.logging_utils import setup_logging # noqa
 from brainsss2.h5_to_nii import h5_to_nii
-from brainsss2.ants_utils import get_motion_parameters_from_transforms, get_dataset_resolution
+from brainsss2.ants_utils import get_motion_parameters_from_transforms
 from brainsss2.hdf5_utils import make_empty_h5, get_chunk_boundaries
 from brainsss2.imgmath import imgmath
 from brainsss2.resample_img import resample_img
