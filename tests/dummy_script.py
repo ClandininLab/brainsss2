@@ -4,10 +4,7 @@
 import logging
 import argparse
 import sys
-
-sys.path.append("../brainsss")
-sys.path.append("../brainsss/scripts")
-from logging_utils import setup_logging
+from brainsss2.logging_utils import setup_logging
 
 
 
