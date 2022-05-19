@@ -9,9 +9,7 @@ def get_current_git_hash(file=None, return_length=8):
         if file is None:
             file = __file__
         script = os.path.realpath(file)
-        print(script)
         repo = git.Repo(path=script, search_parent_directories=True)
-        print(repo)
         return repo.head.object.hexsha[:return_length]
     except:  # noqa
         return None
