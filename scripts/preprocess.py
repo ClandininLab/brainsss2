@@ -193,24 +193,6 @@ def run_preprocessing_step(script, args, args_dict):
     logging.info(f'Completed step: {stepname}')
     return(output)
 
-# def run_STA():
-
-#     for func in funcs:
-#         args = {"logfile": logfile, "func_path": func}
-#         script = "stim_triggered_avg_neu.py"
-#         job_id = brainsss.sbatch(
-#             jobname="STA",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=4,
-#             mem=4,
-#             nice=nice,
-#             nodes=nodes,
-#         )
-#         brainsss.wait_for_job(job_id, logfile, com_path)
-
 
 # def run_h5_to_nii():
 
@@ -276,7 +258,7 @@ def process_fly(args):
             'cores': 2
         }
 
-    if args.motion_correction == 'func' or args.motion_correction == 'both' or args.run_all:
+    if args.motion_correction in ['func', 'both'] or args.run_all:
         workflow_dict['motion_correction_func'] = {
             'script': 'motion_correction.py',
             'basedir': args.basedir,
@@ -291,7 +273,7 @@ def process_fly(args):
             'dirtype': 'func'
         }
 
-    if args.motion_correction in ['anat', 'both']:
+    if args.motion_correction in ['anat', 'both'] or args.run_all:
         workflow_dict['motion_correction_anat'] = {
             'script': 'motion_correction.py',
             'basedir': args.basedir,
@@ -333,35 +315,69 @@ def process_fly(args):
             'label': 'model001_dRotLabXYZ',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1,
-            'behavior': ['dRotLabX+', 'dRotLabX-', 'dRotLabY', 'dRotLabZ+', 'dRotLabZ-'],
+            'behavior': ['dRotLabY', 'dRotLabZ+', 'dRotLabZ-'],
         }
         workflow_dict['regression_confound'] = {
             'script': 'regression.py',
             'basedir': args.basedir,
             'overwrite': True,
             'dir': args.process,
+            'save_residuals': True,
             'cores': 4,
             'label': 'model000_confound',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1
         }
 
-    if args.STA:
-        #             time=4,
-        #             cores=4,
-        logging.warning('STA not yet implemented!')
+    if args.STA or args.run_all:
+        workflow_dict['STA'] = {
+            'script': 'stim_triggered_avg_neu.py',
+            'basedir': args.basedir,
+            'overwrite': True,
+            'dir': args.process,
+            'cores': 4,
+            'time_hours': 1
+        }
+
+    if args.atlasreg or args.run_all:
+        if args.atlasdir is None:
+            args.atlasdir = os.path.join(
+                args.basedir,
+                'atlas'
+            )
+        workflow_dict['atlasreg'] = {
+            'script': 'atlas_registration.py',
+            'basedir': args.basedir,
+            'atlasfile': os.path.join(
+                args.atlasdir,
+                args.atlasfile),
+            'atlasname': 'jfrc',
+            'overwrite': args.overwrite,
+            'dir': args.dir,
+            'cores': 4,
+            'time_hours': 1
+        }
+    # align_anat
+
+    # make supervoxels
+    if args.supervoxels or args.run_all:
+        workflow_dict['supervoxels'] = {
+            'script': 'make_supervoxels.py',
+            'basedir': args.basedir,
+            'overwrite': args.overwrite,
+            'dir': args.dir,
+            'cores': 4,
+            'time_hours': 1
+        }
 
     if args.h5_to_nii:
         #             time=2,
         #             mem=10, - this seems crazy...
         logging.warning('h5_to_nii not yet implemented!')
 
-    # if 'post' in args.temporal_mean or 'both' in args.temporal_mean:
-    #     mean_brain_post_output = run_temporal_mean_brain_post()
-
     for stepname, step_args_dict in workflow_dict.items():
         logging.info(f'running step: {step_args_dict["script"]}')
-        args.dir = args.process
+        args.dir = args.process  # NOTE: this is bad and confusing, but would take work to fix
         run_preprocessing_step(step_args_dict['script'], args, step_args_dict)
 
 
