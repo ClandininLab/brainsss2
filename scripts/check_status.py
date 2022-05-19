@@ -56,7 +56,7 @@ def find_dirs(flydir):
         for dirtype in ['anat', 'func']})
 
 
-def check_funcdir(funcdir):
+def check_dir(funcdir):
     if not os.path.exists(funcdir):
         print(f'{funcdir} does not exist')
         return None
@@ -78,7 +78,38 @@ def check_funcdir(funcdir):
 
     funcinfo['STA'] = check_STA(funcdir)
 
+    funcinfo['atlasreg'] = check_atlasreg(funcdir)
+
+    funcinfo['supervoxels'] = check_supervoxels(funcdir)
+
     return funcinfo
+
+
+def check_atlasreg(funcdir):
+    atlasreg_dir = os.path.join(
+        os.path.dirname(funcdir),
+        'registration'
+    )
+    if not os.path.exists(atlasreg_dir):
+        return None
+    reg_files = [i.as_posix() for i in Path(atlasreg_dir).glob('*nii')]
+
+    if len(reg_files) == 0:
+        return None
+    else:
+        return({'files': {i: {} for i in reg_files}})
+
+
+def check_supervoxels(funcdir):
+    supervoxel_dir = os.path.join(funcdir, 'clustering')
+    if not os.path.exists(supervoxel_dir):
+        return None
+    sv_files = [i.as_posix() for i in Path(supervoxel_dir).glob('*nii')]
+
+    if len(sv_files) == 0:
+        return None
+    else:
+        return({'files': {i: {} for i in sv_files}})
 
 
 def check_smoothing(funcdir):
@@ -117,7 +148,15 @@ def check_regression(funcdir):
     if len(reg_dirs) == 0:
         return None
     else:
-        return({'models': {i: {} for i in reg_dirs}})
+        results = {}
+        for reg_dir in reg_dirs:
+            if os.path.exists(
+                os.path.join(regression_dir, reg_dir, 'rsquared.nii')
+            ):
+                results[reg_dir] = {'completed': True}
+                # TODO: get some summary stats
+        # NEED TO CHECK FOR FILES!
+        return(results)
 
 
 def check_moco(funcdir):
@@ -298,18 +337,32 @@ def check_all_status(flyinfo):
                     for file in dirinfo['smoothing']['files']:
                         print(f'    {os.path.basename(file)}')
 
-            if dirinfo['regression'] is None:
+            if dirinfo['regression'] is None and dirtype == 'func':
                 print("No regression results found")
-            else:
+            elif dirtype == 'func':
                 print("Regression complete")
-                for file in dirinfo['regression']['models']:
-                    print(f'    {os.path.basename(file)}')
+                for model in dirinfo['regression']:
+                    print(f'    {os.path.basename(model)}')
 
-            if dirinfo['STA'] is None:
+            if dirinfo['STA'] is None and dirtype == 'func':
                 print("No STA results found")
-            else:
+            elif dirtype == 'func':
                 print("STA complete")
                 for file in dirinfo['STA']['files']:
+                    print(f'    {os.path.basename(file)}')
+
+            if dirinfo['atlasreg'] is None and dirtype == 'func':
+                print("No registration results found")
+            elif dirtype == 'func':
+                print("Registration complete")
+                for file in dirinfo['atlasreg']['files']:
+                    print(f'    {os.path.basename(file)}')
+
+            if dirinfo['supervoxels'] is None and dirtype == 'func':
+                print("No supervoxel results found")
+            elif dirtype == 'func':
+                print("Supervoxel creation complete")
+                for file in dirinfo['supervoxels']['files']:
                     print(f'    {os.path.basename(file)}')
 
 
@@ -328,10 +381,10 @@ if __name__ == "__main__":
     # check func dirs
 
     for funcdir in flyinfo['dirs']['func']:
-        flyinfo['dirs']['func'][funcdir] = check_funcdir(funcdir)
+        flyinfo['dirs']['func'][funcdir] = check_dir(funcdir)
 
     for anatdir in flyinfo['dirs']['anat']:
-        flyinfo['dirs']['anat'][anatdir] = check_funcdir(anatdir)
+        flyinfo['dirs']['anat'][anatdir] = check_dir(anatdir)
 
     flyinfo_file = os.path.join(args.dir, 'fly_processing_info.json')
     with open(flyinfo_file, 'w') as f:
