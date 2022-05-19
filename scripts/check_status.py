@@ -104,7 +104,7 @@ def check_supervoxels(funcdir):
     supervoxel_dir = os.path.join(funcdir, 'clustering')
     if not os.path.exists(supervoxel_dir):
         return None
-    sv_files = [i.as_posix() for i in Path(supervoxel_dir).glob('*nii')]
+    sv_files = [i.as_posix() for i in Path(supervoxel_dir).glob('*nii*')]
 
     if len(sv_files) == 0:
         return None
