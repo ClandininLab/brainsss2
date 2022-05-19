@@ -12,15 +12,23 @@ from brainsss2.argparse_utils import get_base_parser
 from brainsss2.logging_utils import setup_logging
 
 
-def parse_args(args):
+def parse_args(args, allow_unknown=True):
     parser = get_base_parser('Stimulus-triggered averaging')
     parser.add_argument('-d', '--dir', type=str, default=None,
         help='Path to functional data', required=True)
+    parser.add_argument('-f', '--filename', type=str,
+        default='preproc/functional_channel_2_moco_smooth-2.0mu.h5')
     parser.add_argument('--outdir', type=str, default=None,
         help='Path to output directory')
     parser.add_argument('--overwrite', action='store_true', default=False,
         help='Overwrite existing files')
-    return parser.parse_args(args)
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+    return args
 
 
 def prep_visual_stimuli(args):
@@ -131,7 +139,8 @@ if __name__ == "__main__":
     list_in_ms0 = prep_visual_stimuli(args)
 
     brain_path = os.path.join(args.dir,
-        'preproc/functional_channel_2_moco_smooth-2.0.h5')
+        args.filename)
+    assert os.path.exists(brain_path)
     timestamps = brainsss.load_timestamps(
         os.path.join(args.dir, 'imaging'),
         file='functional.xml')
