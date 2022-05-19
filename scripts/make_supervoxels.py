@@ -124,7 +124,7 @@ if __name__ == "__main__":
         cluster_img.dataobj[:, :, z] = cluster_model.labels_.reshape(brain.shape[:2])
     cluster_labels = np.asarray(cluster_labels)
 
-    logging.info("saving clustering solution")
+    logging.info(f"saving clustering solution to {cluster_dir}")
     save_file = os.path.join(cluster_dir, "cluster_labels.npy")
     np.save(save_file, cluster_labels)
     save_img = os.path.join(cluster_dir, "cluster_labels.nii.gz")
@@ -149,4 +149,6 @@ if __name__ == "__main__":
     all_signals = np.asarray(all_signals)
     save_file = os.path.join(cluster_dir, "cluster_signals.npy")
     np.save(save_file, all_signals)
+    if os.path.exists(os.path.join(cluster_dir, "joblib")):
+        shutil.rmtree(os.path.join(cluster_dir, "joblib"))
     logging.info("completed clustering")
