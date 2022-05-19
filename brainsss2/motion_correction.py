@@ -89,7 +89,7 @@ def load_data(args):
 def set_stepsize(args, scantype_stepsize_dict=None):
     if scantype_stepsize_dict is None:
         scantype_stepsize_dict = {'func': 40, 'anat': 5}
-    setattr(args, 'stepsize', scantype_stepsize_dict[args.scantype])
+    setattr(args, 'stepsize', scantype_stepsize_dict[args.dirtype])
     return(args)
 
 
