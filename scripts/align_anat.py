@@ -1,19 +1,64 @@
 import numpy as np
 import os
 import sys
-import psutil
 import nibabel as nib
 from time import time
-import json
-import brainsss
-import matplotlib.pyplot as plt
 from contextlib import contextmanager
-import warnings
-warnings.filterwarnings("ignore")
 from shutil import copyfile
 import ants
 
-def main(args):
+from brainsss2.argparse_utils import (
+    get_base_parser,
+    add_moco_arguments
+)
+from brainsss2.logging_utils import setup_logging
+from brainsss2.imgmath import imgmath
+
+
+def parse_args(input, allow_unknown=True):
+    parser = get_base_parser('anatomical_registration')
+    parser = add_moco_arguments(parser)
+
+    # need to add this manually to procesing steps in order to make required
+    parser.add_argument(
+        '--dir',
+        type=str,
+        help='base fly directory',
+        required=True)
+    parser.add_argument(
+        '--atlasfile',
+        type=str,
+        help='atlas file',
+        required=True)
+    parser.add_argument(
+        '--transformdir',
+        type=str,
+        help='directory to save transforms')
+    parser.add_argument(
+        '--maskthresh',
+        type=float,
+        default=.1,
+        help='threshold for masking'
+    )
+    parser.add_argument('--save_transforms', action='store_true', default=False)
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+        if unknown is not None:
+            print(f'skipping unknown arguments:{unknown}')
+    else:
+        args = parser.parse_args()
+
+    return args
+
+
+if __name__ == "__main__":
+
+    args = parse_args(sys.argv[1:])
+
+    args = setup_logging(args, logtype="atlasreg")
+
+    args.outdir = os.path.join(args.dir, "func_0/atlasreg")
 
     logfile = args['logfile']
     save_directory = args['save_directory']
@@ -202,5 +247,3 @@ def stderr_redirected(to=os.devnull):
                                             # buffering and flags such as
                                             # CLOEXEC may be different
 
-if __name__ == '__main__':
-    main(json.loads(sys.argv[1]))
