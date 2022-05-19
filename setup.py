@@ -15,9 +15,12 @@ setup(
        'scripts/bleaching_qc.py',
        'scripts/regression.py',
        'scripts/imgmath.py',
-       'scripts/imgmean.py',
-       'scripts/imgsmooth.py',
-       'scripts/imgstd.py',
+       'scripts/make_supervoxels.py',
+       'scripts/atlas_registration.py',
+       'scripts/check_status.py',
+       'scripts/h5_to_nii.py',
+       'scripts/stim_triggered_avg_beh.py',
+       'scripts/stim_triggered_avg_neu.py'
        ],
     include_package_data=True,
     install_requires=[
