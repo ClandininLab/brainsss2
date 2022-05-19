@@ -70,6 +70,8 @@ def add_preprocess_arguments(parser):
         choices=['func', 'anat', 'both']
     )
     parser.add_argument("--regression", action="store_true", help="run regression")
+    parser.add_argument("--supervoxels", action="store_true", help="run supervoxels")
+    parser.add_argument("--atlasreg", action="store_true", help="run registration to/from atlas")
     parser.add_argument("--smoothing", action="store_true", help="run spatial smoothing")
     parser.add_argument("--fictrac_qc", action="store_true", help="run fictrac QC")
     parser.add_argument("--bleaching_qc", action="store_true", help="run bleaching QC")
@@ -111,7 +113,21 @@ def add_builder_arguments(parser):
         nargs='+',
         help="specific fly dirs to process for import date"
     )
-    parser.add_argument('-o', '--overwrite', action='store_true', help='overwrite existing fly dir')
+    parser.add_argument('-o', '--overwrite',
+        action='store_true',
+        help='overwrite existing fly dir')
+    parser.add_argument(
+        '--atlasfile',
+        type=str,
+        help='atlas file for atlasreg',
+        default='20220301_luke_2_jfrc_affine_fixed_2um.nii')
+    parser.add_argument('--atlasname',
+        type=str,
+        default='jfrc',
+        help='identifier for atlas space for atlasreg')
+    parser.add_argument('--atlasdir',
+        type=str,
+        help='directory containing atlas files for atlasreg')
     parser.add_argument(
         "--fictrac_import_dir",
         type=str,
@@ -179,6 +195,6 @@ def add_highpassfilter_arguments(parser):
 
 
 def add_imgmath_arguments(parser):
-    parser.add_argument('--fwhm', type=float,
+    parser.add_argument('--fwhm', type=float, default=2.0,
         help='fwhm for smoothing')
     return(parser)
