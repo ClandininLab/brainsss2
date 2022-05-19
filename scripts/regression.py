@@ -37,7 +37,7 @@ def parse_args(input, allow_unknown=True):
         help='func directory to be analyzed', required=True)
     parser.add_argument('--label', type=str, help='model label', required=True)
     parser.add_argument('-f', '--file', type=str, help='file to process',
-        default='preproc/functional_channel_2_moco_smooth-2.0.h5')
+        default='preproc/functional_channel_2_moco_smooth-2.0mu.h5')
     parser.add_argument('--bg_img', type=str, help='background image for plotting')
     parser.add_argument('-b', '--behavior', type=str,
         help='behavior(s) to include in model',
@@ -53,8 +53,8 @@ def parse_args(input, allow_unknown=True):
     parser.add_argument('--dct_bases', type=int, default=8, help='number of dct bases to use')
     parser.add_argument('--confound_files', type=str, nargs='+', help='confound files')
     parser.add_argument('--overwrite', action='store_true', help='overwrite existing output')
-    parser.add_argument('--save-residuals', action='store_true',
-        help='save model residuals - NOT YET IMPLEMENTED')
+    parser.add_argument('--save_residuals', action='store_true',
+        help='save model residuals')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
         if unknown is not None:
@@ -283,6 +283,16 @@ if __name__ == "__main__":
     confound_regressors, confound_names = setup_confounds(args, brain)
     if len(confound_names) > 0:
         logging.info(f'confound regressors: {confound_names}')
+
+    if args.save_residuals:
+        residual_img = nib.Nifti1Image(
+            np.zeros(brain.shape, dtype='float32'),
+            affine=qform)
+        residual_img.header.set_qform(qform)
+        residual_img.header.set_sform(qform)
+        residual_img.header.set_zooms(zooms)
+        residual_img.header.set_xyzt_units(xyz=xyzt_units[0], t=xyzt_units[1])
+
     # loop over slices
     for z in range(brain.shape[2]):
 
@@ -330,7 +340,14 @@ if __name__ == "__main__":
         lm.fit(X, y)
         predictions = lm.predict(X)
         X_w_const = add_constant(X)
-        squared_resids = (y - predictions)**2
+        residuals = y - predictions
+        if args.save_residuals:
+            # need to map mask residuals back into full space
+            residuals_full = np.zeros((residuals.shape[0], zmask_vec.shape[0]))
+            residuals_full[:, zmask_vec == 1] = residuals
+            residual_img.dataobj[:, :, z, :] = residuals_full.T.reshape(
+                brain.shape[0], brain.shape[1], brain.shape[3])
+        squared_resids = (residuals)**2
         df = X_w_const.shape[0] - X_w_const.shape[1]
         MSE = squared_resids.sum(axis=0) / (df)
         XtX = np.dot(X_w_const.T, X_w_const)
@@ -358,5 +375,11 @@ if __name__ == "__main__":
     save_files = save_regressiondata(
         args, results,
         qform, zooms, xyzt_units)
+    if args.save_residuals:
+        del results
+        del brain
+
+        residual_file = os.path.join(args.outdir, 'residuals.nii')
+        nib.save(residual_img, residual_file)
 
     logging.info(f'job completed: {datetime.datetime.now()}')
