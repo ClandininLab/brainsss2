@@ -173,7 +173,7 @@ def imgmath(file, operation,
         outfile_type = infile_type
 
     if operation == 'smooth':
-        operation = f'smooth-{fwhm:.1f}'
+        operation = f'smooth-{fwhm:.1f}mu'
 
     assert outfile_type in ['nii', 'h5'], "outfile_type must be either 'nii' or 'h5'"
 
