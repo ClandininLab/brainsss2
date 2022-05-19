@@ -330,7 +330,10 @@ def copy_bruker_data(source, destination, folder_type, args):
             if ".nii" in item and folder_type == "anat":
                 item = "anatomy_" + item.split("_")[1] + "_" + item.split("_")[2]
                 target_item = os.path.join(destination, item)
-                copy_nifti_file(source_item, target_item)
+                if item.find('channel_1') > -1:
+                    copy_nifti_file(source_item, target_item)
+                else:
+                    logging.info('skipping anat channel 2')
                 continue
 
             # Special copy for photodiode since it goes in visual folder
