@@ -337,7 +337,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': True,
             'dir': args.process,
-            'cores': 4,
+            'cores': 8,
             'time_hours': 1
         }
 
@@ -353,11 +353,12 @@ def process_fly(args):
             'atlasfile': os.path.join(
                 args.atlasdir,
                 args.atlasfile),
+            'type_of_transform': 'SyN',
             'atlasname': 'jfrc',
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': 4,
-            'time_hours': 1
+            'cores': 8,
+            'time_hours': 8
         }
     # align_anat
 
