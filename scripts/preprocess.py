@@ -266,7 +266,7 @@ def process_fly(args):
             'dir': args.process,
             # use longer run with fewer cores if not using normal queue
             # need to retest this with the new moco model
-            'time_hours': 48 if args.partition == 'normal' else 96,
+            'time_hours': 16 if args.partition == 'normal' else 24,
             'cores': args.cores if args.cores is not None else min(
                 8 if args.partition == 'normal' else 4,
                 get_max_slurm_cpus()),
@@ -281,7 +281,7 @@ def process_fly(args):
             'dir': args.process,
             # use longer run with fewer cores if not using normal queue
             # need to retest this with the new moco model
-            'time_hours': 48 if args.partition == 'normal' else 96,
+            'time_hours': 2 if args.partition == 'normal' else 24,
             'stepsize': 4,
             'downsample': True,
             'cores': min(
@@ -298,6 +298,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'fwhm': args.fwhm,
             'dir': args.dir,
+            'cores': 8,
             'file': os.path.join(
                 args.process,
                 'func_0/preproc/functional_channel_2_moco.h5'
