@@ -21,8 +21,7 @@ from statsmodels.api import add_constant
 from sklearn.metrics import r2_score
 import scipy.stats
 from statsmodels.stats.multitest import fdrcorrection
-
-# THIS A HACK FOR DEVELOPMENT
+from regression_utils import get_transformed_data_slice
 from brainsss2.argparse_utils import get_base_parser # noqa
 from brainsss2.logging_utils import setup_logging # noqa
 from brainsss2.fictrac import load_fictrac, smooth_and_interp_fictrac
@@ -97,14 +96,6 @@ def load_brain(args):
         xyzt_units = [i.decode('utf-8') for i in hf['xyzt_units'][:]]
     logging.info(f'brain shape: {brain.shape}')
     return(brain, qform, zooms, xyzt_units)
-
-
-def get_transformed_data_slice(zdata, zmask):
-    if zmask.sum() == 0:
-        return(None, zmask)
-    zmask_vec = zmask.reshape(np.prod(zmask.shape))
-    zdata_mat = zdata.reshape((np.prod(zmask.shape), zdata.shape[-1]))
-    return(zdata_mat[zmask_vec == 1], zmask_vec)
 
 
 def save_desmtx(args, X, confound_names=None):
