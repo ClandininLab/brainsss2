@@ -150,7 +150,7 @@ def run_preprocessing_step(script, args, args_dict):
     saved_handlers = []
 
     for procdir in procdirs:
-        if args.func_dirs is not None and procdir.split('/')[-1] not in args.func_dirs:
+        if args.dirtype == 'func' and args.func_dirs is not None and procdir.split('/')[-1] not in args.func_dirs:
             logging.info(f'skipping {procdir} - not included in --func_dirs')
             continue
 
@@ -172,6 +172,7 @@ def run_preprocessing_step(script, args, args_dict):
 
         args_dict['partition'] = args.partition
         args_dict['dir'] = procdir
+        args_dict['verbose'] = args.verbose
         args.dir = procdir
         sbatch[procdir] = SlurmBatchJob(stepname, script,
                                      args_dict, local=args.local)
