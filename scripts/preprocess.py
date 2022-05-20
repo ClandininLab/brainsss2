@@ -172,6 +172,7 @@ def run_preprocessing_step(script, args, args_dict):
 
         args_dict['partition'] = args.partition
         args_dict['dir'] = procdir
+        args_dict['verbose'] = args.verbose
         args.dir = procdir
         sbatch[procdir] = SlurmBatchJob(stepname, script,
                                      args_dict, local=args.local)
