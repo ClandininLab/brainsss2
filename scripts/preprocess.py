@@ -313,7 +313,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'dir': args.process,
             'overwrite': True,
-            'cores': 4,
+            'cores': 8,
             'label': 'model001_dRotLabXYZ',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1,
@@ -325,7 +325,7 @@ def process_fly(args):
             'overwrite': True,
             'dir': args.process,
             'save_residuals': True,
-            'cores': 4,
+            'cores': 8,
             'label': 'model000_confound',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1
