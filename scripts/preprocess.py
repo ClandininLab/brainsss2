@@ -369,7 +369,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': 4,
+            'cores': 8,
             'time_hours': 1
         }
 
