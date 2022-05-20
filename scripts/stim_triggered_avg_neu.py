@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d
 from brainsss2.argparse_utils import get_base_parser
 from brainsss2.logging_utils import setup_logging
 from brainsss2.visual import load_photodiode, extract_stim_times_from_pd, get_stimulus_metadata
-from brainsss.utils import load_timestamps
+from brainsss2.utils import load_timestamps
 
 
 def parse_args(args, allow_unknown=True):
