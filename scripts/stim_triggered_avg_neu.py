@@ -1,4 +1,3 @@
-import brainsss
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -10,6 +9,8 @@ import shutil
 from scipy.interpolate import interp1d
 from brainsss2.argparse_utils import get_base_parser
 from brainsss2.logging_utils import setup_logging
+from brainsss2.visual import load_photodiode, extract_stim_times_from_pd, get_stimulus_metadata
+from brainsss.utils import load_timestamps
 
 
 def parse_args(args, allow_unknown=True):
@@ -36,11 +37,11 @@ def prep_visual_stimuli(args):
     assert os.path.exists(vision_path), f'{vision_path} does not exist'
 
     ### Load Photodiode ###
-    t, ft_triggers, pd1, pd2 = brainsss.load_photodiode(vision_path)
-    stimulus_start_times = brainsss.extract_stim_times_from_pd(pd2, t)
+    t, ft_triggers, pd1, pd2 = load_photodiode(vision_path)
+    stimulus_start_times = extract_stim_times_from_pd(pd2, t)
 
     ### Get Metadata ###
-    stim_ids, angles = brainsss.get_stimulus_metadata(vision_path)
+    stim_ids, angles = get_stimulus_metadata(vision_path)
     logging.info(F"Found {len(stim_ids)} presented stimuli.")
 
     # *100 puts in units of 10ms, which will match fictrac
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     brain_path = os.path.join(args.dir,
         args.filename)
     assert os.path.exists(brain_path)
-    timestamps = brainsss.load_timestamps(
+    timestamps = load_timestamps(
         os.path.join(args.dir, 'imaging'),
         file='functional.xml')
 
