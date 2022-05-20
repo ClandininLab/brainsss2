@@ -21,7 +21,7 @@ from statsmodels.api import add_constant
 from sklearn.metrics import r2_score
 import scipy.stats
 from statsmodels.stats.multitest import fdrcorrection
-from regression_utils import get_transformed_data_slice
+from brainsss2.regression_utils import get_transformed_data_slice
 from brainsss2.argparse_utils import get_base_parser # noqa
 from brainsss2.logging_utils import setup_logging # noqa
 from brainsss2.fictrac import load_fictrac, smooth_and_interp_fictrac
