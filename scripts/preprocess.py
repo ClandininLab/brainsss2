@@ -82,6 +82,7 @@ def build_fly(args):
         'func_dirs': args.func_dirs,
         "user": args.user,
         "verbose": args.verbose,
+        "overwrite": args.overwrite,
         'basedir': args.basedir,
         'logfile': os.path.join(
             args.basedir,
