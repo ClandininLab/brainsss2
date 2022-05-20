@@ -286,7 +286,11 @@ def copy_fly(args):
                 copy_bruker_data(source_expt_folder, imaging_destination, "func", args)
                 # Copt fictrac data based on timestamps
                 copy_fictrac(expt_folder, args)
-
+                # remove empty dirs
+                destination_files = os.listdir(imaging_destination)
+                if len(destination_files) == 0:
+                    logging.info(f'removing empty func dir: {imaging_destination}')
+                    os.remove(imaging_destination)
             else:
                 logging.warning("Invalid directory in fly folder (skipping): {}".format(item))
 
