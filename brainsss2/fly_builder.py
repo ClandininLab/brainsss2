@@ -274,6 +274,15 @@ def copy_fly(args):
                 if not os.path.exists(imaging_destination):
                     os.mkdir(imaging_destination)
                 copy_bruker_data(source_expt_folder, imaging_destination, "anat", args)
+                # remove empty dirs
+                destination_files = os.listdir(imaging_destination)
+                if len(destination_files) == 0:
+                    logging.info(f'removing empty func dir: {imaging_destination}')
+                    os.remove(imaging_destination)
+                else:
+                    logging.info('changing permissions to read-only')
+                    for f in destination_files:
+                        os.chmod(os.path.join(imaging_destination, f), 0o444)
 
             elif "func" in item:
                 if args.func_dirs is not None and item.split('/')[-1] not in args.func_dirs:
@@ -291,6 +300,10 @@ def copy_fly(args):
                 if len(destination_files) == 0:
                     logging.info(f'removing empty func dir: {imaging_destination}')
                     os.remove(imaging_destination)
+                else:
+                    logging.info('changing permissions to read-only')
+                    for f in destination_files:
+                        os.chmod(os.path.join(imaging_destination, f), 0o444)
             else:
                 logging.warning("Invalid directory in fly folder (skipping): {}".format(item))
 
