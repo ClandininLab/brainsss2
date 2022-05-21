@@ -1,6 +1,5 @@
 # refactor of slurm utils
-import argparse
-from brainsss2.preprocess_utils import dict_to_args_list, dict_to_namespace
+from brainsss2.preprocess_utils import dict_to_args_list
 import subprocess
 import logging
 import time
@@ -12,8 +11,7 @@ def slurm_submit(jobname,
                  errfile,
                  args=None,
                  dep=None,
-                 modules=None): #
-    # , time, mem, nodes, modules, global_resources):
+                 modules=None):  
     """
     submit slurm job
 
@@ -37,11 +35,6 @@ def slurm_submit(jobname,
         path to directory to store output
     """
 
-    default_args = {
-        'nice': False,
-        'time_hours': 1,
-        'com_path': './com'
-    }
     if args_dict is None:
         args_dict = {}
     elif not isinstance(args, dict):
@@ -58,24 +51,24 @@ def slurm_submit(jobname,
         module_string = 'ml {" ".join(modules)}; '
 
     if dep is not None:
-        logging.info(f'dependencies: {dep}')
+        logging.debug(f'dependencies: {dep}')
         dep = "--dependency=afterok:{} --kill-on-invalid-dep=yes ".format(dep)
 
     command = f"{module_string}python3 {script} {' '.join(dict_to_args_list(args))}"
-    logging.info(f'command: {command}')
+    logging.debug(f'command: {command}')
 
     sbatch_command = (
         f"sbatch -J {jobname} -o ./com/%j.out "
-        f"--nice={args.nice} {}--open-mode=append --cpus-per-task={args.nodes} "
+        f"--nice={args.nice} --open-mode=append --cpus-per-task={args.nodes} "
         f"-e ./com/%j.stderr  -t {time_hours}:00:00 --wrap='{command}'"
     )
     #    jobname, logfile, time, nice, node_cmd, mem, begin, command, dep
 
-    logging.info(f'sbatch_command: {sbatch_command}')
-    logging.info(f'Redirecting stderr to {errfile}')
+    logging.debug(f'sbatch_command: {sbatch_command}')
+    logging.debug(f'Redirecting stderr to {errfile}')
 
     sbatch_response = subprocess.getoutput(sbatch_command)
-    logging.info(f'sbatch_response: {sbatch_response}')
+    logging.debug(f'sbatch_response: {sbatch_response}')
 
     job_id = sbatch_response.split(" ")[-1].strip()
 
@@ -105,7 +98,7 @@ def get_job_status(job_id, return_full_output=False):
 
 def wait_for_job(job_id, com_path, wait_time=5):
 
-    logging.info(f'Waiting for job {job_id}')
+    logging.debug(f'Waiting for job {job_id}')
 
     while True:
         status = get_job_status(job_id)
