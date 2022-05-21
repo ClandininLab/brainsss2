@@ -300,7 +300,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'fwhm': args.fwhm,
             'dir': args.dir,
-            'cores': 8,
+            'cores': min(arg.cores, 8),
             'file': os.path.join(
                 args.process,
                 'func_0/preproc/functional_channel_2_moco.h5'
@@ -314,7 +314,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'dir': args.process,
             'overwrite': True,
-            'cores': 8,
+            'cores': min(arg.cores, 8),
             'label': 'model001_dRotLabXYZ',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1,
@@ -326,7 +326,7 @@ def process_fly(args):
             'overwrite': True,
             'dir': args.process,
             'save_residuals': True,
-            'cores': 8,
+            'cores': min(arg.cores, 8),
             'label': 'model000_confound',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1
@@ -338,7 +338,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': True,
             'dir': args.process,
-            'cores': 8,
+            'cores': min(arg.cores, 8),
             'time_hours': 1
         }
 
@@ -358,7 +358,7 @@ def process_fly(args):
             'atlasname': 'jfrc',
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': 8,
+            'cores': min(arg.cores, 8),
             'time_hours': 8
         }
     # align_anat
@@ -370,7 +370,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': 8,
+            'cores': min(arg.cores, 8),
             'time_hours': 1
         }
 
