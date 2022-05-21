@@ -90,9 +90,8 @@ def build_fly(args):
             f"flybuilder_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.txt")
     }
 
-    logging.info(f'args_dict submitted to fly_builder: {args_dict}')
+    logging.debug(f'args_dict submitted to fly_builder: {args_dict}')
     if not args.local:
-
         sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict, verbose=args.verbose)
         sbatch.run()
         sbatch.wait()
@@ -148,7 +147,9 @@ def run_preprocessing_step(script, args, args_dict):
     assert len(procdirs) > 0, "no func directories found, somethign has gone wrong"
 
     sbatch = {}
-    saved_handlers = []
+    # saved_handlers = []
+    saved_handlers = remove_existing_file_handlers()
+    print('run_preprocessing_step - saved_handlers', saved_handlers)  # FOR DEBUGGING
 
     for procdir in procdirs:
         if args.dirtype == 'func' and args.func_dirs is not None and procdir.split('/')[-1] not in args.func_dirs:
@@ -160,8 +161,6 @@ def run_preprocessing_step(script, args, args_dict):
                 os.path.join(procdir, 'logs'),
                 stepname
             )
-        print(f'LOGGING to {logfile}')
-        args_dict['logfile'] = logfile
 
         if not os.path.exists(os.path.dirname(logfile)):
             os.mkdir(os.path.dirname(logfile))
@@ -174,50 +173,31 @@ def run_preprocessing_step(script, args, args_dict):
         args_dict['partition'] = args.partition
         args_dict['dir'] = procdir
         args_dict['verbose'] = args.verbose
+        args_dict['logfile'] = logfile
         args.dir = procdir
+
         sbatch[procdir] = SlurmBatchJob(stepname, script,
-                                     args_dict, local=args.local)
+                                        user_args=args_dict,
+                                        local=args.local)
         sbatch[procdir].run()
-        if hasattr(sbatch[procdir], 'saved_handlers'):
-            saved_handlers.extend(sbatch[procdir].saved_handlers)
+        # if hasattr(sbatch[procdir], 'saved_handlers'):
+        #     saved_handlers.extend(sbatch[procdir].saved_handlers)
 
     output = {}
     for procdir, job in sbatch.items():
         job.wait()
         output[procdir] = job.status()
+        job.disable_loggers()
 
-    _ = remove_existing_file_handlers()
+    logging.info(f'Completed step: {stepname}')
+
     if saved_handlers:
+        print('reinstating saved_handlers', saved_handlers)  # FOR DEBUGGING
         reinstate_file_handlers(saved_handlers)
     else:
         logging.warning('no saved handlers found')
 
-    logging.info(f'Completed step: {stepname}')
     return(output)
-
-
-# def run_h5_to_nii():
-
-#     for func in funcs:
-#         args = {
-#             "logfile": logfile,
-#             "h5_path": os.path.join(
-#                 func, "functional_channel_2_moco_zscore_highpass.h5"
-#             ),
-#         }
-#         script = "h5_to_nii.py"
-#         job_id = brainsss.sbatch(
-#             jobname="h5tonii",
-#             script=os.path.join(scripts_path, script),
-#             modules=modules,
-#             args=args,
-#             logfile=logfile,
-#             time=2,
-#             mem=10,
-#             nice=nice,
-#             nodes=nodes,
-#         )
-#         brainsss.wait_for_job(job_id, logfile, com_path)
 
 
 def process_fly(args):
@@ -300,7 +280,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'fwhm': args.fwhm,
             'dir': args.dir,
-            'cores': min(arg.cores, 8),
+            'cores': min(args.cores, 8),
             'file': os.path.join(
                 args.process,
                 'func_0/preproc/functional_channel_2_moco.h5'
@@ -314,7 +294,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'dir': args.process,
             'overwrite': True,
-            'cores': min(arg.cores, 8),
+            'cores': min(args.cores, 8),
             'label': 'model001_dRotLabXYZ',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1,
@@ -326,7 +306,7 @@ def process_fly(args):
             'overwrite': True,
             'dir': args.process,
             'save_residuals': True,
-            'cores': min(arg.cores, 8),
+            'cores': min(args.cores, 8),
             'label': 'model000_confound',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1
@@ -338,7 +318,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': True,
             'dir': args.process,
-            'cores': min(arg.cores, 8),
+            'cores': min(args.cores, 8),
             'time_hours': 1
         }
 
@@ -358,7 +338,7 @@ def process_fly(args):
             'atlasname': 'jfrc',
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': min(arg.cores, 8),
+            'cores': min(args.cores, 8),
             'time_hours': 8
         }
     # align_anat
@@ -370,7 +350,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': min(arg.cores, 8),
+            'cores': min(args.cores, 8),
             'time_hours': 1
         }
 
@@ -420,7 +400,6 @@ if __name__ == "__main__":
 
     print('welcome to fly_preprocessing')
     args = parse_args(sys.argv[1:])
-    print(args)
 
     args = setup_modules(args)
 
@@ -440,8 +419,6 @@ if __name__ == "__main__":
 
     if not args.ignore_settings:
         args = load_user_settings_from_json(args)
-
-    print(args)
 
     if args.build:
         logging.info("building fly")
