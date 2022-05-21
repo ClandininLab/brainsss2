@@ -7,7 +7,6 @@ from time import strftime
 import logging
 import pyfiglet
 import datetime
-from brainsss2.git_utils import get_current_git_hash
 
 
 def get_logfile_name(logdir, logtype, flystring=''):
@@ -135,22 +134,18 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
     #  RP: replace custom code with logging.basicConfig
     setattr(args, 'file_handler', logging.FileHandler(args.logfile))
     logging_handlers = [args.file_handler]
-    if args.verbose:
-        #  use logging.StreamHandler to echo log messages to stdout
-        logging_handlers.append(logging.StreamHandler())
 
     logging.basicConfig(
         handlers=logging_handlers,
-        level=logging.INFO,
+        level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(message)s",
         datefmt="%m/%d/%Y %I:%M:%S %p",
     )
+
     title = pyfiglet.figlet_format("Brainsss", font="doom")
-    title_shifted = ("\n").join([" " * 42 + line for line in title.split("\n")][:-2])
+    title_shifted = ("\n").join([" " * 20 + line for line in title.split("\n")][:-2])
     logging.info(title_shifted)
     logging.info(f"jobs started: {datetime.datetime.now()}")
-    setattr(args, "git_hash", get_current_git_hash())
-    logging.info(f"git commit: {args.git_hash}")
     if args.verbose:
         logging.info(f"logging enabled: {args.logfile}")
 
