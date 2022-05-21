@@ -6,18 +6,12 @@ import subprocess
 import logging
 import time
 import os
-import sys
 from brainsss2.logging_utils import remove_existing_file_handlers  # noqa
 from brainsss2.preprocess_utils import dict_to_args_list
 
 # set up module level logging
 logger = logging.getLogger('SlurmBatchJob')
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+logger.setLevel(logging.INFO)
 
 
 class SlurmBatchJob:
@@ -66,27 +60,25 @@ class SlurmBatchJob:
         elif 'logfile' in user_args:
             self.logfile = user_args['logfile']
 
+        formatter = logging.Formatter(
+            '|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
         if self.logfile is not None:
             self.logdir = os.path.dirname(os.path.realpath(self.logfile))
             if not os.path.exists(self.logdir):
                 os.makedirs(self.logdir)
             fh = logging.FileHandler(self.logfile)
-            formatter = logging.Formatter(
-                '|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
             fh.setFormatter(formatter)
             logger.addHandler(fh)
-            logger.debug(f'log dir: {self.logdir}')
+            logger.debug(f'log file: {self.logfile}')
         else:
-            logger.info('No logfile specified - logging to stdout only')
+            sh = logging.StreamHandler()
+            sh.setFormatter(formatter)
+            logger.addHandler()
+            logger.debug('No logfile specified')
+        logger.setLevel(logging.DEBUG if self.verbose else logging.INFO)
 
-        if self.verbose:
-            logger.setLevel(logging.DEBUG)
-        else:
-            logger.setLevel(logging.INFO)
-
-        logger.info('Setting up SlurmBatchJob')
-        # check args
         assert os.path.exists(self.script)
+        logger.info(f'Setting up SlurmBatchJob for {self.script}')
 
         self.default_args = {
             'nice': False,
@@ -98,7 +90,7 @@ class SlurmBatchJob:
         }
 
         self.setup_args(user_args, kwargs)
-        logger.info(f'args: {self.args}')
+        logger.debug(f'args: {self.args}')
 
         self.command = (
             f"{self.args['module_string']}"
@@ -162,7 +154,7 @@ class SlurmBatchJob:
             if status is not None and status not in ['PENDING', 'RUNNING', 'CONFIGURING']:
                 status = self.status(return_full_output=True)
                 logger.info(f'Job {self.job_id} finished with status: {status}\n\n')
-                logger.info(f'opening log_file: {self.logfile}')
+                logger.debug(f'reading log_file: {self.logfile}')
                 try:
                     with open(self.logfile, "r") as f:
                         output = f.read()
@@ -191,6 +183,12 @@ class SlurmBatchJob:
         status = None if temp == "" else temp.split("\n")[0].split("|")[0].upper()
 
         return temp if return_full_output else status
+
+    @staticmethod
+    def disable_loggers():
+        for h in logger.handlers:
+            if isinstance(h, logging.FileHandler):
+                logger.removeHandler(h)
 
 
 if __name__ == "__main__":

@@ -69,8 +69,6 @@ def setup_dirs(args):
 def build_fly(args):
 
     args = setup_dirs(args)
-    print(logging.getLogger())
-    print(logging.getLogger().handlers)
 
     # Assume this folder contains fly1 etc
     # Each area will have a T and a Z
@@ -110,14 +108,13 @@ def build_fly(args):
             )
             print(f'flydir: {args.destination_dir}')
 
-            overwrite_msg = None
             if os.path.exists(args.destination_dir):
                 if not args.overwrite:
                     logging.warning(f"Fly dir {args.destination_dir} already exists, use -o to overwrite")
                     logging.info(f'flydir: {args.destination_dir}')
                     continue
 
-                overwrite_msg = f"Overwriting existing fly dir {args.destination_dir}"
+                logging.info(f"Overwriting existing fly dir {args.destination_dir}")
                 rmtree(os.path.join(args.destination_dir))
 
             os.mkdir(args.destination_dir)
@@ -127,15 +124,7 @@ def build_fly(args):
                 f"\n{'   Building '+likely_fly_folder+' as fly_'+ str(new_fly_number) + '   '}"
             )
 
-            # put log file into fly directory
-            # args = setup_logging(args, logtype='flybuilder',
-            #    logdir=os.path.join(args.destination_dir, "logs"))
-
-            # print(f'Using logger: {logging.getLogger()}')
             logging.info(f"Created fly directory:{args.destination_dir}")
-            # print to stdout so that preprocess.py can use this output
-            if overwrite_msg is not None:
-                logging.info(overwrite_msg)
 
             # Copy fly data
             copy_fly(args)
@@ -632,7 +621,6 @@ def get_datetime_from_xml(xml_file):
     tree = ET.parse(xml_file)
     root = tree.getroot()
     datetime = root.get("date")
-    # will look like "4/2/2019 4:16:03 PM" to start
 
     # Get dates
     date = datetime.split(" ")[0]

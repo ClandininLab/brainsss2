@@ -147,7 +147,7 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
     logging.info(title_shifted)
     logging.info(f"jobs started: {datetime.datetime.now()}")
     if args.verbose:
-        logging.info(f"logging enabled: {args.logfile}")
+        logging.debug(f"logging enabled: {args.logfile}")
 
     logging.info("\n\nArguments:")
     args_dict = vars(args)
