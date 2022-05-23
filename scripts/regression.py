@@ -15,6 +15,7 @@ import datetime
 import logging
 import shutil
 import ants
+import warnings
 from nilearn.plotting import plot_stat_map
 from sklearn.linear_model import LinearRegression
 from statsmodels.api import add_constant
@@ -47,13 +48,14 @@ def parse_args(input, allow_unknown=True):
     parser.add_argument('--fps', type=float, default=100, help='frame rate of fictrac camera')
     parser.add_argument('--resolution', type=float, default=10, help='resolution of fictrac data')
     parser.add_argument('-o', '--outdir', type=str, help='directory to save output')
-    parser.add_argument('--corrthresh', type=float, default=0.1, help='correlation threshold for plotting')
+    parser.add_argument('--pthresh', type=float, default=0.05, help='p value cutoff for plotting')
     parser.add_argument('--cores', type=int, default=4, help='number of cores to use')
     parser.add_argument('--dct_bases', type=int, default=8, help='number of dct bases to use')
     parser.add_argument('--confound_files', type=str, nargs='+', help='confound files')
     parser.add_argument('--overwrite', action='store_true', help='overwrite existing output')
     parser.add_argument('--save_residuals', action='store_true',
         help='save model residuals')
+    parser.add_argument('--std_betas', action='store_true', help='normalize regressors')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
         if unknown is not None:
@@ -147,23 +149,26 @@ def save_regressiondata(
             img.header.set_xyzt_units(xyz=xyzt_units[0], t=xyzt_units[1])
             img.to_filename(save_file)
             cut_coords = np.arange(8, 49, 8) * zooms[2]
-            if '1-p' in k:
-                plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
-                    display_mode='z', threshold=.05, draw_cross=False,
-                    cut_coords=cut_coords,
-                    title=f'Regression fdr p: {args.behavior[i]}',
-                    output_file=os.path.join(
-                        args.outdir, f'1-p_{args.behavior[i]}.png'))
-            elif k == 'rsquared':
-                save_files[k] = save_file
-                plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
-                    display_mode='z', threshold=.05, draw_cross=False,
-                    cut_coords=cut_coords,
-                    title='Regression r-squared',
-                    output_file=os.path.join(
-                        args.outdir, 'rsquared.png'))
-            else:
-                save_files[(k, args.behavior[i])] = save_file
+            with warnings.catch_warnings():
+                # filter matplotlib warnings
+                warnings.filterwarnings("ignore", module="matplotlib\..*")
+                if '1-p' in k:
+                    plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
+                        display_mode='z', threshold=1 - args.pthresh, draw_cross=False,
+                        cut_coords=cut_coords,
+                        title=f'Regression fdr p: {args.behavior[i]}',
+                        output_file=os.path.join(
+                            args.outdir, f'1-p_{args.behavior[i]}.png'))
+                elif k == 'rsquared':
+                    save_files[k] = save_file
+                    plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
+                        display_mode='z', threshold=1 - args.pthresh, draw_cross=False,
+                        cut_coords=cut_coords,
+                        title='Regression r-squared',
+                        output_file=os.path.join(
+                            args.outdir, 'rsquared.png'))
+                else:
+                    save_files[(k, args.behavior[i])] = save_file
 
             logging.info(f"Saved {k} to {save_file}")
     return(save_files)
@@ -193,7 +198,7 @@ def setup_confounds(args, brain):
             else:
                 confound_mtx = np.hstack((confound_mtx, confound_df.values))
 
-    if args.dct_bases is not None:
+    if args.dct_bases is not None and args.dct_bases > 0:
         dct_mtx = get_dct_mtx(np.zeros((ntimepoints, 1)), args.dct_bases)
         if confound_mtx is None:
             confound_mtx = dct_mtx
@@ -309,17 +314,20 @@ if __name__ == "__main__":
         if len(regressors) > 0:
             X = np.concatenate(
                 [regressors[behavior] for behavior in args.behavior], axis=1)
+            X = X - np.mean(X, axis=0)  # demean regressors
         else:
             X = None
 
         zdata_trans, zmask_vec = get_transformed_data_slice(brain[:, :, z, :], mask[:, :, z])
+        if args.verbose:
+            print(f'slice {z}: ')
         if zdata_trans is None:
             logging.info(f'Skipping slice {z} because it has no brain')
             continue
         else:
             logging.info(F"Processing slice {z}: {np.sum(zmask_vec)} voxels")
 
-        lm = LinearRegression(n_jobs=args.cores)
+        lm = LinearRegression(n_jobs=args.cores, fit_intercept=False)
         y = zdata_trans.T
         # add confound regressors
         if confound_regressors is not None:
@@ -327,10 +335,13 @@ if __name__ == "__main__":
                 X = np.hstack((X, confound_regressors))
             else:
                 X = confound_regressors
-
+        if args.std_betas:
+            logging.debug('Standardizing regressors')
+            X = X - np.mean(X, axis=0)
+            X = X / np.std(X, axis=0)
+        X = add_constant(X, prepend=False)
         lm.fit(X, y)
         predictions = lm.predict(X)
-        X_w_const = add_constant(X)
         residuals = y - predictions
         if args.save_residuals:
             # need to map mask residuals back into full space
@@ -339,16 +350,17 @@ if __name__ == "__main__":
             residual_img.dataobj[:, :, z, :] = residuals_full.T.reshape(
                 brain.shape[0], brain.shape[1], brain.shape[3])
         squared_resids = (residuals)**2
-        df = X_w_const.shape[0] - X_w_const.shape[1]
+        df = X.shape[0] - X.shape[1]
         MSE = squared_resids.sum(axis=0) / (df)
-        XtX = np.dot(X_w_const.T, X_w_const)
+        XtX = np.dot(X.T, X)
 
         for i in range(len(behaviors)):
             slice_coefs = np.zeros(brain.shape[:2])
             slice_coefs[mask[:, :, z] == 1] = lm.coef_[:, i]
             results['beta'][:, :, z, i] = slice_coefs
             slice_tstat = np.zeros(brain.shape[:2])
-            slice_tstat[mask[:, :, z] == 1] = lm.coef_[:, i] / np.sqrt(MSE[i] * np.diag(XtX)[i])
+            slice_tstat[mask[:, :, z] == 1] = lm.coef_[:, i] / np.sqrt(MSE[i] / np.diag(XtX)[i])
+            logging.debug(f'max tstat: {np.max(slice_tstat[mask[:, :, z] == 1])}')
             results['tstat'][:, :, z, i] = slice_tstat
 
         slice_rsquared = np.zeros(brain.shape[:2])
