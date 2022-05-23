@@ -77,6 +77,7 @@ def build_fly(args):
     args_dict = {
         "import_date": args.import_date,
         'import_dir': args.import_dir,
+        'fictrac_import_dir': args.fictrac_import_dir,
         "target_dir": args.target_dir,
         "fly_dirs": args.fly_dirs,
         'func_dirs': args.func_dirs,
