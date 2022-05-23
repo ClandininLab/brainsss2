@@ -135,19 +135,25 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
     setattr(args, 'file_handler', logging.FileHandler(args.logfile))
     logging_handlers = [args.file_handler]
 
+    if args.verbose:
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
+        ch.setFormatter(formatter)
+        logging_handlers.append(ch)
+
     logging.basicConfig(
         handlers=logging_handlers,
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(message)s",
         datefmt="%m/%d/%Y %I:%M:%S %p",
     )
-
     title = pyfiglet.figlet_format("Brainsss", font="doom")
     title_shifted = ("\n").join([" " * 20 + line for line in title.split("\n")][:-2])
     logging.info(title_shifted)
     logging.info(f"jobs started: {datetime.datetime.now()}")
     if args.verbose:
-        logging.debug(f"logging enabled: {args.logfile}")
+        logging.debug(f"verbose logging enabled: {args.logfile}")
 
     logging.info("\n\nArguments:")
     args_dict = vars(args)
