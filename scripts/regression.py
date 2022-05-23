@@ -123,14 +123,17 @@ def get_dct_mtx(X, ndims):
 
 def save_regressiondata(
         args, results,
-        qform, zooms, xyzt_units):
+        qform, zooms, xyzt_units,
+        use_fdr=True):
+    fdr_string = 'fdr_' if use_fdr else ''
+
     save_files = {}
     for k, result in results.items():
         if len(result.shape) > 3:
             n_results = result.shape[3]
         else:
             n_results = 1  # rsquared
-        k = k.replace('pvalue', '1-p')
+        k = k.replace('pvalue', f'{fdr_string}1-p')
         for i in range(n_results):
             if k == 'rsquared':
                 result_data = result
@@ -156,14 +159,14 @@ def save_regressiondata(
                 if '1-p' in k:
                     plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
                         display_mode='z', threshold=1 - args.pthresh, draw_cross=False,
-                        cut_coords=cut_coords,
+                        cut_coords=cut_coords, vmax=1,
                         title=f'Regression fdr p: {args.behavior[i]}',
                         output_file=os.path.join(
-                            args.outdir, f'1-p_{args.behavior[i]}.png'))
+                            args.outdir, f'{fdr_string}1-p_{args.behavior[i]}.png'))
                 elif k == 'rsquared':
                     save_files[k] = save_file
                     plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
-                        display_mode='z', threshold=1 - args.pthresh, draw_cross=False,
+                        display_mode='z', threshold=.05, draw_cross=False,
                         cut_coords=cut_coords,
                         title='Regression r-squared',
                         output_file=os.path.join(
