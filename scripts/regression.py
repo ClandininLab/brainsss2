@@ -158,7 +158,7 @@ def save_regressiondata(
                 if '1-p' in k:
                     plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
                         display_mode='z', threshold=1 - args.pthresh, draw_cross=False,
-                        cut_coords=cut_coords, vmax=1,
+                        cut_coords=cut_coords, vmax=1, cmap='bwr',
                         title=f'Regression fdr p: {args.behavior[i]}',
                         output_file=os.path.join(
                             args.outdir, f'{k}_{args.behavior[i]}.png'))
