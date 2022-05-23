@@ -17,10 +17,12 @@ if __name__ == "__main__":
 
     logging.info(f"loading data from {args.dir}")
     data_mean = load_data(args)
+    if data_mean is None or len(data_mean) == 0:
+        raise ValueError('No data found')
 
     logging.info("getting bleaching curve")
     outdir = os.path.join(args.dir, "QC")
     if not os.path.exists(outdir):
         os.mkdir(outdir)
     logging.info(f'saving results to {outdir}')
-    get_bleaching_curve(data_mean, outdir)
+    data_mean = get_bleaching_curve(data_mean, outdir)
