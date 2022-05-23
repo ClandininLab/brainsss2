@@ -125,7 +125,6 @@ def save_regressiondata(
         args, results,
         qform, zooms, xyzt_units,
         use_fdr=True):
-    fdr_string = 'fdr_' if use_fdr else ''
 
     save_files = {}
     for k, result in results.items():
@@ -133,7 +132,7 @@ def save_regressiondata(
             n_results = result.shape[3]
         else:
             n_results = 1  # rsquared
-        k = k.replace('pvalue', f'1-p')
+        k = k.replace('pvalue', '1-p')
         for i in range(n_results):
             if k == 'rsquared':
                 result_data = result
@@ -162,7 +161,7 @@ def save_regressiondata(
                         cut_coords=cut_coords, vmax=1,
                         title=f'Regression fdr p: {args.behavior[i]}',
                         output_file=os.path.join(
-                            args.outdir, f'k_{args.behavior[i]}.png'))
+                            args.outdir, f'{k}_{args.behavior[i]}.png'))
                 elif k == 'rsquared':
                     save_files[k] = save_file
                     plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
