@@ -69,8 +69,9 @@ def get_bleaching_curve(data_mean, outdir):
     for file in data_mean:
         loss_string = loss_string + file + " lost" + f"{int(signal_loss[file])}" + "%\n"
     plt.title(loss_string, ha="center", va="bottom")
+    plt.legend(loc=2)
     plt.tight_layout()
 
     save_file = os.path.join(outdir, "bleaching.png")
     plt.savefig(save_file, dpi=300, bbox_inches="tight")
-    return data_mean
+    return save_file
