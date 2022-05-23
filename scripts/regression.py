@@ -104,6 +104,7 @@ def save_desmtx(args, X, confound_names=None):
     colnames = args.behavior if args.behavior is not None else []
     if confound_names is not None:
         colnames += confound_names
+    colnames += ['constant']
     df = pd.DataFrame(X, columns=colnames)
     outfile = os.path.join(args.outdir, f'{args.label}_desmtx.csv')
     df.to_csv(outfile, index=False)
@@ -151,7 +152,7 @@ def save_regressiondata(
             cut_coords = np.arange(8, 49, 8) * zooms[2]
             with warnings.catch_warnings():
                 # filter matplotlib warnings
-                warnings.filterwarnings("ignore", module="matplotlib\..*")
+                warnings.filterwarnings("ignore", module="matplotlib\..*")  # noqa
                 if '1-p' in k:
                     plot_stat_map(save_file, os.path.join(args.dir, args.bg_img),
                         display_mode='z', threshold=1 - args.pthresh, draw_cross=False,
