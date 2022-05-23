@@ -8,6 +8,7 @@ import json
 import h5py
 import re
 import pandas as pd
+import nibabel as nib
 from pathlib import Path
 from brainsss2.argparse_utils import get_base_parser
 from brainsss2.fictrac import load_fictrac
@@ -117,12 +118,24 @@ def check_smoothing(funcdir):
     if not os.path.exists(preproc_dir):
         return None
 
-    moco_files = [i.as_posix() for i in Path(preproc_dir).glob('functional_channel_2_moco_smooth-*.h5')]
+    smooth_files = [i.as_posix() for i in Path(preproc_dir).glob('functional_channel_2_moco_smooth-*.h5')]
 
-    if len(moco_files) == 0:
+    if len(smooth_files) == 0:
         return None
-    else:
-        return({'files': {i: {} for i in moco_files}})
+    smoothfiles = {'files': {i: {} for i in smooth_files}}
+    for file in smooth_files:
+        try:
+            with h5py.File(file, 'r') as f:
+                smoothfiles['files'][file] = {'shape': f['data'].shape,
+                                        'completed': False,
+                                        'dtype': f['data'].dtype.name}
+                x, y, z = [int(i / 2) for i in f['data'].shape[:3]]
+                tpvals = [f['data'][x, y, z, i] for i in range(f['data'].shape[-1])]
+                if all(i > 0 for i in tpvals):
+                    smoothfiles['files'][file]['completed'] = True
+        except OSError:
+            smoothfiles['files'][file] = {'completed': False}
+    return(smoothfiles)
 
 
 def check_STA(funcdir):
@@ -130,7 +143,7 @@ def check_STA(funcdir):
     if not os.path.exists(STA_dir):
         return None
 
-    sta_files = [i.as_posix() for i in Path(STA_dir).glob('sta*.npy')]
+    sta_files = [i.as_posix() for i in Path(STA_dir).glob('sta*.png')]
 
     if len(sta_files) == 0:
         return None
@@ -150,12 +163,22 @@ def check_regression(funcdir):
     else:
         results = {}
         for reg_dir in reg_dirs:
+            print(f'checking for {os.path.join(regression_dir, reg_dir, "rsquared.png")}')
             if os.path.exists(
-                os.path.join(regression_dir, reg_dir, 'rsquared.nii')
+                os.path.join(regression_dir, reg_dir, 'rsquared.png')
             ):
-                results[reg_dir] = {'completed': True}
-                # TODO: get some summary stats
-        # NEED TO CHECK FOR FILES!
+                results[reg_dir] = {
+                    'completed': True,
+                    'label': os.path.basename(reg_dir),
+                    'rsquared': os.path.join(reg_dir, 'rsquared.png'),
+                    'desmtx': os.path.join(reg_dir, f'{os.path.basename(reg_dir)}_desmtx.csv')
+                }
+                pval_files = [i.as_posix() for i in Path(reg_dir).glob('1-p*.png')]
+                results[reg_dir]['pvals'] = {}
+                if len(pval_files) > 0:
+                    for pval_file in pval_files:
+                        key = os.path.basename(pval_file).replace('1-p_', '').split('.')[0]
+                        results[reg_dir]['pvals'][key] = pval_file
         return(results)
 
 
@@ -191,14 +214,17 @@ def check_moco(funcdir):
     # heuristic to catch empty values if moco dies part way through
     moco_info['files'] = {}
     for moco_file in moco_files:
-        with h5py.File(moco_file, 'r') as f:
-            moco_info['files'][moco_file] = {'shape': f['data'].shape,
-                                    'completed': False}
-            x, y, z = [int(i / 2) for i in f['data'].shape[:3]]
-            tpvals = [f['data'][x, y, z, i] for i in range(f['data'].shape[-1])]
-            if all(i > 0 for i in tpvals):
-                moco_info['files'][moco_file]['completed'] = True
-
+        try:
+            with h5py.File(moco_file, 'r') as f:
+                moco_info['files'][moco_file] = {'shape': f['data'].shape,
+                                        'completed': False,
+                                        'dtype': f['data'].dtype.name}
+                x, y, z = [int(i / 2) for i in f['data'].shape[:3]]
+                tpvals = [f['data'][x, y, z, i] for i in range(f['data'].shape[-1])]
+                if all(i > 0 for i in tpvals):
+                    moco_info['files'][moco_file]['completed'] = True
+        except OSError:
+            moco_info['files'][moco_file] = {'completed': False}
     return(moco_info)
 
 
@@ -206,15 +232,18 @@ def check_imaging(funcdir):
     imaging_dir = os.path.join(funcdir, 'imaging')
     if not os.path.exists(imaging_dir):
         return None
-    imaging_info = {}
+    imaging_info = {'files': {}}
     infofile = os.path.join(imaging_dir, 'scan.json')
     if os.path.exists(infofile):
         with open(infofile) as f:
             imaging_info['scan'] = json.load(f)
-    imaging_info['files'] = [
+    imgfiles = [
         os.path.join(imaging_dir, f) for f in os.listdir(imaging_dir)
         if re.search(r'(functional|anatomy)_channel_(1|2).nii', f)]
-    imaging_info['files'].sort()
+    imgfiles.sort()
+    for file in imgfiles:
+        img = nib.load(file)
+        imaging_info['files'][file] = {'dtype': img.header.get_data_dtype().name}
     return imaging_info
 
 
@@ -253,7 +282,10 @@ def check_visual(funcdir):
 def check_fictrac(fictrac_dir):
     if not os.path.exists(fictrac_dir):
         return None
-    fictrac_data = load_fictrac(fictrac_dir)
+    try:
+        fictrac_data = load_fictrac(fictrac_dir)
+    except FileNotFoundError:
+        return None
 
     fictrac_info = {'dir': fictrac_dir,
                     'shape': fictrac_data.shape}
@@ -281,8 +313,8 @@ def check_all_status(flyinfo):
                 print("No imaging data found")
             else:
                 print('Found imaging files:')
-                for file in dirinfo['imaging']['files']:
-                    print(f'    {os.path.basename(file)}')
+                for file, info in dirinfo['imaging']['files'].items():
+                    print(f'    {os.path.basename(file)} {info["dtype"]}')
 
             if dirtype == 'func' and dirinfo['fictrac'] is None:
                 print("No fictrac data found")
@@ -327,15 +359,15 @@ def check_all_status(flyinfo):
                     print("Motion correction incomplete")
                 else:
                     print('Motion correction complete')
-                    for file in dirinfo['moco']['files']:
-                        print(f'    {os.path.basename(file)}')
+                    for file, info in dirinfo['moco']['files'].items():
+                        print(f'    {os.path.basename(file)} {info["dtype"]}')
 
-                if dirinfo['smoothing'] is None:
-                    print("No smoothed data found")
-                else:
-                    print("Smoothing complete")
-                    for file in dirinfo['smoothing']['files']:
-                        print(f'    {os.path.basename(file)}')
+            if dirinfo['smoothing'] is None and dirtype == 'func':
+                print("No smoothed data found")
+            elif dirtype == 'func':
+                print("Smoothing complete")
+                for file, info in dirinfo['smoothing']['files'].items():
+                    print(f'    {os.path.basename(file)} {info["dtype"]}')
 
             if dirinfo['regression'] is None and dirtype == 'func':
                 print("No regression results found")
@@ -372,7 +404,7 @@ if __name__ == "__main__":
     assert os.path.exists(args.dir), f"Directory {args.dir} does not exist"
     print(f'Checking status of building/preprocessing for {args.dir}')
 
-    flyinfo = get_flyinfo(args.dir)
+    flyinfo = {'metadata': get_flyinfo(args.dir)}
 
     flyinfo['conversion'] = get_conversion_info(args.dir)
 
