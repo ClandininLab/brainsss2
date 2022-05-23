@@ -25,4 +25,4 @@ if __name__ == "__main__":
     if not os.path.exists(outdir):
         os.mkdir(outdir)
     logging.info(f'saving results to {outdir}')
-    data_mean = get_bleaching_curve(data_mean, outdir)
+    save_file = get_bleaching_curve(data_mean, outdir)
