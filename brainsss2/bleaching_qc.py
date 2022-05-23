@@ -30,7 +30,9 @@ def parse_args(input, allow_unknown=True):
 
 def load_data(args):
     """determine directory type and load data"""
-    files = [f.as_posix() for f in Path(args.dir).glob("*_channel*.nii") if 'mean' not in f.as_posix()]
+    imaging_dir = os.path.join(args.dir, 'imaging')
+    files = [f.as_posix() for f in Path(imaging_dir).glob("*_channel*.nii") if 'mean' not in f.as_posix()]
+    assert len(files) > 0, "No imaging files found"
     data_mean = {}
     for file in files:
         if args.verbose:
