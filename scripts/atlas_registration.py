@@ -5,6 +5,7 @@
 import os
 import sys
 import ants
+import json
 import logging
 from brainsss2.argparse_utils import get_base_parser, add_moco_arguments # noqa
 from brainsss2.logging_utils import setup_logging # noqa
@@ -60,8 +61,6 @@ def parse_args(input, allow_unknown=True):
     )
     if allow_unknown:
         args, unknown = parser.parse_known_args()
-        if unknown is not None:
-            print(f'skipping unknown arguments:{unknown}')
     else:
         args = parser.parse_args()
 
@@ -84,18 +83,22 @@ if __name__ == "__main__":
     args = setup_logging(args, logtype="atlasreg")
 
     registration_dir = os.path.join(args.dir, "registration")
-    if not os.path.exists(registration_dir):
-        os.mkdir(registration_dir)
-    elif args.overwrite:
+    setattr(args, "registration_dir", registration_dir)
+    if args.overwrite and os.path.exists(registration_dir):
         print(f"overwriting existing registration in {registration_dir}")
         shutil.rmtree(registration_dir)
-    else:
+    elif os.path.exists(registration_dir):
         raise FileExistsError(f"registration dir {registration_dir} already exists, use -o to overwrite")
+    
+    if not os.path.exists(registration_dir):
+        os.mkdir(registration_dir)
+        
 
     if args.transformdir is None:
         args.transformdir = os.path.join(registration_dir, 'transforms')
     if not os.path.exists(args.transformdir):
         os.mkdir(args.transformdir)
+    setattr(args, "transformdir", args.transformdir)
 
     filestem = os.path.basename(args.funcfile).split('.')[0]
 
@@ -122,6 +125,7 @@ if __name__ == "__main__":
         registration_dir,
         os.path.basename(args.anatfile).replace('.nii', f'_space-{args.atlasname}.nii')
     )
+    setattr(args, "mean_reg_to_atlas_file", mean_reg_to_atlas_file)
     anat_to_atlas['warpedmovout'].to_filename(mean_reg_to_atlas_file)
 
     # save transformed atlas to mean space
@@ -129,6 +133,7 @@ if __name__ == "__main__":
         registration_dir,
         os.path.basename(args.atlasfile).replace('.nii', '_space-anat.nii')
     )
+    setattr(args, "atlas_to_mean_reg_file", atlas_to_mean_reg_file)
     anat_to_atlas['warpedfixout'].to_filename(atlas_to_mean_reg_file)
 
     # then register functional channel 1 mean to anat channel 1 mean
@@ -150,6 +155,7 @@ if __name__ == "__main__":
         registration_dir,
         os.path.basename(args.funcfile).replace('.nii', '_space-anat.nii')
     )
+    setattr(args, "func_reg_to_anat_file", func_reg_to_anat_file)
     func_to_anat['warpedmovout'].to_filename(func_reg_to_anat_file)
 
     # save inverse
@@ -157,6 +163,7 @@ if __name__ == "__main__":
         registration_dir,
         os.path.basename(args.anatfile).replace('.nii', '_space-func.nii')
     )
+    setattr(args, "anat_reg_to_func_file", anat_reg_to_func_file)
     func_to_anat['warpedfixout'].to_filename(anat_reg_to_func_file)
 
     # warp atlas to func space
@@ -168,6 +175,11 @@ if __name__ == "__main__":
         registration_dir,
         os.path.basename(args.atlasfile).replace('.nii', '_space-func.nii')
     )
+    setattr(args, "atlas_to_func_file", atlas_to_func_file)
     atlas_to_func.to_filename(atlas_to_func_file)
 
+    setattr(args, 'completed', True)
+    delattr(args, 'file_handler')  # not serializable
+    with open(os.path.join(registration_dir, 'registration.json'), 'w') as f:
+        json.dump(vars(args), f, indent=4)
     logging.info("Completed atlas registration")
