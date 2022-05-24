@@ -127,7 +127,7 @@ def add_builder_arguments(parser):
         help='identifier for atlas space for atlasreg')
     parser.add_argument('--atlasdir',
         type=str,
-        default='/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/anat_templates'
+        default='/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/anat_templates',
         help='directory containing atlas files for atlasreg')
     parser.add_argument(
         "--fictrac_import_dir",
