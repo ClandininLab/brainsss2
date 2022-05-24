@@ -363,7 +363,14 @@ def process_fly(args):
     for stepname, step_args_dict in workflow_dict.items():
         logging.info(f'running step: {step_args_dict["script"]}')
         args.dir = args.process  # NOTE: this is bad and confusing, but would take work to fix
-        run_preprocessing_step(step_args_dict['script'], args, step_args_dict)
+        step_output = run_preprocessing_step(step_args_dict['script'], args, step_args_dict)
+        if step_output is None:
+            logging.error(f'{step_args_dict["script"]} failed')
+            raise Exception(f'{step_args_dict["script"]} failed')
+        for key, value in step_output.items():
+            if value != 'COMPLETED':
+                logging.error(f'{step_args_dict["script"]} failed')
+                raise Exception(f'{step_args_dict["script"]} failed')
 
 
 def setup_build_dirs(args):
