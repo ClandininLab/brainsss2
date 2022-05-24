@@ -238,7 +238,7 @@ def process_fly(args):
             'script': 'bleaching_qc.py',
             'basedir': args.basedir,
             'dir': args.process,
-            'cores': 2
+            'cores': 16
         }
 
     if args.motion_correction in ['func', 'both'] or args.run_all:
