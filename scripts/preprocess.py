@@ -193,7 +193,6 @@ def run_preprocessing_step(script, args, args_dict):
     logging.info(f'Completed step: {stepname}')
 
     if saved_handlers:
-        print('reinstating saved_handlers', saved_handlers)  # FOR DEBUGGING
         reinstate_file_handlers(saved_handlers)
     else:
         logging.warning('no saved handlers found')

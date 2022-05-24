@@ -20,7 +20,6 @@ def remove_existing_file_handlers():
     logger = logging.getLogger()
     saved_handlers = []
     for h in logger.handlers:
-        print(h)
         if isinstance(h, logging.FileHandler):
             saved_handlers.append(h)
             logging.getLogger().removeHandler(h)
