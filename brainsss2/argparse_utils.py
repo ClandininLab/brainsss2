@@ -120,13 +120,14 @@ def add_builder_arguments(parser):
         '--atlasfile',
         type=str,
         help='atlas file for atlasreg',
-        default='20220301_luke_2_jfrc_affine_fixed_2um.nii')
+        default='20220301_luke_2_jfrc_affine_zflip_2umiso.nii')
     parser.add_argument('--atlasname',
         type=str,
         default='jfrc',
         help='identifier for atlas space for atlasreg')
     parser.add_argument('--atlasdir',
         type=str,
+        default='/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/anat_templates'
         help='directory containing atlas files for atlasreg')
     parser.add_argument(
         "--fictrac_import_dir",
