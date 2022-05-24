@@ -4,10 +4,11 @@ import os
 import json
 import shutil
 import nibabel as nib
+import numpy as np
 import nilearn.plotting
 import seaborn as sns
 import pandas as pd
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 
 
 # generic class to create an object from a dictionary
@@ -57,7 +58,7 @@ class DataDir:
                 self.smoothed_files = data_dict['smoothing']['files']
             else:
                 self.smoothed_files = {}
-        
+
             if 'regression' in data_dict and data_dict['regression'] is not None:
                 regdir = os.path.join('images', self.label, 'regression')
                 regdir_full = os.path.join(reportdir, regdir)
@@ -79,12 +80,12 @@ class DataDir:
                         self.regression_pvals = {}
                         # make desmtx correlation plot
                         desmtx = pd.read_csv(model['desmtx'])
-                        fig = plt.figure(figsize=(10,10))
+                        fig = plt.figure(figsize=(10, 10))
                         ax = plt.gca()
-                        ccmap = sns.heatmap(desmtx.corr(), cmap='viridis', ax=ax)
+                        _ = sns.heatmap(desmtx.corr(), cmap='viridis', ax=ax)
                         fig.tight_layout(rect=[0, 0, .9, 1])
                         fig.savefig(os.path.join(regdir_full, 'desmtx_corr.png'))
-                        del fig, ax, ccmap
+                        del fig, ax
                         self.regression_model_desmtx_corr = os.path.join(regdir, 'desmtx_corr.png')
                         self.regression_model_rsquared = os.path.join(
                             regdir, 'confound_rsquared.png')
@@ -95,6 +96,34 @@ class DataDir:
                             self.regression_pvals[k] = os.path.join(regdir, k + '.png')
             else:
                 self.regression = None
+
+            if 'atlasreg' in data_dict and data_dict['atlasreg'] is not None:
+                regdir = os.path.join('images', self.label, 'registration')
+                regdir_full = os.path.join(reportdir, regdir)
+                if not os.path.exists(regdir_full):
+                    os.makedirs(regdir_full)
+                self.registration = Item(data_dict['atlasreg'])
+                # create png images for the registration outcomes
+                # first create original anatomical image
+                anat_img = nib.load(os.path.join(self.registration.dir, self.registration.anatfile))
+                self.registration.orig_anat_file_png = os.path.join(regdir, 'orig_anat.png')
+                cut_coords = cut_coords = np.arange(8, 49, 8) * anat_img.header.get_zooms()[2]
+                nilearn.plotting.plot_anat(anat_img, cut_coords=cut_coords,
+                    display_mode='z', draw_cross=False,
+                    output_file=os.path.join(regdir_full, 'orig_anat.png'))
+                # then create functional image aligned to anatomy
+                func_img = nib.load(self.registration.func_reg_to_anat_file)
+                self.registration.func_to_anat_png = os.path.join(regdir, 'func_to_anat.png')
+                nilearn.plotting.plot_anat(func_img, cut_coords=cut_coords,
+                    display_mode='z', draw_cross=False,
+                    output_file=os.path.join(regdir_full, 'func_to_anat.png'))
+                # then create atlas aligned to anatomy
+                atlas_img = nib.load(self.registration.atlas_to_mean_reg_file)
+                self.registration.atlas_to_anat_png = os.path.join(regdir, 'atlas_to_anat.png')
+                nilearn.plotting.plot_anat(atlas_img, cut_coords=cut_coords,
+                    display_mode='z', draw_cross=False,
+                    output_file=os.path.join(regdir_full, 'atlas_to_anat.png'))
+
 
         self.moco_completed = data_dict['moco']['completed']
         if not self.moco_completed:
@@ -108,16 +137,6 @@ class DataDir:
 
         self.moco_plot = os.path.join(imgdir, 'motion_correction.png')
         self.moco_files = data_dict['moco']['files']
-
-        if 'atlasreg' in data_dict and data_dict['atlasreg'] is not None:
-            regdir = os.path.join('images', self.label, 'registration')
-            regdir_full = os.path.join(reportdir, regdir)
-            if not os.path.exists(regdir_full):
-                os.makedirs(regdir_full)
-            self.registration = data_dict['atlasreg']
-            #for key, img in self.registration.items():
-                #shutil.copy(img, regdir_full)
-                #setattr(self, key.replace('.png', ''), os.path.join(regdir, key))
 
 
 if __name__ == '__main__':
