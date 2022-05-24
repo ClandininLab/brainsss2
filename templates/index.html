@@ -1,0 +1,137 @@
+
+    <h1>{{ h1 }}</h1>
+     
+    <h2>Fly metadata (from fly.json)</h2>
+    <ul>
+    {% for key, value in fly_metadata.items() %}
+    <li>{{key}}: {{ value }}</li>
+    {% endfor %}    
+    </ul>
+
+    <h2>Anatomical data</h2>
+    {% for key, value in anat_info.items() %}
+    <h3>{{key}}</h3>
+    <h4>Raw data files:</h4>
+    <ul>
+    {% for key2, value2 in value['files'].items() %}
+    <li>{{key2}}: {{ value2 }}</li>
+    {% endfor %}
+    </ul>
+    {% if value.moco_completed %}
+    <h4>Motion correction results</h4>
+    <ul>
+    {% for key2, value2 in value['moco_files'].items() %}
+      <li>{{key2}}:</li>
+      <ul>
+      {% for key3, value3 in value2.items() %}
+      <li>{{key3}}: {{ value3 }}</li>
+      {% endfor %}
+      </ul>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    </ul>
+    <img src="{{ value.moco_plot }}" width="{{ imgwidth }}">
+    {% endfor %}
+     
+
+    <h2>Functional data</h2>
+    {% for key, value in func_info.items() %}
+    <h3>{{key}}</h3>
+
+    <h4>Raw data files:</h4>
+    <ul>
+    {% for key2, value2 in value['files'].items() %}
+    <li>{{key2}}: {{ value2 }}</li>
+    {% endfor %}
+    </ul>
+
+    {% if value.bleaching %}
+    <h4>Bleaching QC results</h4>
+    <img src="{{ value.bleaching_plot }}" height="{{ imgheight }}">
+
+    {% else %} 
+    <h4>No bleaching QC results present</h4>
+    {% endif %}
+
+
+    {% if value.fictrac %}
+    <h4>Fictrac QC results</h4>
+    <h5>Velocity trace</h5>
+    <img src="{{ value.fictrac_velocity_trace }}" height="{{ imgheight }}">
+    <h5>2D Histogram</h5>
+    <img src="{{ value.fictrac_2d_hist }}" height="{{ imgheight }}">
+    <h5>2D Histogram (fixed)</h5>
+    <img src="{{ value.fictrac_2d_hist_fixed }}" height="{{ imgheight }}">
+
+    {% else %} 
+    <h4>No Fictrac QC results present</h4>
+    {% endif %}
+  
+
+    {% if value.moco_completed %}
+    <h4>Motion correction results</h4>
+    <ul>
+    {% for key2, value2 in value['moco_files'].items() %}
+      <li>{{key2}}:</li>
+      <ul>
+      {% for key3, value3 in value2.items() %}
+      <li>{{key3}}: {{ value3 }}</li>
+      {% endfor %}
+      </ul>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    </ul>
+    <img src="{{ value.moco_plot }}" width="{{ imgwidth }}">
+
+
+    <h4>Smoothing results</h4>
+    <ul>
+    {% for key2, value2 in value['smoothed_files'].items() %}
+      <li>{{key2}}:</li>
+      <ul>
+      {% for key3, value3 in value2.items() %}
+      <li>{{key3}}: {{ value3 }}</li>
+      {% endfor %}
+      </ul>
+    {% endfor %}
+    </ul>
+    
+    <h4>Regression results: Confound model</h4>
+    <h5>R-squared</h5>
+    <img src="{{ value.regression_confound_rsquared }}" width="{{ imgwidth }}">
+
+    <h4>Regression results: Rotlab model</h4>
+    <h5>Design matrix correlation</h5>
+    <img src="{{ value.regression_model_desmtx_corr }}" width="{{ 500 }}">
+
+    <h5>R-squared</h5>
+    <img src="{{ value.regression_model_rsquared }}" width="{{ imgwidth }}">
+
+    {% for key2, value2 in value.regression_pvals.items() %}
+    <h5>p-values (FDR-corrected) for {{key2}}</h5>
+    <img src="{{ value2 }}" width="{{ imgwidth }}">
+    {% endfor %}
+
+    {% if value['registration']['completed'] %}
+    <h4>Atlas registration results</h4>
+    <ul>
+    <li>atlas name: {{ value.registration.atlasname }}</li>
+    <li>type of transform: {{ value.registration.type_of_transform }}</li>
+    <li>interpolation method: {{ value.registration.interpolation_method }}</li>
+    <li>flow sigma: {{ value.registration.flow_sigma }}</li>
+    <li>total sigma: {{ value.registration.total_sigma }}</li>
+    </ul>
+    <h5>Original anatomical space</h5>
+    <img src="{{ value.registration.orig_anat_file_png }}" width="{{ imgwidth }}">
+    <h5>Functional image aligned to anatomical space</h5>
+    <img src="{{ value.registration.func_to_anat_png }}" width="{{ imgwidth }}">
+    <h5>Atlas image aligned to anatomical space</h5>
+    <img src="{{ value.registration.atlas_to_anat_png }}" width="{{ imgwidth }}">
+
+    {% else %}
+    <h4>No atlas registration results</h4>
+    {% endif %}
+
+{% endfor %}
