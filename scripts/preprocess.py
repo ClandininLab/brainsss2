@@ -238,7 +238,7 @@ def process_fly(args):
             'script': 'bleaching_qc.py',
             'basedir': args.basedir,
             'dir': args.process,
-            'cores': 16
+            'cores': min(16, get_max_slurm_cpus())
         }
 
     if args.motion_correction in ['func', 'both'] or args.run_all:
@@ -281,7 +281,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'fwhm': args.fwhm,
             'dir': args.dir,
-            'cores': min(args.cores, 8),
+            'cores': min(args.cores, 8, get_max_slurm_cpus()),
             'file': os.path.join(
                 args.process,
                 'func_0/preproc/functional_channel_2_moco.h5'
@@ -295,7 +295,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'dir': args.process,
             'overwrite': True,
-            'cores': min(args.cores, 8),
+            'cores': min(args.cores, 8, get_max_slurm_cpus()),
             'label': 'model001_dRotLabXYZ',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1,
@@ -307,7 +307,7 @@ def process_fly(args):
             'overwrite': True,
             'dir': args.process,
             'save_residuals': True,
-            'cores': min(args.cores, 8),
+            'cores': min(args.cores, 8, get_max_slurm_cpus()),
             'label': 'model000_confound',
             'confound_files': 'preproc/framewise_displacement.csv',
             'time_hours': 1
@@ -319,7 +319,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': True,
             'dir': args.process,
-            'cores': min(args.cores, 8),
+            'cores': min(args.cores, 8, get_max_slurm_cpus()),
             'time_hours': 1
         }
 
@@ -339,7 +339,7 @@ def process_fly(args):
             'atlasname': 'jfrc',
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': min(args.cores, 8),
+            'cores': min(args.cores, 8, get_max_slurm_cpus()),
             'time_hours': 8
         }
     # align_anat
@@ -351,7 +351,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': min(args.cores, 8),
+            'cores': min(args.cores, 8, get_max_slurm_cpus()),
             'time_hours': 1
         }
 
