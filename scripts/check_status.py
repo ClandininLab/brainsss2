@@ -93,12 +93,15 @@ def check_atlasreg(funcdir):
     )
     if not os.path.exists(atlasreg_dir):
         return None
-    reg_files = [i.as_posix() for i in Path(atlasreg_dir).glob('*nii')]
+    reg_files = [i.as_posix() for i in Path(atlasreg_dir).glob('registration.json')]
 
     if len(reg_files) == 0:
         return None
     else:
-        return({'files': {i: {} for i in reg_files}})
+        with open(reg_files[0]) as f:
+            reg_info = json.load(f)
+            reg_info['files'] = {i: {} for i in reg_files}
+        return(reg_info)
 
 
 def check_supervoxels(funcdir):
@@ -173,7 +176,7 @@ def check_regression(funcdir):
                     'rsquared': os.path.join(reg_dir, 'rsquared.png'),
                     'desmtx': os.path.join(reg_dir, f'{os.path.basename(reg_dir)}_desmtx.csv')
                 }
-                pval_files = [i.as_posix() for i in Path(reg_dir).glob('1-p*.png')]
+                pval_files = [i.as_posix() for i in Path(reg_dir).glob('fdr_1-p*.png')]
                 results[reg_dir]['pvals'] = {}
                 if len(pval_files) > 0:
                     for pval_file in pval_files:
