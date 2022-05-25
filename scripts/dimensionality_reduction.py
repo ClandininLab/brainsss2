@@ -58,6 +58,31 @@ def plot_comps(comps, varexp, compts, args):
     compts_df.to_csv(os.path.join(args.outdir, 'PCA_components.csv'))
 
 
+def load_masked_data(datafile, maskfile):
+    alldata = None
+    if 'h5' in datafile:
+        f = h5py.File(datafile, 'r')
+        dataobj = f['data']
+    elif 'nii' in datafile:
+        f = nib.load(datafile)
+        dataobj = f.dataobj
+    else:
+        raise ValueError('Unknown data file type')
+
+    for slice in range(dataobj.shape[2]):
+        data_slice, mask_slice = get_transformed_data_slice(
+            dataobj[:, :, slice, :],
+            mask_img.dataobj[:, :, slice]
+        )
+        if data_slice is None:
+            continue
+        if alldata is None:
+            alldata = data_slice.T
+        else:
+            alldata = np.concatenate((alldata, data_slice.T), axis=1)
+    return(alldata)
+
+
 if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
 
@@ -75,33 +100,14 @@ if __name__ == '__main__':
 
     # load data
     print('Loading data...')
-    alldata = None
-    if 'h5' in args.datafile:
-        f = h5py.File(args.datafile, 'r')
-        dataobj = f['data']
-    elif 'nii' in args.datafile:
-        f = nib.load(args.datafile)
-        dataobj = f.dataobj
-    else:
-        raise ValueError('Unknown data file type')
+    alldata = load_masked_data(args.datafile, args.maskfile)
 
-    for slice in range(dataobj.shape[2]):
-        data_slice, mask_slice = get_transformed_data_slice(
-            dataobj[:, :, slice, :],
-            mask_img.dataobj[:, :, slice]
-        )
-        if data_slice is None:
-            continue
-        if alldata is None:
-            alldata = data_slice.T
-        else:
-            alldata = np.concatenate((alldata, data_slice.T), axis=1)
 
     print('Performing PCA...')
-    pca = PCA(n_components=args.ncomps, svd_solver='randomized')
-    pca.fit(alldata)
     alldata = alldata - np.mean(alldata, axis=0)
     alldata = alldata / np.std(alldata, axis=0)
+    pca = PCA(n_components=args.ncomps, svd_solver='randomized')
+    pca.fit(alldata)
     scale_comps = scale(pca.components_, axis=1)
     comp_timeseries = alldata.dot(scale_comps.T)/alldata.shape[1]
 
