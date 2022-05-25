@@ -58,8 +58,6 @@ def parse_args(input, allow_unknown=True):
     parser.add_argument('--std_betas', action='store_true', help='normalize regressors')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
-        if unknown is not None:
-            print(f'skipping unknown arguments:{unknown}')
     else:
         args = parser.parse_args()
     return args
