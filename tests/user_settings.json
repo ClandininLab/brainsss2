@@ -1,0 +1,5 @@
+{
+    "motion_correction_func": {
+        "type_of_transform": "Rigid"
+    }
+}
