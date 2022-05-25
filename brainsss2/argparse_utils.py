@@ -216,4 +216,11 @@ def add_dr_args(parser):
         help='func dir to process')
     parser.add_argument('--imgwidth', type=int, default=800)
     parser.add_argument('--imgheight', type=int, default=350)
+    parser.add_argument('--datafile', type=str,
+        default='preproc/functional_channel_2_moco_smooth-2.0mu.h5',
+        help='func data file subpath (defaults to preproc/functional_channel_2_moco_smooth-2.0mu.h5')
+    parser.add_argument('--meanfile', type=str,
+        default='preproc/functional_channel_1_moco_mean.nii')
+    parser.add_argument('--maskfile', type=str,
+        default='preproc/functional_channel_1_moco_mask.nii')
     return(parser)
