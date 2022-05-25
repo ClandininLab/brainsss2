@@ -9,7 +9,7 @@ import os
 import logging
 import datetime
 from pathlib import Path
-
+import json
 from brainsss2.argparse_utils import add_moco_arguments
 from brainsss2.logging_utils import (
     setup_logging,
@@ -55,6 +55,8 @@ def parse_args(input):
         help="base directory for fly data",
         required=True)
 
+    # set up base parser, and then loading in separate arguments for
+    # each processing step
     parser = add_builder_arguments(parser)
 
     parser = add_preprocess_arguments(parser)
@@ -69,7 +71,16 @@ def parse_args(input):
 
 
 def build_fly(args):
-    """build a single fly"""
+    """build a single fly directory
+
+    Parameters:
+        args {argparse.Namespace}:
+            parsed arguments from main script
+
+    Returns:
+        flydir {str}:
+            path to fly directory
+    """
     logging.info(f"building flies from {args.import_path}")
 
     assert args.import_date is not None, "no import date specified"
@@ -115,7 +126,16 @@ def build_fly(args):
 
 
 def get_dirs_to_process(args):
-    """get the directories to process from the fly directory"""
+    """get the directories to process from the fly directory
+
+    Parameters:
+        args {argparse.Namespace}:
+            parsed arguments from main script
+
+    Returns:
+        dirs_to_process {dict}:
+            dictionary of directories to process
+    """
     return {
         'func': [i.as_posix() for i in Path(args.process).glob('func_*')],
         'anat': [i.as_posix() for i in Path(args.process).glob('anat_*')]
@@ -133,13 +153,18 @@ def run_preprocessing_step(script, args, args_dict):
         args_dict {dict}:
             dictionary of arguments to pass to step script
 
-        """
+    Returns:
+        output {str}:
+            output from step script
+    """
     stepname = script.split(".")[0]
     logging.info(f"running {stepname}")
 
     if 'dirtype' in args_dict and args_dict['dirtype'] is not None:
         args.dirtype = args_dict['dirtype']
     else:
+        # assume func if not specified
+        # this requires that dirtype is always set for anat dirs
         args.dirtype = 'func'
 
     procdirs = get_dirs_to_process(args)[args.dirtype]
@@ -148,9 +173,9 @@ def run_preprocessing_step(script, args, args_dict):
     assert len(procdirs) > 0, "no func directories found, somethign has gone wrong"
 
     sbatch = {}
-    # saved_handlers = []
+
+    # turn off previous logging handlers
     saved_handlers = remove_existing_file_handlers()
-    print('run_preprocessing_step - saved_handlers', saved_handlers)  # FOR DEBUGGING
 
     for procdir in procdirs:
         if args.dirtype == 'func' and args.func_dirs is not None and procdir.split('/')[-1] not in args.func_dirs:
@@ -175,16 +200,14 @@ def run_preprocessing_step(script, args, args_dict):
         args_dict['dir'] = procdir
         args_dict['verbose'] = args.verbose
         args_dict['logfile'] = logfile
-        args.dir = procdir
 
         sbatch[procdir] = SlurmBatchJob(stepname, script,
                                         user_args=args_dict,
                                         local=args.local)
         sbatch[procdir].run()
-        # if hasattr(sbatch[procdir], 'saved_handlers'):
-        #     saved_handlers.extend(sbatch[procdir].saved_handlers)
 
     output = {}
+    # loop through processes, waiting for each one
     for procdir, job in sbatch.items():
         job.wait()
         output[procdir] = job.status()
@@ -192,6 +215,7 @@ def run_preprocessing_step(script, args, args_dict):
 
     logging.info(f'Completed step: {stepname}')
 
+    # hand logging back to the previous handlers
     if saved_handlers:
         reinstate_file_handlers(saved_handlers)
     else:
@@ -201,7 +225,16 @@ def run_preprocessing_step(script, args, args_dict):
 
 
 def process_fly(args):
-    """process a single fly"""
+    """perform preprocessing on a single fly
+
+    Parameters:
+        args {argparse.Namespace}:
+            parsed arguments from main script
+
+    Returns:
+        workflow_dict {dict}:
+            dictionary of workflow specs
+    """
 
     assert os.path.exists(args.process)
     logging.info(f"processing fly from {args.process}")
@@ -370,9 +403,22 @@ def process_fly(args):
             if value != 'COMPLETED':
                 logging.error(f'{step_args_dict["script"]} failed')
                 raise Exception(f'{step_args_dict["script"]} failed')
+    return(workflow_dict)
 
 
 def setup_build_dirs(args):
+    """setup args entries for build_dirs
+
+    Parameters:
+    -----------
+    args : argparse.Namespace
+        args object
+
+    Returns:
+    --------
+    args : argparse.Namespace
+        args object with entries for build_dirs
+    """
     assert args.import_date is not None, "must specify import_date for building"
 
     if args.import_dir is None:
@@ -442,4 +488,7 @@ if __name__ == "__main__":
     if args.process is not None:
         logging.info(f'processing {args.process}')
         setattr(args, 'script_path', os.path.dirname(os.path.realpath(__file__)))
-        process_fly(args)
+        workflow_dict = process_fly(args)
+
+    with open(os.path.join(args.process, 'preproc/preproc_workflow.json'), 'w') as f:
+        json.dump(workflow_dict, f, indent=4)
