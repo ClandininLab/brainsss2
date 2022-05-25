@@ -161,7 +161,7 @@ class DataDir:
                 comps = os.listdir(pcadir_full)
                 comps.sort()
                 for file in comps:
-                    if file.endswith('.png'):
+                    if file.endswith('.png') and file.startswith('PCA_comp'):
                         self.PCA[file.replace('.png', '')] = os.path.join(
                             'images', self.label, 'PCA', file)
 
@@ -211,10 +211,11 @@ def generate_report(args):
             imgwidth=args.imgwidth,
             imgheight=args.imgheight
         ))
+    return func_info, anat_info
 
 
 if __name__ == '__main__':
 
     args = parse_args(sys.argv[1:])
 
-    generate_report(args)
+    func_info, anat_info = generate_report(args)

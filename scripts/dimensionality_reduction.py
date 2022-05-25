@@ -3,11 +3,15 @@ import sys
 import nibabel as nib
 from nilearn.plotting import plot_stat_map
 import numpy as np
+import pandas as pd
 from brainsss2.regression_utils import get_transformed_data_slice
 import h5py
 import scipy.stats
 from brainsss2.argparse_utils import get_base_parser, add_dr_args
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import scale
+import matplotlib.pyplot as plt
+import json
 
 
 def parse_args(args, allow_unknown=True):
@@ -22,7 +26,7 @@ def parse_args(args, allow_unknown=True):
     return args
 
 
-def plot_comps(comps, varexp, args):
+def plot_comps(comps, varexp, compts, args):
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
@@ -44,38 +48,67 @@ def plot_comps(comps, varexp, args):
             display_mode='z', cut_coords=args.ncuts,
             title=f'PCA Component {compnum} ({100*varexp[compnum]:.03} % var)',
             output_file=os.path.join(args.outdir, f'PCA_comp_{compnum:03}.png'))
+        plt.figure(figsize=(12, 3))
+        plt.plot(comp_timeseries[:, compnum])
+        plt.title(f'PCA Component {compnum}')
+        plt.savefig(os.path.join(args.outdir, f'PCA_timeseries_comp_{compnum:03}.png'))
+
+    compts_df = pd.DataFrame(compts,
+        columns=[f'pc{compnum:03}' for compnum in range(args.ncomps)])
+    compts_df.to_csv(os.path.join(args.outdir, 'PCA_components.csv'))
 
 
 if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
 
-    setattr(args, 'datafile', os.path.join(args.dir, args.funcdir, 'preproc/functional_channel_2_moco.h5'))
+    # add paths to data files
+    setattr(args, 'datafile',
+        os.path.join(args.dir, args.funcdir, args.datafile))
 
-    setattr(args, 'meanfile', os.path.join(args.dir, args.funcdir, 'preproc/functional_channel_1_moco_mean.nii'))
+    setattr(args, 'meanfile',
+        os.path.join(args.dir, args.funcdir, args.meanfile))
 
-    setattr(args, 'maskfile', os.path.join(args.dir, args.funcdir, 'preproc/functional_channel_1_moco_mask.nii'))
+    setattr(args, 'maskfile',
+        os.path.join(args.dir, args.funcdir, args.maskfile))
 
     mask_img = nib.load(args.maskfile)
 
     # load data
     print('Loading data...')
     alldata = None
-    with h5py.File(args.datafile, 'r') as f:
-        for slice in range(f['data'].shape[2]):
-            data_slice, mask_slice = get_transformed_data_slice(f['data'][:, :, slice, :], mask_img.dataobj[:, :, slice])
-            if data_slice is None:
-                continue
-            if alldata is None:
-                alldata = data_slice.T
-            else:
-                alldata = np.concatenate((alldata, data_slice.T), axis=1)
+    if 'h5' in args.datafile:
+        f = h5py.File(args.datafile, 'r')
+        dataobj = f['data']
+    elif 'nii' in args.datafile:
+        f = nib.load(args.datafile)
+        dataobj = f.dataobj
+    else:
+        raise ValueError('Unknown data file type')
+
+    for slice in range(dataobj.shape[2]):
+        data_slice, mask_slice = get_transformed_data_slice(
+            dataobj[:, :, slice, :],
+            mask_img.dataobj[:, :, slice]
+        )
+        if data_slice is None:
+            continue
+        if alldata is None:
+            alldata = data_slice.T
+        else:
+            alldata = np.concatenate((alldata, data_slice.T), axis=1)
 
     print('Performing PCA...')
     pca = PCA(n_components=args.ncomps, svd_solver='randomized')
     pca.fit(alldata)
+    alldata = alldata - np.mean(alldata, axis=0)
+    alldata = alldata / np.std(alldata, axis=0)
+    scale_comps = scale(pca.components_, axis=1)
+    comp_timeseries = alldata.dot(scale_comps.T)/alldata.shape[1]
 
     print('Plotting components...')
     if args.outdir is None:
         args.outdir = os.path.join(args.dir, f'report/images/{args.funcdir}/PCA')
-    plot_comps(pca.components_, pca.explained_variance_ratio_,
+    plot_comps(pca.components_, pca.explained_variance_ratio_, comp_timeseries,
         args)
+    with open(os.path.join(args.outdir, 'PCA.json'), 'w') as f:
+        json.dump(vars(args), f)
