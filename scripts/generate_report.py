@@ -124,6 +124,31 @@ class DataDir:
                     display_mode='z', draw_cross=False,
                     output_file=os.path.join(regdir_full, 'atlas_to_anat.png'))
 
+            if 'STA' in data_dict and data_dict['STA'] is not None:
+                stadir = os.path.join('images', self.label, 'STA')
+                stadir_full = os.path.join(reportdir, stadir)
+                if not os.path.exists(stadir_full):
+                    os.makedirs(stadir_full)
+                self.STA = data_dict['STA']
+                for file in data_dict['STA']['files'].keys():
+                    imglabel = os.path.basename(file).replace('.png', '')
+                    shutil.copy(file, os.path.join(stadir_full, imglabel + '.png'))
+                    setattr(self, 'STA_' + imglabel, os.path.join(stadir, imglabel + '.png'))
+            else:
+                self.STA = None
+
+            # check for PCA results
+            pcadir_full = os.path.join(reportdir, 'images', self.label, 'PCA')
+            if not os.path.exists(pcadir_full):
+                self.PCA = None
+            else:
+                self.PCA = {}
+                comps = os.listdir(pcadir_full)
+                comps.sort()
+                for file in comps:
+                    if file.endswith('.png'):
+                        self.PCA[file.replace('.png', '')] = os.path.join(
+                            'images', self.label, 'PCA', file)
 
         self.moco_completed = data_dict['moco']['completed']
         if not self.moco_completed:

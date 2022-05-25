@@ -59,8 +59,6 @@
     <h4>Fictrac QC results</h4>
     <h5>Velocity trace</h5>
     <img src="{{ value.fictrac_velocity_trace }}" height="{{ imgheight }}">
-    <h5>2D Histogram</h5>
-    <img src="{{ value.fictrac_2d_hist }}" height="{{ imgheight }}">
     <h5>2D Histogram (fixed)</h5>
     <img src="{{ value.fictrac_2d_hist_fixed }}" height="{{ imgheight }}">
 
@@ -97,7 +95,16 @@
       </ul>
     {% endfor %}
     </ul>
-    
+  
+    {% if value.STA %}
+    <h4>Stimulus-triggered average results</h4>
+    <h5>0 degrees</h5>
+    <img src="{{ value.STA_sta_0 }}" width="{{ imgwidth }}">
+    <h5>180 degrees</h5>
+    <img src="{{ value.STA_sta_180 }}" width="{{ imgwidth }}">
+    {% endif %}
+
+
     <h4>Regression results: Confound model</h4>
     <h5>R-squared</h5>
     <img src="{{ value.regression_confound_rsquared }}" width="{{ imgwidth }}">
@@ -132,6 +139,13 @@
 
     {% else %}
     <h4>No atlas registration results</h4>
+    {% endif %}
+
+    {% if value['PCA'] %}
+    <h4>PCA results</h4>
+    {% for key2, value2 in value['PCA'].items() %}
+    <img src="{{ value2 }}" width="{{ imgwidth }}">
+    {% endfor %}
     {% endif %}
 
 {% endfor %}
