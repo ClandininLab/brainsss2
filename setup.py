@@ -8,7 +8,7 @@ setup(
     imaging data.  It is a refactor of https://github.com/ClandininLab/brainsss/
     """,
     packages=['brainsss2'],
-    package_data={'': ['templates/index.html']},
+    package_data={'': ['templates/index.html', 'settings/settings.json']},
     scripts=[
         'scripts/preprocess.py',
         'scripts/fly_builder.py',
