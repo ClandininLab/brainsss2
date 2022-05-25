@@ -199,3 +199,21 @@ def add_imgmath_arguments(parser):
     parser.add_argument('--fwhm', type=float, default=2.0,
         help='fwhm for smoothing')
     return(parser)
+
+
+def add_dr_args(parser):
+    parser.add_argument('--ncomps', type=int, default=10,
+        help='number of components to plot')
+    parser.add_argument('--ncuts', type=int, default=8,
+        help='number of cuts to plot')
+    parser.add_argument('--threshpct', type=int, default=90,
+        help='threshold percentile for plotting')
+    parser.add_argument('-d', '--dir', type=str, required=True,
+        help='fly directory')
+    parser.add_argument('--outdir', type=str,
+        help='output directory for plots (defaults to report/images/PCA)')
+    parser.add_argument('--funcdir', type=str, default='func_0',
+        help='func dir to process')
+    parser.add_argument('--imgwidth', type=int, default=800)
+    parser.add_argument('--imgheight', type=int, default=350)
+    return(parser)

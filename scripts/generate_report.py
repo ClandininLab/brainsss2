@@ -1,6 +1,7 @@
 # create static html report for fly preprocessing
 from jinja2 import Environment, FileSystemLoader
 import os
+import sys
 import json
 import shutil
 import nibabel as nib
@@ -9,6 +10,20 @@ import nilearn.plotting
 import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
+from brainsss2.argparse_utils import get_base_parser, add_dr_args
+import pkg_resources
+
+
+def parse_args(args, allow_unknown=True):
+    parser = get_base_parser('create html report')
+
+    parser = add_dr_args(parser)
+
+    if allow_unknown:
+        args, unknown = parser.parse_known_args()
+    else:
+        args = parser.parse_args()
+    return args
 
 
 # generic class to create an object from a dictionary
@@ -164,34 +179,25 @@ class DataDir:
         self.moco_files = data_dict['moco']['files']
 
 
-if __name__ == '__main__':
-
-    root = os.path.dirname(os.path.abspath(__file__))
-    templates_dir = os.path.join(os.path.dirname(root), 'templates')
+def generate_report(args):
+    templates_dir = pkg_resources.resource_filename('brainsss2', 'templates')
     env = Environment(loader=FileSystemLoader(templates_dir))
     template = env.get_template('index.html')
 
-    flynum = 'fly_001'
-    flydir = f'/data/brainsss/processed/{flynum}'
-    assert os.path.exists(flydir), f'{flydir} does not exist'
+    assert os.path.exists(args.dir), f'{args.dir} does not exist'
+    flynum = os.path.basename(args.dir)
 
-    metadata_file = os.path.join(flydir, 'fly_processing_info.json')
+    metadata_file = os.path.join(args.dir, 'fly_processing_info.json')
     assert os.path.exists(metadata_file), f'{metadata_file} does not exist'
     with open(metadata_file, 'r') as f:
         flyinfo = json.load(f)
 
-    reportdir = os.path.join(flydir, 'report')
+    reportdir = os.path.join(args.dir, 'report')
     if not os.path.exists(reportdir):
         os.mkdir(reportdir)
 
     anat_info = {k: DataDir(k, v, reportdir) for k, v in flyinfo['dirs']['anat'].items()}
     func_info = {k: DataDir(k, v, reportdir) for k, v in flyinfo['dirs']['func'].items()}
-
-    # # create slice images for anat and func means
-    # for k, v in anat_info.items():
-    #     for file in v.files:
-    #         print(f'loading file {file}')
-    #         img = nib.load(file)
 
     filename = os.path.join(reportdir, 'report.html')
     if os.path.exists(filename):
@@ -202,6 +208,13 @@ if __name__ == '__main__':
             fly_metadata=flyinfo['metadata'],
             anat_info=anat_info,
             func_info=func_info,
-            imgwidth=800,
-            imgheight=350
+            imgwidth=args.imgwidth,
+            imgheight=args.imgheight
         ))
+
+
+if __name__ == '__main__':
+
+    args = parse_args(sys.argv[1:])
+
+    generate_report(args)

@@ -6,23 +6,15 @@ import numpy as np
 from brainsss2.regression_utils import get_transformed_data_slice
 import h5py
 import scipy.stats
-from brainsss2.argparse_utils import get_base_parser
+from brainsss2.argparse_utils import get_base_parser, add_dr_args
 from sklearn.decomposition import PCA
 
 
 def parse_args(args, allow_unknown=True):
     parser = get_base_parser('dimensionality reduction')
-    parser.add_argument('--ncomps', type=int, default=10,
-        help='number of components to plot')
-    parser.add_argument('--ncuts', type=int, default=8,
-        help='number of cuts to plot')
-    parser.add_argument('--threshpct', type=int, default=90,
-        help='threshold percentile for plotting')
-    parser.add_argument('--basedir', type=str, required=True)
-    parser.add_argument('--outdir', type=str,
-        help='output directory for plots (defaults to report/images/PCA)')
-    parser.add_argument('--funcdir', type=str, default='func_0',
-        help='func dir to process')
+
+    parser = add_dr_args(parser)
+
     if allow_unknown:
         args, unknown = parser.parse_known_args()
     else:
@@ -57,11 +49,11 @@ def plot_comps(comps, varexp, args):
 if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
 
-    setattr(args, 'datafile', os.path.join(args.basedir, args.funcdir, 'preproc/functional_channel_2_moco.h5'))
+    setattr(args, 'datafile', os.path.join(args.dir, args.funcdir, 'preproc/functional_channel_2_moco.h5'))
 
-    setattr(args, 'meanfile', os.path.join(args.basedir, args.funcdir, 'preproc/functional_channel_1_moco_mean.nii'))
+    setattr(args, 'meanfile', os.path.join(args.dir, args.funcdir, 'preproc/functional_channel_1_moco_mean.nii'))
 
-    setattr(args, 'maskfile', os.path.join(args.basedir, args.funcdir, 'preproc/functional_channel_1_moco_mask.nii'))
+    setattr(args, 'maskfile', os.path.join(args.dir, args.funcdir, 'preproc/functional_channel_1_moco_mask.nii'))
 
     mask_img = nib.load(args.maskfile)
 
@@ -84,6 +76,6 @@ if __name__ == '__main__':
 
     print('Plotting components...')
     if args.outdir is None:
-        args.outdir = os.path.join(args.basedir, f'report/images/{args.funcdir}/PCA')
+        args.outdir = os.path.join(args.dir, f'report/images/{args.funcdir}/PCA')
     plot_comps(pca.components_, pca.explained_variance_ratio_,
         args)
