@@ -20,6 +20,7 @@ from brainsss2.logging_utils import (
 from collections import OrderedDict # noqa
 from brainsss2.preprocess_utils import ( # noqa
     load_user_settings_from_json,
+    load_default_settings_from_json,
     setup_modules,
     dict_to_args_list,
     run_shell_command
@@ -32,18 +33,8 @@ from brainsss2.argparse_utils import ( # noqa
     add_moco_arguments,
     add_imgmath_arguments
 )  # noqa
-from brainsss2.slurm import SlurmBatchJob  # noqa
+from brainsss2.slurm import SlurmBatchJob, get_max_slurm_cpus  # noqa
 from brainsss2.imgmath import imgmath  # noqa
-
-
-def get_max_slurm_cpus():
-    """get the max number of cpus for slurm"""
-    cmdout = run_shell_command("sinfo -h -o %C")
-    try:
-        maxcores = int(cmdout.strip().split('/')[-1])
-    except AttributeError:
-        maxcores = 1
-    return maxcores
 
 
 def parse_args(input):
@@ -319,7 +310,6 @@ def process_fly(args):
                 'func_0/preproc/functional_channel_2_moco.h5'
             )
         }
-        print('workflow_dict:', workflow_dict)
 
     if args.regression or args.run_all:
         workflow_dict['regression_XYZ'] = {
@@ -402,7 +392,8 @@ def process_fly(args):
         for key, value in step_output.items():
             if value != 'COMPLETED':
                 logging.error(f'{step_args_dict["script"]} failed')
-                raise Exception(f'{step_args_dict["script"]} failed')
+                if not args.continue_on_error:
+                    raise Exception(f'{step_args_dict["script"]} failed')
     return(workflow_dict)
 
 
@@ -470,8 +461,13 @@ if __name__ == "__main__":
     args = setup_logging(args, logtype='preprocess',
         logdir=os.path.join(args.basedir, "logs"))
 
+    args = load_default_settings_from_json(args)
+
     if not args.ignore_settings:
         args = load_user_settings_from_json(args)
+
+    if args.settings_file is not None:
+        args = load_user_settings_from_json(args, args.settings_file)
 
     if args.build:
         logging.info("building fly")
