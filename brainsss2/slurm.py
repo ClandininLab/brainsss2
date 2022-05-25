@@ -150,7 +150,8 @@ class SlurmBatchJob:
             logging.warning('Cannot wait for job - job not run')
 
         while True:
-            status = self.status().split('|')[0]
+            status = self.status()
+            status = status.split('|')[0] if status is not None else None
             if status is not None and status not in ['PENDING', 'RUNNING', 'CONFIGURING']:
                 status = self.status(return_full_output=True)
                 logger.info(f'Job {self.job_id} finished with status: {status}\n\n')
