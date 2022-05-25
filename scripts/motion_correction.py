@@ -5,6 +5,7 @@ import sys
 import json
 import logging
 import datetime
+import shutil
 from brainsss2.motion_correction import (
     parse_args,
     load_data,
@@ -36,7 +37,6 @@ if __name__ == '__main__':
     files, args = load_data(args)
 
     logging.info(f'files: {files}')
-
 
     if args.stepsize is None:
         args = set_stepsize(args)
@@ -74,5 +74,5 @@ if __name__ == '__main__':
         save_nii(args, h5_files)
 
     shutil.rmtree(args.temp_dir)
-    
+
     logging.info(f'Motion correction complete: {datetime.datetime.now()}')
