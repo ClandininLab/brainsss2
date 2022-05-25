@@ -171,6 +171,8 @@ def get_temp_dir(args):
             os.mkdir(args.temp_dir)
     else:
         setattr(args, 'temp_dir', '/tmp')
+
+    logging.info(f'using ants tmp dir {args.temp_dir}')
     return(args)
 
 

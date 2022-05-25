@@ -26,6 +26,8 @@ if __name__ == '__main__':
 
     args = parse_args(sys.argv[1:])
 
+    args = get_temp_dir(args)
+
     args = setup_logging(args, logtype='moco')
 
     args = create_moco_output_dir(args)
