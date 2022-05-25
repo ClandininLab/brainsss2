@@ -73,4 +73,6 @@ if __name__ == '__main__':
         logging.info('saving nifti')
         save_nii(args, h5_files)
 
+    shutil.rmtree(args.temp_dir)
+    
     logging.info(f'Motion correction complete: {datetime.datetime.now()}')
