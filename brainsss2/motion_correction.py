@@ -10,6 +10,8 @@ import ants
 import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
+import random
+import string
 from brainsss2.argparse_utils import get_base_parser, add_moco_arguments # noqa
 from brainsss2.logging_utils import setup_logging # noqa
 from brainsss2.h5_to_nii import h5_to_nii
@@ -163,14 +165,18 @@ def create_moco_output_dir(args):
     return(args)
 
 
+def get_random_hash(length=8):
+    return(''.join(random.choice(string.ascii_lowercase) for i in range(length)))
+
+
 def get_temp_dir(args):
     if 'SCRATCH' in os.environ:
         setattr(args, 'temp_dir',
-            os.path.join(os.environ['SCRATCH'], 'ants_tmp'))
-        if not os.path.exists(args.temp_dir):
-            os.mkdir(args.temp_dir)
+            os.path.join(os.environ['SCRATCH'], f'ants_tmp_{get_random_hash()}'))
     else:
-        setattr(args, 'temp_dir', '/tmp')
+        setattr(args, 'temp_dir', f'/tmp/{get_random_hash()}')
+    if not os.path.exists(args.temp_dir):
+        os.makedirs(args.temp_dir)
 
     logging.info(f'using ants tmp dir {args.temp_dir}')
     return(args)
