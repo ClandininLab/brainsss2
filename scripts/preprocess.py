@@ -250,7 +250,7 @@ def process_fly(args):
             # need to retest this with the new moco model
             'time_hours': 24 if args.partition == 'normal' else 24,
             'cores': args.cores if args.cores is not None else min(
-                8 if args.partition == 'normal' else 4,
+                16 if args.partition == 'normal' else 4,
                 get_max_slurm_cpus() - 1),
             'dirtype': 'func'
         }
