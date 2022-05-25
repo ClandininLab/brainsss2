@@ -7,7 +7,7 @@ import logging
 import time
 import os
 from brainsss2.logging_utils import remove_existing_file_handlers  # noqa
-from brainsss2.preprocess_utils import dict_to_args_list
+from brainsss2.preprocess_utils import dict_to_args_list, run_shell_command
 
 # set up module level logging
 logger = logging.getLogger('SlurmBatchJob')
@@ -190,6 +190,16 @@ class SlurmBatchJob:
         for h in logger.handlers:
             if isinstance(h, logging.FileHandler):
                 logger.removeHandler(h)
+
+
+def get_max_slurm_cpus():
+    """get the max number of cpus for slurm"""
+    cmdout = run_shell_command("sinfo -h -o %C")
+    try:
+        maxcores = int(cmdout.strip().split('/')[-1])
+    except AttributeError:
+        maxcores = 1
+    return maxcores
 
 
 if __name__ == "__main__":
