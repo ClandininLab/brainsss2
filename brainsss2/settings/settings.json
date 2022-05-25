@@ -1,0 +1,69 @@
+{
+    "fictrac_qc": {
+        "script": "fictrac_qc.py",
+        "fps": 100
+    },
+    "stim_triggered_avg_beh": {
+        "script": "stim_triggered_avg_beh.py",
+        "cores": 2
+    },
+    "bleaching_qc": {
+        "script": "bleaching_qc.py"
+    },
+    "motion_correction_func": {
+        "script": "motion_correction.py",
+        "type_of_transform": "SyN",
+        "time_hours": 24,
+        "dirtype": "func"
+    },
+    "motion_correction_anat": {
+        "script": "motion_correction.py",
+        "type_of_transform": "SyN",
+        "time_hours": 8,
+        "stepsize": 4,
+        "downsample": true,
+        "dirtype": "anat"
+    },
+    "smoothing": {
+        "script": "imgmath.py",
+        "operation": "smooth",
+        "fwhm": 2.0
+    },
+    "regression_XYZ": {
+        "script": "regression.py",
+        "overwrite": true,
+        "label": "model001_dRotLabXYZ",
+        "confound_files": "preproc/framewise_displacement.csv",
+        "time_hours": 1,
+        "behavior": [
+            "dRotLabY",
+            "dRotLabZ+",
+            "dRotLabZ-"
+        ]
+    },
+    "regression_confound": {
+        "script": "regression.py",
+        "overwrite": true,
+        "save_residuals": true,
+        "label": "model000_confound",
+        "confound_files": "preproc/framewise_displacement.csv",
+        "time_hours": 1
+    },
+    "STA": {
+        "script": "stim_triggered_avg_neu.py",
+        "overwrite": true,
+        "time_hours": 1
+    },
+    "atlasreg": {
+        "script": "atlas_registration.py",
+        "type_of_transform": "SyN",
+        "atlasname": "jfrc",
+        "overwrite": true,
+        "time_hours": 8
+    },
+    "supervoxels": {
+        "script": "make_supervoxels.py",
+        "overwrite": true,
+        "time_hours": 1
+    }
+}
