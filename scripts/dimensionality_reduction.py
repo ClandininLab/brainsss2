@@ -20,6 +20,7 @@ def parse_args(args, allow_unknown=True):
 
     parser = add_dr_args(parser)
 
+    parser.add_argument('--dir', type=str, help='fly dir')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
     else:
@@ -28,6 +29,11 @@ def parse_args(args, allow_unknown=True):
 
 
 def plot_comps(comps, varexp, compts, args):
+
+    if args.label is not None:
+        labelstring = f'_{args.label}'
+    else:
+        labelstring = ''
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
@@ -48,15 +54,15 @@ def plot_comps(comps, varexp, compts, args):
         plot_stat_map(comp_img, args.meanfile, threshold=thresh,
             display_mode='z', cut_coords=args.ncuts,
             title=f'PCA Component {compnum} ({100*varexp[compnum]:.03} % var)',
-            output_file=os.path.join(args.outdir, f'PCA_comp_{compnum:03}.png'))
+            output_file=os.path.join(args.outdir, f'PCA{labelstring}_comp_{compnum:03}.png'))
         plt.figure(figsize=(12, 3))
         plt.plot(comp_timeseries[:, compnum])
         plt.title(f'PCA Component {compnum}')
-        plt.savefig(os.path.join(args.outdir, f'PCA_timeseries_comp_{compnum:03}.png'))
+        plt.savefig(os.path.join(args.outdir, f'PCA{labelstring}_timeseries_comp_{compnum:03}.png'))
 
     compts_df = pd.DataFrame(compts,
         columns=[f'pc{compnum:03}' for compnum in range(args.ncomps)])
-    compts_df.to_csv(os.path.join(args.outdir, 'PCA_components.csv'))
+    compts_df.to_csv(os.path.join(args.outdir, f'PCA{labelstring}_components.csv'))
 
 
 def load_masked_data(datafile, maskfile):
@@ -89,30 +95,37 @@ if __name__ == '__main__':
 
     args = setup_logging(args, logtype="PCA")
     print(args)
-    labelstring = '' if args.label is None else f'_{args.label}'
     if args.outdir is None:
-        args.outdir = os.path.join(args.basedir, f'report/images/{args.funcdir}/PCA{labelstring}')
+        args.outdir = os.path.join(
+            os.path.dirname(args.dir),
+            f'report/images/{args.funcdir}/PCA')
 
-    required_files = ["PCA.json"]
+    if args.label is not None:
+        labelstring = f'_{args.label}'
+    else:
+        labelstring = ''
+
+    required_files = [f"PCA{labelstring}.json", f'PCA{labelstring}_components.csv']
     check_for_existing_files(args, args.outdir, required_files)
 
-    # add paths to data files
+    args.logger.info(f'outdir: {args.outdir}')
+
     setattr(args, 'datafile',
-        os.path.join(args.basedir, args.funcdir, args.datafile))
+        os.path.join(args.dir, args.datafile))
 
     setattr(args, 'meanfile',
-        os.path.join(args.basedir, args.funcdir, args.meanfile))
+        os.path.join(args.dir, args.meanfile))
 
     setattr(args, 'maskfile',
-        os.path.join(args.basedir, args.funcdir, args.maskfile))
+        os.path.join(args.dir, args.maskfile))
 
     mask_img = nib.load(args.maskfile)
 
     # load data
-    args.logger('Loading data...')
+    args.logger.info('Loading data...')
     alldata = load_masked_data(args.datafile, args.maskfile)
 
-    args.logger('Performing PCA...')
+    args.logger.info('Performing PCA...')
     alldata = alldata - np.mean(alldata, axis=0)
     alldata = alldata / np.std(alldata, axis=0)
     pca = PCA(n_components=args.ncomps, svd_solver='randomized')
@@ -120,8 +133,10 @@ if __name__ == '__main__':
     scale_comps = scale(pca.components_, axis=1)
     comp_timeseries = alldata.dot(scale_comps.T) / alldata.shape[1]
 
-    args.logger('Plotting components...')
+    args.logger.info('Plotting components...')
     plot_comps(pca.components_, pca.explained_variance_ratio_, comp_timeseries,
         args)
 
-    dump_args_to_json(args, os.path.join(args.outdir, 'PCA.json'))
+    jsonfile = os.path.join(args.outdir, f'PCA{labelstring}.json')
+    args.logger.info(f'Saving PCA results to {jsonfile}')
+    dump_args_to_json(args, jsonfile)

@@ -157,12 +157,21 @@ class DataDir:
             if not os.path.exists(pcadir_full):
                 self.PCA = None
             else:
-                self.PCA = {}
+                # first process results from non-filtered data
+                self.PCA_moco = {}
                 comps = os.listdir(pcadir_full)
                 comps.sort()
                 for file in comps:
-                    if file.endswith('.png') and file.startswith('PCA_comp'):
-                        self.PCA[file.replace('.png', '')] = os.path.join(
+                    if file.endswith('.png') and file.startswith('PCA_moco_comp'):
+                        self.PCA_moco[file.replace('.png', '')] = os.path.join(
+                            'images', self.label, 'PCA', file)
+                # then process results from filtered data
+                self.PCA_resid = {}
+                comps = os.listdir(pcadir_full)
+                comps.sort()
+                for file in comps:
+                    if file.endswith('.png') and file.startswith('PCA_resid_comp'):
+                        self.PCA_resid[file.replace('.png', '')] = os.path.join(
                             'images', self.label, 'PCA', file)
 
         self.moco_completed = data_dict['moco']['completed']

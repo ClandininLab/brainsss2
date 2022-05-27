@@ -78,7 +78,7 @@ if __name__ == "__main__":
         brain = nib.load(os.path.join(args.dir, args.funcfile))
     elif args.funcfile.endswith(".h5"):
         f = h5py.File(os.path.join(args.dir, args.funcfile), "r")
-        brain = f["data"]
+        brain = nib.Nifti1Image(f["data"], affine=f['qform'])
     else:
         raise ValueError(f"Unknown file type: {args.funcfile}")
 

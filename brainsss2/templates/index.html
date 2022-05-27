@@ -141,9 +141,17 @@
     <h4>No atlas registration results</h4>
     {% endif %}
 
-    {% if value['PCA'] %}
+    {% if value['PCA_moco'] %}
     <h4>PCA results (on smoothed moco data)</h4>
-    {% for key2, value2 in value['PCA'].items() %}
+    {% for key2, value2 in value['PCA_moco'].items() %}
+    <img src="{{ value2 }}" width="{{ imgwidth }}">
+    <img src="{{ value2.replace('PCA_comp', 'PCA_timeseries_comp') }}" width="{{ imgwidth }}">
+    {% endfor %}
+    {% endif %}
+
+    {% if value['PCA_resid'] %}
+    <h4>PCA results (on confound model residuals)</h4>
+    {% for key2, value2 in value['PCA_resid'].items() %}
     <img src="{{ value2 }}" width="{{ imgwidth }}">
     <img src="{{ value2.replace('PCA_comp', 'PCA_timeseries_comp') }}" width="{{ imgwidth }}">
     {% endfor %}

@@ -200,6 +200,7 @@ def add_imgmath_arguments(parser):
 
 
 def add_dr_args(parser):
+    parser.add_argument('--label', type=str, help='label for data', default='')
     parser.add_argument('--ncomps', type=int, default=10,
         help='number of components to plot')
     parser.add_argument('--ncuts', type=int, default=8,
