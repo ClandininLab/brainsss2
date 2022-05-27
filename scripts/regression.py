@@ -55,6 +55,8 @@ def parse_args(input, allow_unknown=True):
     parser.add_argument('--confound_files', type=str, nargs='+', help='confound files')
     parser.add_argument('--save_residuals', action='store_true',
         help='save model residuals')
+    parser.add_argument('--residfile', type=str,
+        help='filename/path for residuals (defaults to residuals.nii in regression folder')
     parser.add_argument('--std_betas', action='store_true', help='normalize regressors')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
@@ -375,7 +377,16 @@ if __name__ == "__main__":
         del results
         del brain
 
-        residual_file = os.path.join(args.outdir, 'residuals.nii')
-        nib.save(residual_img, residual_file)
+        if args.residfile is None:
+            residfile = os.path.join(args.outdir, 'residuals.h5')
+        else:
+            residfile = os.path.join(args.dir, args.residfile)
+
+        with h5py.File(residfile, 'w') as f:
+            f.create_dataset('data', data=residual_img.dataobj)
+            f.create_dataset('qform', data=residual_img.header.get_qform())
+            f.create_dataset('zooms', data=residual_img.header.get_zooms())
+            f.create_dataset('xyzt_units', data=residual_img.header.get_xyzt_units())
+        nib.save(residual_img, residfile)
 
     args.logger.info(f'job completed: {datetime.datetime.now()}')

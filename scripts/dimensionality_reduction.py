@@ -89,8 +89,9 @@ if __name__ == '__main__':
 
     args = setup_logging(args, logtype="PCA")
     print(args)
+    labelstring = '' if args.label is None else f'_{args.label}'
     if args.outdir is None:
-        args.outdir = os.path.join(args.basedir, f'report/images/{args.funcdir}/PCA')
+        args.outdir = os.path.join(args.basedir, f'report/images/{args.funcdir}/PCA{labelstring}')
 
     required_files = ["PCA.json"]
     check_for_existing_files(args, args.outdir, required_files)

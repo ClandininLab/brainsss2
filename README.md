@@ -1,6 +1,6 @@
 # brainsss2
 
-This package performs preprocessing and analysis of volumetric 2-photon imaging data from Drosophila melanogaster. It is based on a previous package called [brainsss][https://github.com/ClandininLab/brainsss].  
+This package performs preprocessing and analysis of volumetric 2-photon imaging data from Drosophila melanogaster. It is based on a previous package called [brainsss](https://github.com/ClandininLab/brainsss).  
 
 The workflow includes the following steps:
 

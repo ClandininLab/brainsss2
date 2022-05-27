@@ -309,6 +309,15 @@ def process_fly(args):
         args.logger.debug(f'smoothing workflow dict: {workflow_dict}')
 
     if args.regression or args.run_all:
+        # run confound model first so that we can create delta r2 for full model
+        workflow_dict['regression_confound'] = {
+            'basedir': args.basedir,
+            'dir': args.process,
+            'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
+            'residfile': f'preproc/functional_channel_2_moco_smooth-{args.preproc_settings["smoothing"]["fwhm"]:.1f}mu_residuals.h5'
+        }
+        workflow_dict['regression_confound'].update(args.preproc_settings['regression_confound'])
+        args.logger.debug(f'regression_confound workflow dict: {workflow_dict}')
         workflow_dict['regression_XYZ'] = {
             'basedir': args.basedir,
             'dir': args.process,
@@ -316,18 +325,12 @@ def process_fly(args):
         }
         workflow_dict['regression_XYZ'].update(args.preproc_settings['regression_XYZ'])
         args.logger.debug(f'regression_XYZ workflow dict: {workflow_dict}')
-        workflow_dict['regression_confound'] = {
-            'basedir': args.basedir,
-            'dir': args.process,
-            'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
-        }
-        workflow_dict['regression_confound'].update(args.preproc_settings['regression_confound'])
-        args.logger.debug(f'regression_confound workflow dict: {workflow_dict}')
 
     if args.STA or args.run_all:
         workflow_dict['STA'] = {
             'basedir': args.basedir,
             'dir': args.process,
+            'filename': 'preproc/functional_channel_2_moco_smooth-2.0mu_residuals.h5',
             'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
         }
         workflow_dict['STA'].update(args.preproc_settings['STA'])
@@ -364,14 +367,25 @@ def process_fly(args):
 
     # run PCA
     if args.PCA or args.run_all:
-        workflow_dict['PCA'] = {
+        workflow_dict['PCA_resid'] = {
             'basedir': args.dir,
+            'label': 'resid',
+            'overwrite': args.overwrite,
+            'dir': args.dir,
+            'datafile': f'preproc/functional_channel_2_moco_smooth-{args.preproc_settings["smoothing"]["fwhm"]:.1f}mu_residuals.h5',
+            'cores': min(args.cores, 16, get_max_slurm_cpus() - 1),
+        }
+        workflow_dict['PCA_resid'].update(args.preproc_settings['PCA_resid'])
+        args.logger.debug(f'PCA_resid workflow dict: {workflow_dict}')
+        workflow_dict['PCA_moco'] = {
+            'basedir': args.dir,
+            'label': 'moco',
             'overwrite': args.overwrite,
             'dir': args.dir,
             'cores': min(args.cores, 16, get_max_slurm_cpus() - 1),
         }
-        workflow_dict['PCA'].update(args.preproc_settings['PCA'])
-        args.logger.debug(f'PCA workflow dict: {workflow_dict}')
+        workflow_dict['PCA_moco'].update(args.preproc_settings['PCA_moco'])
+        args.logger.debug(f'PCA_moco workflow dict: {workflow_dict}')
 
     # always overwrite for these
     if args.report or args.run_all:
@@ -389,7 +403,6 @@ def process_fly(args):
         }
         workflow_dict['report'].update(args.preproc_settings['report'])
         args.logger.debug(f'report workflow dict: {workflow_dict}')
-
 
     for stepname, step_args_dict in workflow_dict.items():
         args.logger.info(f'running step: {step_args_dict["script"]}')

@@ -61,7 +61,11 @@
         "script": "make_supervoxels.py",
         "time_hours": 1
     },
-    "PCA": {
+    "PCA_moco": {
+        "script": "dimensionality_reduction.py",
+        "time_hours": 1
+    },
+    "PCA_resid": {
         "script": "dimensionality_reduction.py",
         "time_hours": 1
     },
