@@ -360,6 +360,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'overwrite': args.overwrite,
             'dir': args.dir,
+            'funcfile': f'preproc/functional_channel_2_moco_smooth-{args.preproc_settings["smoothing"]["fwhm"]:.1f}mu_residuals.h5',
             'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
         }
         workflow_dict['supervoxels'].update(args.preproc_settings['supervoxels'])
