@@ -1,10 +1,41 @@
 import os
+import sys
 import logging
 import json
 import shlex
 import subprocess
 import argparse
 import pkg_resources
+import shutil
+
+
+def required_files_exist(outdir, required_files):
+    required_files_exist = True
+    for f in required_files:
+        if not os.path.exists(os.path.join(outdir, f)):
+            required_files_exist = False
+            break
+    return(required_files_exist)
+
+
+def check_for_existing_files(args, outdir, required_files, remove_existing_dir=False):
+    if os.path.exists(outdir):
+        if args.overwrite:
+            args.logger.info("Overwriting existing output directory")
+            if remove_existing_dir:
+                shutil.rmtree(outdir)
+        else:
+            if required_files_exist(outdir, required_files):
+                args.logger.info(
+                    "Output directory exists and contains all required files")
+                sys.exit(0)
+            else:
+                args.logger.info(
+                    "Output directory exists but does not contain all required files")
+                if remove_existing_dir:
+                    shutil.rmtree(outdir)
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
 
 
 # from https://stackoverflow.com/questions/21953835/run-subprocess-and-print-output-to-logging
@@ -137,3 +168,13 @@ def setup_modules(args):
     module_list = list(set(module_list))
     setattr(args, "module_string", " ".join(module_list))
     return(args)
+
+
+def dump_args_to_json(args, outfile):
+    args_dict = vars(args)
+    save_dict = {}
+    for key, value in args_dict.items():
+        if key not in ['logger', 'file_handler']:
+            save_dict[key] = value
+    with open(outfile, 'w') as f:
+        json.dump(save_dict, f, indent=4)

@@ -13,7 +13,9 @@ from brainsss2.argparse_utils import (
     get_base_parser,
     add_fictrac_qc_arguments,
 )
+from brainsss2.preprocess_utils import check_for_existing_files
 from brainsss2.fictrac import smooth_and_interp_fictrac, load_fictrac
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 
 def parse_args(input, allow_unknown=True):
@@ -24,15 +26,13 @@ def parse_args(input, allow_unknown=True):
     # need to add this manually to procesing steps in order to make required
     parser.add_argument(
         '-d',
-        '--dir', 
+        '--dir',
         type=str,
         help='func directory',
         required=True)
 
     if allow_unknown:
         args, unknown = parser.parse_known_args()
-        if unknown is not None:
-            print(f'skipping unknown arguments:{unknown}')
     else:
         args = parser.parse_args()
     return args
@@ -82,16 +82,22 @@ def plot_avg_trace(fictrac, starts_angle_0, starts_angle_180,
 
     fname = os.path.join(outdir, 'stim_triggered_turning.png')
     plt.savefig(fname, dpi=100, bbox_inches="tight")
-    logging.info(f"saved average trace to {fname}")
+    args.logger.info(f"saved average trace to {fname}")
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
     args = setup_logging(args, logtype='stim_triggered_avg_beh')
-    logging.info(f'Running stim_triggered_avg_beh on {args.dir}')
+    outdir = os.path.join(args.dir, "QC")
+    required_files = [
+        "fictrac_2d_hist_fixed.png",
+        "fictrac_velocity_trace.png"]
+    check_for_existing_files(args, outdir, required_files)
+
+    args.logger.info(f'Running stim_triggered_avg_beh on {args.dir}')
     vision_path = os.path.join(args.dir, "visual")
-    logging.info(f'loading vision data from {vision_path}')
+    args.logger.info(f'loading vision data from {vision_path}')
 
     assert os.path.exists(vision_path), f"vision_path {vision_path} does not exist"
 
@@ -99,7 +105,7 @@ if __name__ == "__main__":
     stimulus_start_times = extract_stim_times_from_pd(pd2, t)
 
     stim_ids, angles = get_stimulus_metadata(vision_path)
-    logging.info(F"Found {len(stim_ids)} presented stimuli.")
+    args.logger.info(F"Found {len(stim_ids)} presented stimuli.")
 
     # *100 puts in units of 10ms, which will match fictrac
     starts_angle_0 = [
@@ -112,7 +118,7 @@ if __name__ == "__main__":
         for i in range(len(stimulus_start_times))
         if angles[i] == 180
     ]
-    logging.info(F"starts_angle_0: {len(starts_angle_0)}. starts_angle_180: {len(starts_angle_180)}")
+    args.logger.info(F"starts_angle_0: {len(starts_angle_0)}. starts_angle_180: {len(starts_angle_180)}")
 
     # PREP FICTRAC
     fictrac_path = os.path.join(args.dir, "fictrac")
@@ -130,10 +136,6 @@ if __name__ == "__main__":
             fictrac_raw, args.fps, args.resolution, expt_len, behavior
         )
     xnew = np.arange(0, expt_len, args.resolution)
-
-    outdir = os.path.join(args.dir, "QC")
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
 
     plot_avg_trace(fictrac, starts_angle_0, starts_angle_180,
                    outdir)

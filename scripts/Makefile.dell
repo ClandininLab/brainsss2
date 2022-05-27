@@ -2,10 +2,14 @@ BASEDIR = /data/brainsss
 #BASEDIR = /scratch/users/russpold/brainsss
 #BASEDIR = /Users/poldrack/data_unsynced/brainsss/flydata
 QUEUE = normal
-PROCESS =  --regression #--run_all --type_of_transform Affine
+PROCESS =  --run_all
 FLYNUM = fly_001
 IMPORTDATE = 20220329 #20220420
-IMPORTDIR = fly_2 #fly_1
+IMPORTDIR = fly_1 #fly_1
+
+reinstall:
+	cd ..
+	pip install -U .
 
 clean:
 	-rm -rf  sbatch_preproc_*.log $(BASEDIR)/logs/* $(basedir)/processed/fly_*/*/logs $(BASEDIR)/master_2P.xlsx
@@ -29,7 +33,7 @@ test-build-slurm:
 	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) --overwrite --no_require_settings --build --import_date $(IMPORTDATE) --fly_dirs $(IMPORTDIR)
 
 test-proc-slurm:
-	sbatch preprocess.sh --cores 6 --partition=$(QUEUE) -b $(BASEDIR) --no_require_settings $(PROCESS) --process $(BASEDIR)/processed/$(FLYNUM)
+	sbatch preprocess.sh --cores 6 --partition=$(QUEUE) -b $(BASEDIR) --settings_file user_settings.json $(PROCESS) --process $(BASEDIR)/processed/$(FLYNUM) --atlasdir /data/brainsss/atlas
 
 test-both-slurm:
 	sbatch preprocess.sh --cores 6 --partition=$(QUEUE) -b $(BASEDIR) --import_date $(IMPORTDATE)  --fly_dirs $(IMPORTDIR) --no_require_settings $(PROCESS) --build 
@@ -42,3 +46,7 @@ test-both-slurm-sherlock:
 
 test-proc-slurm-sherlock:
 	sbatch preprocess.sh --cores 8 --partition=$(QUEUE) -b $(BASEDIR) -v --no_require_settings --process $(BASEDIR)/processed/fly_001 $(PROCESS) --func_dirs func_0
+
+report:
+	python dimensionality_reduction.py  --dir /data/brainsss/processed/fly_001 --funcfile regression/model000_confound/residuals.nii
+	python generate_report.py --dir /data/brainsss/processed/fly_001

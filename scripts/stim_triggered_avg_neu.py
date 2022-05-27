@@ -5,12 +5,13 @@ import sys
 from time import time
 import h5py
 import logging
-import shutil
 from scipy.interpolate import interp1d
 from brainsss2.argparse_utils import get_base_parser
 from brainsss2.logging_utils import setup_logging
 from brainsss2.visual import load_photodiode, extract_stim_times_from_pd, get_stimulus_metadata
 from brainsss2.utils import load_timestamps
+from brainsss2.preprocess_utils import check_for_existing_files
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 
 def parse_args(args, allow_unknown=True):
@@ -21,12 +22,8 @@ def parse_args(args, allow_unknown=True):
         default='preproc/functional_channel_2_moco_smooth-2.0mu.h5')
     parser.add_argument('--outdir', type=str, default=None,
         help='Path to output directory')
-    parser.add_argument('--overwrite', action='store_true', default=False,
-        help='Overwrite existing files')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
-        if unknown is not None:
-            print(f'skipping unknown arguments:{unknown}')
     else:
         args = parser.parse_args()
     return args
@@ -42,14 +39,14 @@ def prep_visual_stimuli(args):
 
     ### Get Metadata ###
     stim_ids, angles = get_stimulus_metadata(vision_path)
-    logging.info(F"Found {len(stim_ids)} presented stimuli.")
+    args.logger.info(F"Found {len(stim_ids)} presented stimuli.")
 
     # *100 puts in units of 10ms, which will match fictrac
     starts_angle_0 = [int(stimulus_start_times[i] * 100)
         for i in range(len(stimulus_start_times)) if angles[i] == 0]
     starts_angle_180 = [int(stimulus_start_times[i] * 100)
         for i in range(len(stimulus_start_times)) if angles[i] == 180]
-    logging.info(F"starts_angle_0: {len(starts_angle_0)}. starts_angle_180: {len(starts_angle_180)}")
+    args.logger.info(F"starts_angle_0: {len(starts_angle_0)}. starts_angle_180: {len(starts_angle_180)}")
     return({'0': [i * 10 for i in starts_angle_0],
             '180': [i * 10 for i in starts_angle_180]})
 
@@ -125,17 +122,9 @@ if __name__ == "__main__":
 
     args = setup_logging(args, logtype='STA',
         logdir=args.outdir)
+    check_for_existing_files(args, args.outdir, ['sta_0.npy', 'sta_180.npy'])
 
-    logging.info(f'saving output to {args.outdir}')
-
-    if os.path.exists(args.outdir) and not args.overwrite:
-        logging.info(f'output directory {args.outdir} already exists and overwrite is False')
-        sys.exit(0)
-    elif os.path.exists(args.outdir) and args.overwrite:
-        shutil.rmtree(args.outdir)
-
-    if not os.path.exists(args.outdir):
-        os.makedirs(args.outdir)
+    args.logger.info(f'saving output to {args.outdir}')
 
     list_in_ms0 = prep_visual_stimuli(args)
 
@@ -159,7 +148,7 @@ if __name__ == "__main__":
             chunk_edges = make_chunk_edges(new_stim_timestamps)
             sta = make_stas(ynew, new_stim_timestamps, chunk_edges)
             stas.append(sta)
-            logging.info(F"Slice: {slice_num}. Duration: {time()-t0}")
+            args.logger.info(F"Slice: {slice_num}. Duration: {time()-t0}")
         stas_array = np.asarray(stas)
 
         ### SAVE STA ###

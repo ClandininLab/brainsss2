@@ -31,6 +31,9 @@ def get_base_parser(description):
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
     parser.add_argument("-l", "--logfile", type=str, help="log file")
     parser.add_argument('-t', '--test', action='store_true', help='test mode')
+    parser.add_argument('-o', '--overwrite',
+        action='store_true',
+        help='overwrite existing fly dir')
     return parser
 
 
@@ -41,111 +44,108 @@ def add_preprocess_arguments(parser):
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--build", help="build_flies", action="store_true")
     group.add_argument("--process", type=str, help="fly directory to process")
-    parser.add_argument(
+
+    # flags to run each component
+    comps = parser.add_argument_group('workflow components')
+    comps.add_argument('-a', '--run_all', action='store_true', help='run all preprocessing steps')
+    comps.add_argument("--fictrac_qc", action="store_true", help="run fictrac QC")
+    comps.add_argument("--STB", action="store_true", help="run run stimulus-triggered behavioral averaging")
+    comps.add_argument("--bleaching_qc", action="store_true", help="run bleaching QC")
+    comps.add_argument(
+        "--motion_correction",
+        help="run motion correction (func, anat, or both - defaults to func)",
+        choices=['func', 'anat', 'both']
+    )
+    comps.add_argument("--smoothing", action="store_true", help="run spatial smoothing")
+    comps.add_argument("--STA", action="store_true", help="run stimulus-triggered neural averaging")
+    comps.add_argument("--regression", action="store_true", help="run regression")
+    comps.add_argument("--supervoxels", action="store_true", help="run supervoxels")
+    comps.add_argument("--atlasreg", action="store_true", help="run registration to/from atlas")
+    comps.add_argument("--PCA", action="store_true", help="run PCA on func data")
+    comps.add_argument("--report", action="store_true", help="generate report")
+
+    atlas = parser.add_argument_group('atlas arguments')
+    atlas.add_argument(
+        '--atlasfile',
+        type=str,
+        help='atlas file for atlasreg',
+        default='20220301_luke_2_jfrc_affine_zflip_2umiso.nii')
+    atlas.add_argument('--atlasname',
+        type=str,
+        default='jfrc',
+        help='identifier for atlas space for atlasreg')
+    atlas.add_argument('--atlasdir',
+        type=str,
+        default='/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/anat_templates',
+        help='directory containing atlas files for atlasreg')
+
+    flags = parser.add_argument_group('execution flags')
+    flags.add_argument(
         "--build_only", action="store_true", help="don't process after building"
     )
-    parser.add_argument(
+    flags.add_argument(
         '--local',
         action='store_true',
         help='run locally (rather than using slurm)'
     )
-    parser.add_argument(
+    flags.add_argument(
+        "--cores", help="number of cores to use", type=int, default=1
+    )
+    flags.add_argument(
+        "--partition", help="slurm partition to use for running jobs", type=str, default='normal'
+    )
+    flags.add_argument("-u", "--user", help="user name (default to system username)", type=str, default=getpass.getuser())
+    flags.add_argument('--modules', help='modules to load', type=str, nargs="+")
+    flags.add_argument('--continue_on_error', action='store_true', help='keep going if a step fails')
+
+    flags.add_argument(
         "--func_dirs",
         type=str,
         nargs='+',
         help="specific func dirs to process"
     )
-    parser.add_argument(
-        "--cores", help="number of cores to use", type=int, default=1
-    )
-    parser.add_argument(
-        "--partition", help="slurm partition to use for running jobs", type=str, default='normal'
-    )
-    parser.add_argument('-a', '--run_all', action='store_true', help='run all preprocessing steps')
-
-    # flags to run each component
-    parser.add_argument(
-        "--motion_correction",
-        help="run motion correction (func, anat, or both - defaults to func)",
-        choices=['func', 'anat', 'both']
-    )
-    parser.add_argument("--regression", action="store_true", help="run regression")
-    parser.add_argument("--supervoxels", action="store_true", help="run supervoxels")
-    parser.add_argument("--atlasreg", action="store_true", help="run registration to/from atlas")
-    parser.add_argument("--smoothing", action="store_true", help="run spatial smoothing")
-    parser.add_argument("--fictrac_qc", action="store_true", help="run fictrac QC")
-    parser.add_argument("--bleaching_qc", action="store_true", help="run bleaching QC")
-    parser.add_argument("--zscore", action="store_true", help="zscore functional data")
-    parser.add_argument("--highpass", action="store_true", help="highpass filter functional data")
-
-    parser.add_argument("--STA", action="store_true", help="run STA")
-    parser.add_argument("--STB", action="store_true", help="run STB")
-    # should these be a single argument that takes "pre" or "post" as arguments?
-    parser.add_argument("--temporal_mean", type=str, help="run temporal mean (pre, post, both or None)",
-                        choices=['pre', 'post', 'both', 'None'], nargs='+', default=['None'])
-    parser.add_argument("--h5_to_nii", action="store_true", help="run h52nii")
-
-    parser.add_argument("--nice", action="store_true", help="nice")
-    parser.add_argument(
-        "--ignore_settings", action="store_true", help="ignore settings file"
-    )
-    parser.add_argument("-u", "--user", help="user", type=str, default=getpass.getuser())
-    parser.add_argument(
+    flags.add_argument(
         "-s",
         "--settings_file",
         help="custom settings file (overriding user/package defaults)",
     )
-    parser.add_argument('--modules', help='modules to load', type=str, nargs="+")
-    parser.add_argument('--continue_on_error', action='store_true', help='keep going if a step fails')
+    flags.add_argument(
+        "--ignore_settings", action="store_true", help="ignore settings file"
+    )
     return(parser)
 
 
 def add_builder_arguments(parser):
     """add arguments for fly_builder"""
-    parser.add_argument(
+    builder = parser.add_argument_group('fly_builder arguments')
+    builder.add_argument(
         "--import_date", type=str, help="date of import (YYYYMMDD)"
     )
-    parser.add_argument(
+    builder.add_argument(
         "--fly_dirs",
         type=str,
         nargs='+',
         help="specific fly dirs to process for import date"
     )
-    parser.add_argument('-o', '--overwrite',
-        action='store_true',
-        help='overwrite existing fly dir')
-    parser.add_argument(
-        '--atlasfile',
-        type=str,
-        help='atlas file for atlasreg',
-        default='20220301_luke_2_jfrc_affine_zflip_2umiso.nii')
-    parser.add_argument('--atlasname',
-        type=str,
-        default='jfrc',
-        help='identifier for atlas space for atlasreg')
-    parser.add_argument('--atlasdir',
-        type=str,
-        default='/oak/stanford/groups/trc/data/Brezovec/2P_Imaging/anat_templates',
-        help='directory containing atlas files for atlasreg')
-    parser.add_argument(
+    builder.add_argument(
         "--fictrac_import_dir",
         type=str,
         help="fictrac import directory (defaults to <basedir>/fictrac)"
     )
-    parser.add_argument(
+    builder.add_argument(
         "--target_dir",
         type=str,
         help="directory for built flies (defaults to <basedir>/processed)"
     )
-    parser.add_argument(
+    builder.add_argument(
         '--import_dir',
         type=str,
         help='imaging import directory (defaults to <basedir>/imports)'
     )
-    parser.add_argument(
+    builder.add_argument(
         "--no_visual", action="store_true", help="do not copy visual data"
     )
-    parser.add_argument('--xlsx_file', type=str, help='xlsx file to use for fly data')
+    builder.add_argument('--xlsx_file', type=str, help='xlsx file to use for fly data')
     return parser
 
 
@@ -206,7 +206,7 @@ def add_dr_args(parser):
         help='number of cuts to plot')
     parser.add_argument('--threshpct', type=int, default=90,
         help='threshold percentile for plotting')
-    parser.add_argument('-d', '--dir', type=str, required=True,
+    parser.add_argument('-d', '--basedir', type=str, required=True,
         help='fly directory')
     parser.add_argument('--outdir', type=str,
         help='output directory for plots (defaults to report/images/PCA)')

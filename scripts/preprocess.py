@@ -6,7 +6,6 @@
 
 import sys
 import os
-import logging
 import datetime
 from pathlib import Path
 import json
@@ -52,11 +51,11 @@ def parse_args(input):
 
     parser = add_preprocess_arguments(parser)
 
-    parser = add_fictrac_qc_arguments(parser)
+    # parser = add_fictrac_qc_arguments(parser)
 
-    parser = add_moco_arguments(parser)
+    # parser = add_moco_arguments(parser)
 
-    parser = add_imgmath_arguments(parser)
+    # parser = add_imgmath_arguments(parser)
 
     return parser.parse_args(input)
 
@@ -72,7 +71,7 @@ def build_fly(args):
         flydir {str}:
             path to fly directory
     """
-    logging.info(f"building flies from {args.import_path}")
+    args.logger.info(f"building flies from {args.import_path}")
 
     assert args.import_date is not None, "no import date specified"
 
@@ -93,7 +92,7 @@ def build_fly(args):
             f"flybuilder_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.txt")
     }
 
-    logging.debug(f'args_dict submitted to fly_builder: {args_dict}')
+    args.logger.debug(f'args_dict submitted to fly_builder: {args_dict}')
     if not args.local:
         sbatch = SlurmBatchJob('flybuilder', "fly_builder.py", args_dict, verbose=args.verbose)
         sbatch.run()
@@ -101,7 +100,7 @@ def build_fly(args):
         _ = remove_existing_file_handlers()
         reinstate_file_handlers(sbatch.saved_handlers)
 
-        logging.info(f'flybuilder job complete: {sbatch.status(return_full_output=True)}')
+        args.logger.info(f'flybuilder job complete: {sbatch.status(return_full_output=True)}')
         # get fly directory from output
         if os.path.exists(sbatch.logfile):
             return(get_flydir_from_building_log(sbatch.logfile))
@@ -109,7 +108,7 @@ def build_fly(args):
             return None
     else:
         # run locally
-        logging.info('running fly_builder.py locally')
+        args.logger.info('running fly_builder.py locally')
         args.logfile = args_dict['logfile']
         argstring = ' '.join(dict_to_args_list(args.__dict__))
         output = run_shell_command(f'python fly_builder.py {argstring}')
@@ -149,7 +148,7 @@ def run_preprocessing_step(script, args, args_dict):
             output from step script
     """
     stepname = script.split(".")[0]
-    logging.info(f"running {stepname}")
+    args.logger.info(f"running {stepname}")
 
     if 'dirtype' in args_dict and args_dict['dirtype'] is not None:
         args.dirtype = args_dict['dirtype']
@@ -170,7 +169,7 @@ def run_preprocessing_step(script, args, args_dict):
 
     for procdir in procdirs:
         if args.dirtype == 'func' and args.func_dirs is not None and procdir.split('/')[-1] not in args.func_dirs:
-            logging.info(f'skipping {procdir} - not included in --func_dirs')
+            args.logger.info(f'skipping {procdir} - not included in --func_dirs')
             continue
 
         if 'logfile' not in args_dict:
@@ -183,9 +182,9 @@ def run_preprocessing_step(script, args, args_dict):
             os.mkdir(os.path.dirname(logfile))
 
         if args.local:
-            logging.info(f'running {script} locally')
+            args.logger.info(f'running {script} locally')
         else:
-            logging.info(f'running {script} via slurm')
+            args.logger.info(f'running {script} via slurm')
 
         args_dict['partition'] = args.partition
         args_dict['dir'] = procdir
@@ -194,7 +193,8 @@ def run_preprocessing_step(script, args, args_dict):
 
         sbatch[procdir] = SlurmBatchJob(stepname, script,
                                         user_args=args_dict,
-                                        local=args.local)
+                                        local=args.local,
+                                        verbose=args.verbose)
         sbatch[procdir].run()
 
     output = {}
@@ -204,13 +204,13 @@ def run_preprocessing_step(script, args, args_dict):
         output[procdir] = job.status()
         job.disable_loggers()
 
-    logging.info(f'Completed step: {stepname}')
+    args.logger.info(f'Completed step: {stepname}\n\n')
 
     # hand logging back to the previous handlers
     if saved_handlers:
         reinstate_file_handlers(saved_handlers)
     else:
-        logging.warning('no saved handlers found')
+        args.logger.warning('no saved handlers found')
 
     return(output)
 
@@ -228,10 +228,10 @@ def process_fly(args):
     """
 
     assert os.path.exists(args.process)
-    logging.info(f"processing fly from {args.process}")
+    args.logger.info(f"processing fly from {args.process}")
 
     if args.test:
-        logging.info("test mode, not actually processing flies")
+        args.logger.info("test mode, not actually processing flies")
 
     workflow_dict = OrderedDict()
 
@@ -240,69 +240,64 @@ def process_fly(args):
     # the specific files used in each step are built into the workflow components
     # so we don't need to track and pass output to input at each step ala nipype
     # but it means that the steps cannot be reordered and expected to run properly
+
+    # each step starts with the session-dependent variables
+    # which are then extended with the preproc settings (default or user-specified)
     if args.fictrac_qc or args.run_all:
         workflow_dict['fictrac_qc'] = {
-            'script': 'fictrac_qc.py',
-            "fps": 100,
             'basedir': args.basedir,
             'dir': args.process
         }
+        workflow_dict['fictrac_qc'].update(args.preproc_settings['fictrac_qc'])
+        args.logger.debug(f'fictrac_qc workflow dict: {workflow_dict}')
 
     if args.STB or args.run_all:
         workflow_dict['stim_triggered_avg_beh'] = {
-            'script': 'stim_triggered_avg_beh.py',
             'basedir': args.basedir,
             'dir': args.process,
             'cores': 2
         }
+        workflow_dict['stim_triggered_avg_beh'].update(args.preproc_settings['stim_triggered_avg_beh'])
+        args.logger.debug(f'stim_triggered_avg_beh workflow dict: {workflow_dict}')
 
     if args.bleaching_qc or args.run_all:
         workflow_dict['bleaching_qc'] = {
-            'script': 'bleaching_qc.py',
             'basedir': args.basedir,
             'dir': args.process,
             'cores': min(16, get_max_slurm_cpus() - 1)
         }
+        workflow_dict['bleaching_qc'].update(args.preproc_settings['bleaching_qc'])
+        args.logger.debug(f'bleaching_qc workflow dict: {workflow_dict}')
 
     if args.motion_correction in ['func', 'both'] or args.run_all:
         workflow_dict['motion_correction_func'] = {
-            'script': 'motion_correction.py',
             'basedir': args.basedir,
-            'type_of_transform': args.type_of_transform,
             'dir': args.process,
-            # use longer run with fewer cores if not using normal queue
-            # need to retest this with the new moco model
             'time_hours': 24 if args.partition == 'normal' else 24,
             'cores': args.cores if args.cores is not None else min(
                 16 if args.partition == 'normal' else 4,
                 get_max_slurm_cpus() - 1),
-            'dirtype': 'func'
         }
+        workflow_dict['motion_correction_func'].update(args.preproc_settings['motion_correction_func'])
+        args.logger.debug(f'motion_correction_func workflow dict: {workflow_dict}')
 
     if args.motion_correction in ['anat', 'both'] or args.run_all:
         workflow_dict['motion_correction_anat'] = {
-            'script': 'motion_correction.py',
             'basedir': args.basedir,
-            'type_of_transform': args.type_of_transform,
             'dir': args.process,
-            # use longer run with fewer cores if not using normal queue
-            # need to retest this with the new moco model
             'time_hours': 8 if args.partition == 'normal' else 24,
             'stepsize': 4,
-            'downsample': True,
             'cores': min(
                 args.cores,
                 8 if args.partition == 'normal' else 4,
                 get_max_slurm_cpus() - 1),
-            'dirtype': 'anat'
         }
+        workflow_dict['motion_correction_anat'].update(args.preproc_settings['motion_correction_anat'])
+        args.logger.debug(f'motion_correction_anat workflow dict: {workflow_dict}')
 
     if args.smoothing or args.run_all:
         workflow_dict['smoothing'] = {
-            'script': 'imgmath.py',
-            'operation': 'smooth',
             'basedir': args.basedir,
-            'fwhm': args.fwhm,
             'dir': args.dir,
             'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
             'file': os.path.join(
@@ -310,40 +305,36 @@ def process_fly(args):
                 'func_0/preproc/functional_channel_2_moco.h5'
             )
         }
+        workflow_dict['smoothing'].update(args.preproc_settings['smoothing'])
+        args.logger.debug(f'smoothing workflow dict: {workflow_dict}')
 
     if args.regression or args.run_all:
-        workflow_dict['regression_XYZ'] = {
-            'script': 'regression.py',
-            'basedir': args.basedir,
-            'dir': args.process,
-            'overwrite': True,
-            'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
-            'label': 'model001_dRotLabXYZ',
-            'confound_files': 'preproc/framewise_displacement.csv',
-            'time_hours': 1,
-            'behavior': ['dRotLabY', 'dRotLabZ+', 'dRotLabZ-'],
-        }
+        # run confound model first so that we can create delta r2 for full model
         workflow_dict['regression_confound'] = {
-            'script': 'regression.py',
             'basedir': args.basedir,
-            'overwrite': True,
             'dir': args.process,
-            'save_residuals': True,
             'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
-            'label': 'model000_confound',
-            'confound_files': 'preproc/framewise_displacement.csv',
-            'time_hours': 1
+            'residfile': f'preproc/functional_channel_2_moco_smooth-{args.preproc_settings["smoothing"]["fwhm"]:.1f}mu_residuals.h5'
         }
+        workflow_dict['regression_confound'].update(args.preproc_settings['regression_confound'])
+        args.logger.debug(f'regression_confound workflow dict: {workflow_dict}')
+        workflow_dict['regression_XYZ'] = {
+            'basedir': args.basedir,
+            'dir': args.process,
+            'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
+        }
+        workflow_dict['regression_XYZ'].update(args.preproc_settings['regression_XYZ'])
+        args.logger.debug(f'regression_XYZ workflow dict: {workflow_dict}')
 
     if args.STA or args.run_all:
         workflow_dict['STA'] = {
-            'script': 'stim_triggered_avg_neu.py',
             'basedir': args.basedir,
-            'overwrite': True,
             'dir': args.process,
+            'filename': 'preproc/functional_channel_2_moco_smooth-2.0mu_residuals.h5',
             'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
-            'time_hours': 1
         }
+        workflow_dict['STA'].update(args.preproc_settings['STA'])
+        args.logger.debug(f'STA workflow dict: {workflow_dict}')
 
     if args.atlasreg or args.run_all:
         if args.atlasdir is None:
@@ -352,48 +343,84 @@ def process_fly(args):
                 'atlas'
             )
         workflow_dict['atlasreg'] = {
-            'script': 'atlas_registration.py',
             'basedir': args.basedir,
             'atlasfile': os.path.join(
                 args.atlasdir,
                 args.atlasfile),
-            'type_of_transform': 'SyN',
-            'atlasname': 'jfrc',
             'overwrite': args.overwrite,
             'dir': args.dir,
             'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
-            'time_hours': 8
         }
-    # align_anat
+        workflow_dict['atlasreg'].update(args.preproc_settings['atlasreg'])
+        args.logger.debug(f'atlasreg workflow dict: {workflow_dict}')
 
     # make supervoxels
     if args.supervoxels or args.run_all:
         workflow_dict['supervoxels'] = {
-            'script': 'make_supervoxels.py',
             'basedir': args.basedir,
             'overwrite': args.overwrite,
             'dir': args.dir,
             'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
-            'time_hours': 1
         }
+        workflow_dict['supervoxels'].update(args.preproc_settings['supervoxels'])
+        args.logger.debug(f'supervoxels workflow dict: {workflow_dict}')
 
-    if args.h5_to_nii:
-        #             time=2,
-        #             mem=10, - this seems crazy...
-        logging.warning('h5_to_nii not yet implemented!')
+    # run PCA
+    if args.PCA or args.run_all:
+        workflow_dict['PCA_resid'] = {
+            'basedir': args.dir,
+            'label': 'resid',
+            'overwrite': args.overwrite,
+            'dir': args.dir,
+            'datafile': f'preproc/functional_channel_2_moco_smooth-{args.preproc_settings["smoothing"]["fwhm"]:.1f}mu_residuals.h5',
+            'cores': min(args.cores, 16, get_max_slurm_cpus() - 1),
+        }
+        workflow_dict['PCA_resid'].update(args.preproc_settings['PCA_resid'])
+        args.logger.debug(f'PCA_resid workflow dict: {workflow_dict}')
+        workflow_dict['PCA_moco'] = {
+            'basedir': args.dir,
+            'label': 'moco',
+            'overwrite': args.overwrite,
+            'dir': args.dir,
+            'cores': min(args.cores, 16, get_max_slurm_cpus() - 1),
+        }
+        workflow_dict['PCA_moco'].update(args.preproc_settings['PCA_moco'])
+        args.logger.debug(f'PCA_moco workflow dict: {workflow_dict}')
+
+    # always overwrite for these
+    if args.report or args.run_all:
+        workflow_dict['check_status'] = {
+            'basedir': args.dir,
+            'dir': args.dir,
+            'cores': 2,
+        }
+        workflow_dict['check_status'].update(args.preproc_settings['check_status'])
+        args.logger.debug(f'check_status workflow dict: {workflow_dict}')
+        workflow_dict['report'] = {
+            'basedir': args.dir,
+            'dir': args.dir,
+            'cores': 2,
+        }
+        workflow_dict['report'].update(args.preproc_settings['report'])
+        args.logger.debug(f'report workflow dict: {workflow_dict}')
 
     for stepname, step_args_dict in workflow_dict.items():
-        logging.info(f'running step: {step_args_dict["script"]}')
+        args.logger.info(f'running step: {step_args_dict["script"]}')
         args.dir = args.process  # NOTE: this is bad and confusing, but would take work to fix
+
+        # the overwrite arg dominates - otherwise existibg files will be left alone
+        step_args_dict['overwrite'] = args.overwrite
+
         step_output = run_preprocessing_step(step_args_dict['script'], args, step_args_dict)
         if step_output is None:
-            logging.error(f'{step_args_dict["script"]} failed')
+            args.logger.error(f'{step_args_dict["script"]} failed')
             raise Exception(f'{step_args_dict["script"]} failed')
         for key, value in step_output.items():
             if value != 'COMPLETED':
-                logging.error(f'{step_args_dict["script"]} failed')
+                args.logger.error(f'{step_args_dict["script"]} failed')
                 if not args.continue_on_error:
                     raise Exception(f'{step_args_dict["script"]} failed')
+        workflow_dict[stepname]['output'] = step_output
     return(workflow_dict)
 
 
@@ -470,21 +497,21 @@ if __name__ == "__main__":
         args = load_user_settings_from_json(args, args.settings_file)
 
     if args.build:
-        logging.info("building fly")
+        args.logger.info("building fly")
         args = setup_build_dirs(args)
         args.process = build_fly(args)
         if args.process is None:
             raise ValueError('fly building failed')
-        logging.info(f'Built to flydir: {args.process}')
+        args.logger.info(f'Built to flydir: {args.process}')
         if args.build_only:
-            logging.info('build only, exiting')
+            args.logger.info('build only, exiting')
             args.process = None
     # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
 
     if args.process is not None:
-        logging.info(f'processing {args.process}')
+        args.logger.info(f'processing {args.process}')
         setattr(args, 'script_path', os.path.dirname(os.path.realpath(__file__)))
         workflow_dict = process_fly(args)
 
-    with open(os.path.join(args.process, 'preproc/preproc_workflow.json'), 'w') as f:
-        json.dump(workflow_dict, f, indent=4)
+        with open(os.path.join(args.process, 'preproc_workflow.json'), 'w') as f:
+            json.dump(workflow_dict, f, indent=4)

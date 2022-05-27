@@ -184,15 +184,15 @@ def generate_report(args):
     env = Environment(loader=FileSystemLoader(templates_dir))
     template = env.get_template('index.html')
 
-    assert os.path.exists(args.dir), f'{args.dir} does not exist'
-    flynum = os.path.basename(args.dir)
+    assert os.path.exists(args.basedir), f'{args.basedir} does not exist'
+    flynum = os.path.basename(args.basedir)
 
-    metadata_file = os.path.join(args.dir, 'fly_processing_info.json')
+    metadata_file = os.path.join(args.basedir, 'fly_processing_info.json')
     assert os.path.exists(metadata_file), f'{metadata_file} does not exist'
     with open(metadata_file, 'r') as f:
         flyinfo = json.load(f)
 
-    reportdir = os.path.join(args.dir, 'report')
+    reportdir = os.path.join(args.basedir, 'report')
     if not os.path.exists(reportdir):
         os.mkdir(reportdir)
 

@@ -13,7 +13,6 @@ import nibabel as nib
 import scipy
 import datetime
 import logging
-import shutil
 import ants
 import warnings
 from nilearn.plotting import plot_stat_map
@@ -28,6 +27,8 @@ from brainsss2.logging_utils import setup_logging # noqa
 from brainsss2.fictrac import load_fictrac, smooth_and_interp_fictrac
 from brainsss2.imgmath import imgmath
 from brainsss2.utils import load_timestamps
+from brainsss2.preprocess_utils import check_for_existing_files
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 
 def parse_args(input, allow_unknown=True):
@@ -47,14 +48,15 @@ def parse_args(input, allow_unknown=True):
         help='percentage (1-100) of image to include in mask')
     parser.add_argument('--fps', type=float, default=100, help='frame rate of fictrac camera')
     parser.add_argument('--resolution', type=float, default=10, help='resolution of fictrac data')
-    parser.add_argument('-o', '--outdir', type=str, help='directory to save output')
+    parser.add_argument('--outdir', type=str, help='directory to save output')
     parser.add_argument('--pthresh', type=float, default=0.05, help='p value cutoff for plotting')
     parser.add_argument('--cores', type=int, default=4, help='number of cores to use')
     parser.add_argument('--dct_bases', type=int, default=8, help='number of dct bases to use')
     parser.add_argument('--confound_files', type=str, nargs='+', help='confound files')
-    parser.add_argument('--overwrite', action='store_true', help='overwrite existing output')
     parser.add_argument('--save_residuals', action='store_true',
         help='save model residuals')
+    parser.add_argument('--residfile', type=str,
+        help='filename/path for residuals (defaults to residuals.nii in regression folder')
     parser.add_argument('--std_betas', action='store_true', help='normalize regressors')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
@@ -224,24 +226,16 @@ if __name__ == "__main__":
     if args.outdir is None:
         args.outdir = os.path.join(args.dir, 'regression', args.label)
 
-    args = setup_logging(args, logtype='regression')
+    args = setup_logging(args, logtype=f'regression_{args.label}')
 
-    logging.info(f'saving output to {args.outdir}')
-
-    if os.path.exists(args.outdir) and not args.overwrite:
-        logging.info(f'output directory {args.outdir} already exists and overwrite is False')
-        sys.exit(0)
-    elif os.path.exists(args.outdir) and args.overwrite:
-        shutil.rmtree(args.outdir)
-
-    if not os.path.exists(args.outdir):
-        os.makedirs(args.outdir)
+    check_for_existing_files(args, args.outdir, ['rsquared.nii'])
+    args.logger.info(f'saving output to {args.outdir}')
 
     if args.bg_img is None:
         args.bg_img = os.path.join(args.dir, 'preproc/functional_channel_1_moco_mean.nii')
     if not os.path.exists(args.bg_img):
         baseimg = os.path.join(args.dir, 'preproc/functional_channel_1_moco.h5')
-        logging.warning(f'Background image {args.bg_img} does not exist - trying to create mean from {baseimg}')
+        args.logger.warning(f'Background image {args.bg_img} does not exist - trying to create mean from {baseimg}')
         assert os.path.exists(baseimg), 'base image for mean anat does not exist'
         imgmath(baseimg, 'mean', outfile_type='nii')
         assert os.path.exists(args.bg_img), 'mean image still does not exist'
@@ -250,27 +244,27 @@ if __name__ == "__main__":
 
     fictrac_raw, expt_len = load_fictrac_data(args)
 
-    logging.info('loading data from h5 file')
+    args.logger.info('loading data from h5 file')
     brain, qform, zooms, xyzt_units = load_brain(args)
 
     maskfile = args.bg_img.replace('mean.', 'mask.')
     assert maskfile != args.bg_img, 'maskfile should not be the same as the bg_img'
     if os.path.exists(maskfile):
-        logging.info('loading existing mask')
+        args.logger.info('loading existing mask')
         mask = nib.load(maskfile).get_fdata().astype('int')
     else:
-        logging.info('creating mask')
+        args.logger.info('creating mask')
         mask = setup_mask(args, brain,
             args.bg_img, maskfile)
 
-    logging.info(f"Performing regression on {args.file}")
+    args.logger.info(f"Performing regression on {args.file}")
     if args.behavior is not None:
         # change variable to use an empty list for confound only
         behaviors = args.behavior
-        logging.info(f'behaviors: {behaviors}')
+        args.logger.info(f'behaviors: {behaviors}')
     else:
         behaviors = []
-        logging.info('confound modeling only')
+        args.logger.info('confound modeling only')
 
     results = {'rsquared': np.zeros(brain.shape[:-1])}
     if args.behavior is not None:
@@ -279,7 +273,7 @@ if __name__ == "__main__":
 
     confound_regressors, confound_names = setup_confounds(args, brain)
     if len(confound_names) > 0:
-        logging.info(f'confound regressors: {confound_names}')
+        args.logger.info(f'confound regressors: {confound_names}')
 
     if args.save_residuals:
         residual_img = nib.Nifti1Image(
@@ -323,10 +317,10 @@ if __name__ == "__main__":
         if args.verbose:
             print(f'slice {z}: ')
         if zdata_trans is None:
-            logging.info(f'Skipping slice {z} because it has no brain')
+            args.logger.info(f'Skipping slice {z} because it has no brain')
             continue
         else:
-            logging.info(F"Processing slice {z}: {np.sum(zmask_vec)} voxels")
+            args.logger.info(F"Processing slice {z}: {np.sum(zmask_vec)} voxels")
 
         lm = LinearRegression(n_jobs=args.cores, fit_intercept=False)
         y = zdata_trans.T
@@ -337,7 +331,7 @@ if __name__ == "__main__":
             else:
                 X = confound_regressors
         if args.std_betas:
-            logging.debug('Standardizing regressors')
+            args.logger.debug('Standardizing regressors')
             X = X - np.mean(X, axis=0)
             X = X / np.std(X, axis=0)
         X = add_constant(X, prepend=False)
@@ -361,7 +355,7 @@ if __name__ == "__main__":
             results['beta'][:, :, z, i] = slice_coefs
             slice_tstat = np.zeros(brain.shape[:2])
             slice_tstat[mask[:, :, z] == 1] = lm.coef_[:, i] / np.sqrt(MSE[i] / np.diag(XtX)[i])
-            logging.debug(f'max tstat: {np.max(slice_tstat[mask[:, :, z] == 1])}')
+            args.logger.debug(f'max tstat: {np.max(slice_tstat[mask[:, :, z] == 1])}')
             results['tstat'][:, :, z, i] = slice_tstat
 
         slice_rsquared = np.zeros(brain.shape[:2])
@@ -373,7 +367,7 @@ if __name__ == "__main__":
         results['fdr_pvalue'] = fdrcorrection(
             results['pvalue'].reshape(np.prod(results['pvalue'].shape)))[1].reshape(results['pvalue'].shape)
 
-    logging.info('saving results')
+    args.logger.info('saving results')
     save_desmtx(args, X, confound_names)
 
     save_files = save_regressiondata(
@@ -383,7 +377,15 @@ if __name__ == "__main__":
         del results
         del brain
 
-        residual_file = os.path.join(args.outdir, 'residuals.nii')
-        nib.save(residual_img, residual_file)
+        if args.residfile is None:
+            residfile = os.path.join(args.outdir, 'residuals.h5')
+        else:
+            residfile = os.path.join(args.dir, args.residfile)
 
-    logging.info(f'job completed: {datetime.datetime.now()}')
+        with h5py.File(residfile, 'w') as f:
+            f.create_dataset('data', data=residual_img.dataobj)
+            f.create_dataset('qform', data=residual_img.header.get_qform())
+            f.create_dataset('zooms', data=residual_img.header.get_zooms())
+            f.create_dataset('xyzt_units', data=residual_img.header.get_xyzt_units())
+
+    args.logger.info(f'job completed: {datetime.datetime.now()}')

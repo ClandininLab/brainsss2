@@ -94,35 +94,48 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
 
     # fx argument has priority over args.logfile
     if logfile is not None:
+        if args.verbose:
+            print('setting log file using fx argument')
         setattr(args, 'logfile', logfile)
         setattr(args, 'logdir', os.path.dirname(logfile))
     elif 'logfile' in args and args.logfile is not None:
+        if args.verbose:
+            print('setting log file from args')
         setattr(args, 'logfile', args.logfile)
         setattr(args, 'logdir', os.path.dirname(args.logfile))
     else:
         # come up with a logfile name
-        if logdir is None and "logdir" in args:
-            logdir = args.logdir
-        elif logdir is not None:
+        if logdir is not None:
             setattr(args, "logdir", logdir)
+        elif logdir is None and "logdir" in args:
+            logdir = args.logdir
         else:
             setattr(args, "logdir", None)
 
         if args.logdir is None:
             # try to put into dir if possible
             if args.dir is not None:
+                if args.verbose:
+                    print('setting log dir from args.dir')
                 args.logdir = os.path.join(args.dir, 'logs')
             # fall back on basedir
             elif args.basedir is not None:
+                if args.verbose:
+                    print('setting log dir from args.basedir')
                 args.logdir = os.path.join(args.basedir, 'logs')
             else:
                 raise ValueError("args.dir or args.basedir must be specified if args.logdir is not")
         args.logdir = os.path.realpath(args.logdir)
+        if args.verbose:
+            print('logdir:', args.logdir)
         setattr(
             args,
             "logfile",
             get_logfile_name(args.logdir, logtype),
         )
+
+    if args.verbose:
+        print(f'{logtype}: logging to {args.logfile}')
 
     if not os.path.exists(args.logdir):
         os.mkdir(args.logdir)
@@ -133,30 +146,42 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
     #  RP: replace custom code with logging.basicConfig
     setattr(args, 'file_handler', logging.FileHandler(args.logfile))
     logging_handlers = [args.file_handler]
+    # set level of individual handlers
+    logger = logging.getLogger('brainsss')
+    for handler in logging_handlers:
+        logger.addHandler(handler)
 
+    # logging.basicConfig(
+    #     handlers=logging_handlers,
+    #     format="%(message)s",
+    #     datefmt="%m/%d/%Y %I:%M:%S %p",
+    # )
+    formatter = logging.Formatter("%(message)s")
+    for handler in logger.handlers:
+        handler.setFormatter(formatter)
+        if args.verbose:
+            handler.setLevel(logging.DEBUG)
+        else:
+            handler.setLevel(logging.INFO)
+
+    # set level of root logger
     if args.verbose:
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
-        ch.setFormatter(formatter)
-        logging_handlers.append(ch)
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
 
-    logging.basicConfig(
-        handlers=logging_handlers,
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(message)s",
-        datefmt="%m/%d/%Y %I:%M:%S %p",
-    )
+    print(f"logger (should be {'DEBUG' if args.verbose else 'INFO'}):", logger)
     title = pyfiglet.figlet_format("Brainsss", font="doom")
     title_shifted = ("\n").join([" " * 20 + line for line in title.split("\n")][:-2])
-    logging.info(title_shifted)
-    logging.info(f"jobs started: {datetime.datetime.now()}")
+    logger.info(title_shifted)
+    logger.info(f"jobs started: {datetime.datetime.now()}")
     if args.verbose:
-        logging.debug(f"verbose logging enabled: {args.logfile}")
+        logger.debug(f"verbose logging enabled: {args.logfile}")
 
-    logging.info("\n\nArguments:")
+    logger.info("\n\nArguments:")
     args_dict = vars(args)
     for key, value in args_dict.items():
-        logging.info(f"{key}: {value}")
-    logging.info("\n")
+        logger.info(f"{key}: {value}")
+    logger.info("\n")
+    setattr(args, 'logger', logger)
     return args

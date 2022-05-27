@@ -60,6 +60,7 @@ class SlurmBatchJob:
         elif 'logfile' in user_args:
             self.logfile = user_args['logfile']
 
+        logger.setLevel(logging.DEBUG if self.verbose else logging.INFO)
         formatter = logging.Formatter(
             '|%(asctime)s|%(name)s|%(levelname)s\n%(message)s\n')
         if self.logfile is not None:
@@ -75,7 +76,6 @@ class SlurmBatchJob:
             sh.setFormatter(formatter)
             logger.addHandler()
             logger.debug('No logfile specified')
-        logger.setLevel(logging.DEBUG if self.verbose else logging.INFO)
 
         assert os.path.exists(self.script)
         logger.info(f'Setting up SlurmBatchJob for {self.script}')
@@ -147,7 +147,7 @@ class SlurmBatchJob:
             return(self.local_response)
 
         if not self.sbatch_run:
-            logging.warning('Cannot wait for job - job not run')
+            logger.warning('Cannot wait for job - job not run')
 
         while True:
             status = self.status()
@@ -169,12 +169,12 @@ class SlurmBatchJob:
     def status(self, return_full_output=False):
         if self.local:
             if self.local_response is None:
-                logging.warning('Cannot get status of local job - no response')
+                logger.warning('Cannot get status of local job - no response')
             else:
                 return('COMPLETED')
 
         if not self.sbatch_run:
-            logging.warning('Cannot get status of job - job not run')
+            logger.warning('Cannot get status of job - job not run')
             return None
 
         temp = subprocess.getoutput(
