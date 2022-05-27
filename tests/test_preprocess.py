@@ -5,6 +5,7 @@ import json
 from brainsss2.preprocess_utils import (
     dict_to_args_list,
     load_user_settings_from_json,
+    load_default_settings_from_json,
     setup_modules,
     default_modules
 )
@@ -31,10 +32,6 @@ def args():
 
     parser = add_preprocess_arguments(parser)
 
-    parser = add_fictrac_qc_arguments(parser)
-
-    parser = add_moco_arguments(parser)
-
     return parser.parse_args(['-b', '/tmp/test'])
 
 
@@ -48,13 +45,17 @@ def test_parse_args(args):
 
 
 def test_load_settings_from_file(args):
-    d = {'process_flydir': 'test'}
+    d = {'motion_correction_func': {
+        'type_of_transform': 'Rigid'
+    }}
     testfile = '/tmp/test.json'
     with open(testfile, 'w') as f:
         json.dump(d, f)
     setattr(args, 'settings_file', testfile)
-    args = load_user_settings_from_json(args)
-    assert args.process_flydir == 'test'
+    args = load_default_settings_from_json(args)
+    args = load_user_settings_from_json(args, testfile)
+    assert args.preproc_settings[
+        'motion_correction_func']['type_of_transform'] == 'Rigid'
 
 
 def test_setup_modules_basic(args):

@@ -3,6 +3,7 @@
 # pyright: reportMissingImports=false
 
 import h5py
+import os
 import numpy as np
 import argparse
 import nibabel as nib
@@ -27,7 +28,7 @@ def parse_args(input, allow_unknown=True):
     )
     parser.add_argument('--stepsize', type=int, default=50,
                         help="stepsize for chunking")
-    parser.add_argument('-o', '--operation', type=str,
+    parser.add_argument('--operation', type=str,
             help='operation to perform', required=True)
     parser.add_argument('--outfile_type', type=str,
         choices=['h5', 'nii'], default=None)
@@ -63,8 +64,6 @@ def parse_args_old(input, allow_unknown=True, add_op=False):
     parser.add_argument('--fwhm', type=float, help='fwhm for smoothing')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
-        if unknown is not None:
-            print(f'skipping unknown arguments:{unknown}')
     else:
         args = parser.parse_args()
 
@@ -126,9 +125,7 @@ def img_smooth(img, fwhm, stepsize=50):
     outimg = nib.Nifti1Image(np.zeros(img.shape), img.affine)
     chunk_boundaries = get_chunk_boundaries(stepsize, img.shape[-1])
 
-    nchunks = len(chunk_boundaries)
     for chunk_num, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
-        print(f'chunk {chunk_num+1}/{nchunks}')
         tmp_img = nib.Nifti1Image(img.dataobj[:, :, :, chunk_start:chunk_end],
             img.affine, img.header)
         outimg.dataobj[:, :, :, chunk_start:chunk_end] = smooth_image(
@@ -149,7 +146,7 @@ def img_std(img):
 
 def imgmath(file, operation,
             verbose=False, outfile_type=None,
-            stepsize=50, fwhm=None):
+            stepsize=50, fwhm=None, overwrite=True):
     """
     perform image math
 
@@ -180,14 +177,16 @@ def imgmath(file, operation,
     outfile = file.replace(f".{infile_type}", f"_{operation}.{outfile_type}")
     assert outfile != file, f"outfile should be different from file: {outfile}"
 
+    if os.path.exists(outfile) and not overwrite:
+        print('outfile already exists, skipping')
+        sys.exit(0)
+
     if infile_type == 'h5':
-        print(f'computing {operation} of h5 file')
         f = h5py.File(file, 'r')
         # convert immediately to nibabel image and set header fields
         img = img_from_h5(f)
 
     else:
-        print(f'computing {operation} of nii file')
         img = nib.load(file, mmap='r')
 
     if operation == 'mean':
@@ -210,8 +209,6 @@ def imgmath(file, operation,
     if verbose:
         print(f'image grand mean: {np.mean(outimg.get_fdata())}')
 
-    print(f'saving {operation} of {file} to file {outfile}')
-
     if outfile_type == 'h5':
         nii_to_h5(outimg, outfile)
     else:
@@ -225,4 +222,4 @@ if __name__ == "__main__":
     print(f'applying {args.operation} to {args.file}')
     _ = imgmath(args.file, args.operation,
         args.verbose, args.outfile_type, args.stepsize,
-        fwhm=args.fwhm)
+        fwhm=args.fwhm, overwrite=args.overwrite)

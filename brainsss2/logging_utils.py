@@ -156,7 +156,9 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
     #     format="%(message)s",
     #     datefmt="%m/%d/%Y %I:%M:%S %p",
     # )
+    formatter = logging.Formatter("%(message)s")
     for handler in logger.handlers:
+        handler.setFormatter(formatter)
         if args.verbose:
             handler.setLevel(logging.DEBUG)
         else:
@@ -174,12 +176,12 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
     logger.info(title_shifted)
     logger.info(f"jobs started: {datetime.datetime.now()}")
     if args.verbose:
-        logging.debug(f"verbose logging enabled: {args.logfile}")
+        logger.debug(f"verbose logging enabled: {args.logfile}")
 
     logger.info("\n\nArguments:")
     args_dict = vars(args)
     for key, value in args_dict.items():
-        logging.info(f"{key}: {value}")
+        logger.info(f"{key}: {value}")
     logger.info("\n")
     setattr(args, 'logger', logger)
     return args

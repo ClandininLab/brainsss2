@@ -5,6 +5,8 @@ from brainsss2.argparse_utils import (
     get_base_parser,
     add_fictrac_qc_arguments,
 )
+import logging
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 
 def parse_args(input, allow_unknown=True):
@@ -22,8 +24,6 @@ def parse_args(input, allow_unknown=True):
 
     if allow_unknown:
         args, unknown = parser.parse_known_args()
-        if unknown is not None:
-            print(f'skipping unknown arguments:{unknown}')
     else:
         args = parser.parse_args()
 

@@ -16,4 +16,4 @@ if __name__ == "__main__":
     logging.info(f'applying {args.operation} to {args.file}')
     _ = imgmath(args.file, args.operation,
         args.verbose, args.outfile_type, args.stepsize,
-        fwhm=args.fwhm)
+        fwhm=args.fwhm, overwrite=args.overwrite)

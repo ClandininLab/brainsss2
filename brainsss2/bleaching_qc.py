@@ -7,6 +7,8 @@ import nibabel as nib
 from pathlib import Path
 from brainsss2.argparse_utils import get_base_parser # noqa
 from brainsss2.logging_utils import setup_logging # noqa
+import logging
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 
 def parse_args(input, allow_unknown=True):

@@ -5,26 +5,16 @@
 import os
 import sys
 import ants
-import json
 import logging
 from brainsss2.argparse_utils import get_base_parser, add_moco_arguments # noqa
 from brainsss2.logging_utils import setup_logging # noqa
 from brainsss2.imgmath import imgmath # noqa
-import shutil
+from brainsss2.preprocess_utils import check_for_existing_files, dump_args_to_json
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 
 def parse_args(input, allow_unknown=True):
     parser = get_base_parser('anatomical_registration')
-    parser.add_argument('-o', '--overwrite', action='store_true',
-        help='overwrite existing transforms dir')
-
-    parser.add_argument('--type_of_transform', type=str, default='SyN',
-        help='type of transform to use')
-    parser.add_argument('--interpolation_method', type=str, default='lanczosWindowedSinc')
-    parser.add_argument('--flow_sigma', type=float, default=3,
-        help='flow sigma for registration - higher sigma focuses on coarser features')
-    parser.add_argument('--total_sigma', type=float, default=1,
-        help='total sigma for registration - higher values will restrict the amount of deformation allowed')
 
     # need to add this manually to procesing steps in order to make required
     parser.add_argument(
@@ -36,29 +26,41 @@ def parse_args(input, allow_unknown=True):
         type=str,
         default='func_0/preproc/functional_channel_1_moco_mean.nii',
         help='channel 1 mean img for functional data (after moco)')
-    parser.add_argument('--anatfile',
-        type=str,
-        default='anat_0/preproc/anatomy_channel_1_res-2.0mu_moco_mean.nii',
-        help='channel 1 mean image for anat data (after moco)')
-    parser.add_argument(
-        '--atlasfile',
-        type=str,
-        help='atlas file',
-        required=True)
-    parser.add_argument('--atlasname',
-        type=str,
-        help='identifier for atlas space',
-        required=True)
     parser.add_argument(
         '--transformdir',
         type=str,
         help='directory to save transforms')
-    parser.add_argument(
+
+    atlas = parser.add_argument_group('atlas options')
+    atlas.add_argument('--anatfile',
+        type=str,
+        default='anat_0/preproc/anatomy_channel_1_res-2.0mu_moco_mean.nii',
+        help='channel 1 mean image for anat data (after moco)')
+    atlas.add_argument(
+        '--atlasfile',
+        type=str,
+        help='atlas file',
+        required=True)
+    atlas.add_argument('--atlasname',
+        type=str,
+        help='identifier for atlas space',
+        required=True)
+
+    group = parser.add_argument_group('ANTs registration options')
+    group.add_argument('--type_of_transform', type=str, default='SyN',
+        help='type of transform to use')
+    group.add_argument('--interpolation_method', type=str, default='lanczosWindowedSinc')
+    group.add_argument('--flow_sigma', type=float, default=3,
+        help='flow sigma for registration - higher sigma focuses on coarser features')
+    group.add_argument('--total_sigma', type=float, default=1,
+        help='total sigma for registration - higher values will restrict the amount of deformation allowed')
+    group.add_argument(
         '--maskthresh',
         type=float,
         default=.1,
-        help='threshold for masking'
+        help='density threshold for masking'
     )
+
     if allow_unknown:
         args, unknown = parser.parse_known_args()
     else:
@@ -84,15 +86,12 @@ if __name__ == "__main__":
 
     registration_dir = os.path.join(args.dir, "registration")
     setattr(args, "registration_dir", registration_dir)
-    if args.overwrite and os.path.exists(registration_dir):
-        print(f"overwriting existing registration in {registration_dir}")
-        shutil.rmtree(registration_dir)
-    elif os.path.exists(registration_dir):
-        raise FileExistsError(f"registration dir {registration_dir} already exists, use -o to overwrite")
-    
+
+    required_files = ['registration.json']
+    check_for_existing_files(args, args.registration_dir, required_files)
+
     if not os.path.exists(registration_dir):
         os.mkdir(registration_dir)
-        
 
     if args.transformdir is None:
         args.transformdir = os.path.join(registration_dir, 'transforms')
@@ -110,7 +109,7 @@ if __name__ == "__main__":
     meananatimg = ants.image_read(os.path.join(args.dir, args.anatfile))
 
     ## register anat channel 1 mean to atlas
-    logging.info('registering anat channel 1 mean to atlas')
+    args.logger.info('registering anat channel 1 mean to atlas')
     anat_to_atlas = ants.registration(
         fixed=atlasimg,
         moving=meananatimg,
@@ -140,7 +139,7 @@ if __name__ == "__main__":
     meanfuncimg = ants.image_read(os.path.join(args.dir, args.funcfile))
 
     ## register functional channel 1 mean to anat channel 1 mean
-    logging.info('registering functional channel 1 mean to anat channel 1 mean')
+    args.logger.info('registering functional channel 1 mean to anat channel 1 mean')
     func_to_anat = ants.registration(
         fixed=meananatimg,
         moving=meanfuncimg,
@@ -167,7 +166,7 @@ if __name__ == "__main__":
     func_to_anat['warpedfixout'].to_filename(anat_reg_to_func_file)
 
     # warp atlas to func space
-    logging.info('warping atlas to functional space')
+    args.logger.info('warping atlas to functional space')
     atlas_to_func = ants.apply_transforms(moving=atlasimg,
         fixed=meanfuncimg,
         transformlist=anat_to_atlas['invtransforms'] + func_to_anat['invtransforms'])
@@ -179,7 +178,7 @@ if __name__ == "__main__":
     atlas_to_func.to_filename(atlas_to_func_file)
 
     setattr(args, 'completed', True)
-    delattr(args, 'file_handler')  # not serializable
-    with open(os.path.join(registration_dir, 'registration.json'), 'w') as f:
-        json.dump(vars(args), f, indent=4)
-    logging.info("Completed atlas registration")
+
+    dump_args_to_json(args,
+        os.path.join(registration_dir, 'registration.json'))
+    args.logger.info("Completed atlas registration")

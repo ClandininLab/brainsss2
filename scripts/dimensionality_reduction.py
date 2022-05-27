@@ -11,7 +11,8 @@ from brainsss2.argparse_utils import get_base_parser, add_dr_args
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import scale
 import matplotlib.pyplot as plt
-import json
+from brainsss2.logging_utils import setup_logging  # noqa
+from brainsss2.preprocess_utils import check_for_existing_files, dump_args_to_json
 
 
 def parse_args(args, allow_unknown=True):
@@ -86,35 +87,40 @@ def load_masked_data(datafile, maskfile):
 if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
 
+    args = setup_logging(args, logtype="PCA")
+    print(args)
+    if args.outdir is None:
+        args.outdir = os.path.join(args.basedir, f'report/images/{args.funcdir}/PCA')
+
+    required_files = ["PCA.json"]
+    check_for_existing_files(args, args.outdir, required_files)
+
     # add paths to data files
     setattr(args, 'datafile',
-        os.path.join(args.dir, args.funcdir, args.datafile))
+        os.path.join(args.basedir, args.funcdir, args.datafile))
 
     setattr(args, 'meanfile',
-        os.path.join(args.dir, args.funcdir, args.meanfile))
+        os.path.join(args.basedir, args.funcdir, args.meanfile))
 
     setattr(args, 'maskfile',
-        os.path.join(args.dir, args.funcdir, args.maskfile))
+        os.path.join(args.basedir, args.funcdir, args.maskfile))
 
     mask_img = nib.load(args.maskfile)
 
     # load data
-    print('Loading data...')
+    args.logger('Loading data...')
     alldata = load_masked_data(args.datafile, args.maskfile)
 
-
-    print('Performing PCA...')
+    args.logger('Performing PCA...')
     alldata = alldata - np.mean(alldata, axis=0)
     alldata = alldata / np.std(alldata, axis=0)
     pca = PCA(n_components=args.ncomps, svd_solver='randomized')
     pca.fit(alldata)
     scale_comps = scale(pca.components_, axis=1)
-    comp_timeseries = alldata.dot(scale_comps.T)/alldata.shape[1]
+    comp_timeseries = alldata.dot(scale_comps.T) / alldata.shape[1]
 
-    print('Plotting components...')
-    if args.outdir is None:
-        args.outdir = os.path.join(args.dir, f'report/images/{args.funcdir}/PCA')
+    args.logger('Plotting components...')
     plot_comps(pca.components_, pca.explained_variance_ratio_, comp_timeseries,
         args)
-    with open(os.path.join(args.outdir, 'PCA.json'), 'w') as f:
-        json.dump(vars(args), f)
+
+    dump_args_to_json(args, os.path.join(args.outdir, 'PCA.json'))

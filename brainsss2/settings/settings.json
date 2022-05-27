@@ -31,7 +31,6 @@
     },
     "regression_XYZ": {
         "script": "regression.py",
-        "overwrite": true,
         "label": "model001_dRotLabXYZ",
         "confound_files": "preproc/framewise_displacement.csv",
         "time_hours": 1,
@@ -43,7 +42,6 @@
     },
     "regression_confound": {
         "script": "regression.py",
-        "overwrite": true,
         "save_residuals": true,
         "label": "model000_confound",
         "confound_files": "preproc/framewise_displacement.csv",
@@ -51,19 +49,28 @@
     },
     "STA": {
         "script": "stim_triggered_avg_neu.py",
-        "overwrite": true,
         "time_hours": 1
     },
     "atlasreg": {
         "script": "atlas_registration.py",
         "type_of_transform": "SyN",
         "atlasname": "jfrc",
-        "overwrite": true,
         "time_hours": 8
     },
     "supervoxels": {
         "script": "make_supervoxels.py",
-        "overwrite": true,
+        "time_hours": 1
+    },
+    "PCA": {
+        "script": "dimensionality_reduction.py",
+        "time_hours": 1
+    },
+    "check_status": {
+        "script": "check_status.py",
+        "time_hours": 1
+    },
+    "report": {
+        "script": "generate_report.py",
         "time_hours": 1
     }
 }

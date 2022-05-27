@@ -7,10 +7,10 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.feature_extraction.image import grid_to_graph
 from brainsss2.argparse_utils import get_base_parser  # noqa
 from brainsss2.logging_utils import setup_logging  # noqa
-import logging
 import nibabel as nib
 import shutil
 import warnings
+from brainsss2.preprocess_utils import check_for_existing_files
 
 
 def warn(*args, **kwargs):
@@ -34,18 +34,6 @@ THIS IS A JOBLIB ISSUE. If you can, kindly provide the joblib's team with an
 def parse_args(input, allow_unknown=True):
     parser = get_base_parser("anatomical_registration")
     parser.add_argument(
-        "-o",
-        "--overwrite",
-        action="store_true",
-        help="overwrite existing transforms dir",
-    )
-    parser.add_argument(
-        "--nclusters",
-        type=int,
-        default=2000,
-        help="number of clusters to use for supervoxelization",
-    )
-    parser.add_argument(
         "-d", "--dir", type=str, help="func dir to be processed", required=True
     )
     parser.add_argument(
@@ -55,6 +43,12 @@ def parse_args(input, allow_unknown=True):
         help="functional file to use",
     )
     parser.add_argument(
+        "--nclusters",
+        type=int,
+        default=2000,
+        help="number of clusters to use for supervoxelization",
+    )
+    parser.add_argument(
         "--linkage",
         type=str,
         default="ward",
@@ -62,8 +56,6 @@ def parse_args(input, allow_unknown=True):
     )
     if allow_unknown:
         args, unknown = parser.parse_known_args()
-        if unknown is not None:
-            print(f"skipping unknown arguments:{unknown}")
     else:
         args = parser.parse_args()
 
@@ -75,10 +67,13 @@ if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
     args = setup_logging(args, logtype="supervoxels")
+    cluster_dir = os.path.join(args.dir, "clustering")
 
+    required_files = ["cluster_signals.npy"]
+    check_for_existing_files(args, cluster_dir, required_files)
     ### LOAD BRAIN ###
 
-    logging.info(f"loading brain from {args.funcfile}")
+    args.logger.info(f"loading brain from {args.funcfile}")
     if args.funcfile.endswith(".nii"):
         brain = nib.load(os.path.join(args.dir, args.funcfile))
     elif args.funcfile.endswith(".h5"):
@@ -87,19 +82,7 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Unknown file type: {args.funcfile}")
 
-    ### MAKE CLUSTER DIRECTORY ###
-
-    cluster_dir = os.path.join(args.dir, "clustering")
-    if os.path.exists(cluster_dir) and args.overwrite:
-        logging.info("overwriting existing cluster dir")
-        shutil.rmtree(cluster_dir)
-    elif os.path.exists(cluster_dir):
-        raise FileExistsError(
-            f"cluster dir {cluster_dir} already exists, use -o to overwrite"
-        )
-    os.mkdir(cluster_dir)
-
-    logging.info("fitting clusters")
+    args.logger.info("fitting clusters")
     t0 = time.time()
     connectivity = grid_to_graph(brain.shape[0], brain.shape[1])
     cluster_labels = []
@@ -108,7 +91,7 @@ if __name__ == "__main__":
     )
     for z in range(brain.shape[2]):
         if args.verbose:
-            logging.info(f"clustering slice {z}")
+            args.logger.info(f"clustering slice {z}")
         if isinstance(brain, nib.nifti1.Nifti1Image):
             neural_activity = brain.dataobj[:, :, z, :].reshape(-1, 3384)
         else:
@@ -124,7 +107,7 @@ if __name__ == "__main__":
         cluster_img.dataobj[:, :, z] = cluster_model.labels_.reshape(brain.shape[:2])
     cluster_labels = np.asarray(cluster_labels)
 
-    logging.info(f"saving clustering solution to {cluster_dir}")
+    args.logger.info(f"saving clustering solution to {cluster_dir}")
     save_file = os.path.join(cluster_dir, "cluster_labels.npy")
     np.save(save_file, cluster_labels)
     save_img = os.path.join(cluster_dir, "cluster_labels.nii.gz")
@@ -132,7 +115,7 @@ if __name__ == "__main__":
 
     ### GET CLUSTER AVERAGE SIGNAL ###
 
-    logging.info("getting cluster averages")
+    args.logger.info("getting cluster averages")
     all_signals = []
     for z in range(49):
         if isinstance(brain, nib.nifti1.Nifti1Image):
@@ -151,4 +134,4 @@ if __name__ == "__main__":
     np.save(save_file, all_signals)
     if os.path.exists(os.path.join(cluster_dir, "joblib")):
         shutil.rmtree(os.path.join(cluster_dir, "joblib"))
-    logging.info("completed clustering")
+    args.logger.info("completed clustering")

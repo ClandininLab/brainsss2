@@ -9,7 +9,6 @@ import json
 import ants
 import matplotlib.pyplot as plt
 from pathlib import Path
-import logging
 import random
 import string
 from brainsss2.argparse_utils import get_base_parser, add_moco_arguments # noqa
@@ -48,15 +47,15 @@ def load_data(args):
     """determine directory type and load data"""
     if args.dir.split('/')[-1] != 'imaging':
         datadir = os.path.join(args.dir, 'imaging')
-    logging.info(f'Loading data from {datadir}')
+    args.logger.info(f'Loading data from {datadir}')
     files = [f.as_posix() for f in Path(datadir).glob('*_channel*.nii') if 'mean' not in f.stem]
     files.sort()
-    logging.info(f'Data files: {files}')
+    args.logger.info(f'Data files: {files}')
     assert len(files) in {1, 2}, 'Must have exactly one or two data files in directory'
 
     assert 'channel_1' in files[0], 'data for first channel must be named channel_1'
     if len(files) == 1:
-        logging.info('Only one channel found, no mirror will be used')
+        args.logger.info('Only one channel found, no mirror will be used')
     if len(files) == 2:
         assert 'channel_2' in files[1], 'data for second channel must be named channel_2'
 
@@ -67,7 +66,7 @@ def load_data(args):
         assert 'functional' in files[0], 'dirtype is func but no functional data'
     elif args.dirtype == 'anat':
         assert 'anatomy' in files[0], 'dirtype is anat but no anatomical data'
-    logging.info(f'Scan type: {args.dirtype}')
+    args.logger.info(f'Scan type: {args.dirtype}')
 
     files_dict = {
         'channel_1': files[0],
@@ -89,9 +88,23 @@ def load_data(args):
 
 
 def set_stepsize(args, scantype_stepsize_dict=None):
+    if args.stepsize is not None:
+        return(args)
     if scantype_stepsize_dict is None:
         scantype_stepsize_dict = {'func': 40, 'anat': 5}
     setattr(args, 'stepsize', scantype_stepsize_dict[args.dirtype])
+    return(args)
+
+
+def get_dirtype(args, files):
+    if args.dirtype is not None:
+        return(args)
+    if 'func_' in files['channel_1']:
+        args.dirtype = 'func'
+    elif 'anat_' in files['channel_1']:
+        args.dirtype = 'anat'
+    else:
+        raise Exception('Could not determine scan type')
     return(args)
 
 
@@ -114,7 +127,7 @@ def setup_h5_datasets(args, files):
             '.nii', '_moco.h5'),
         'channel_2': None}
     if args.verbose:
-        logging.info(f'Creating channel_1 h5 file: {h5_file_names["channel_1"]}')
+        args.logger.info(f'Creating channel_1 h5 file: {h5_file_names["channel_1"]}')
 
     # assume same affine for both channels
     img = nib.load(files['channel_1'])
@@ -131,7 +144,7 @@ def setup_h5_datasets(args, files):
         xyzt_units=xyzt_units,
         stepsize=args.stepsize)
     h5_files = {'channel_2': None, 'channel_1': os.path.join(moco_dir, filename)}
-    logging.info(f"Created empty hdf5 file: {h5_files['channel_1']}")
+    args.logger.info(f"Created empty hdf5 file: {h5_files['channel_1']}")
 
     if 'channel_2' in files and files['channel_2'] is not None:
         h5_file_names['channel_2'] = os.path.basename(files['channel_2']).replace(
@@ -144,25 +157,8 @@ def setup_h5_datasets(args, files):
             xyzt_units=xyzt_units,
             stepsize=args.stepsize)
         h5_files['channel_2'] = os.path.join(moco_dir, filename)
-        logging.info(f"Created empty hdf5 file: {h5_files['channel_2']}")
+        args.logger.info(f"Created empty hdf5 file: {h5_files['channel_2']}")
     return h5_files
-
-
-def create_moco_output_dir(args):
-    setattr(args, 'moco_output_dir', os.path.join(args.dir, 'preproc'))
-
-    # NOTE: this might be a good idea to enable in the future, not sure...
-    # if os.path.exists(args.moco_output_dir) and args.overwrite:
-    #     if args.verbose:
-    #         print('removing existing moco output directory')
-    #     shutil.rmtree(args.moco_output_dir)
-    # elif os.path.exists(args.moco_output_dir) and not args.overwrite:
-    #     raise ValueError(f'{args.moco_output_dir} already exists, use --overwrite to overwrite')
-
-    if not os.path.exists(args.moco_output_dir):
-        os.mkdir(args.moco_output_dir)
-    logging.info(f'Moco output directory: {args.moco_output_dir}')
-    return(args)
 
 
 def get_random_hash(length=8):
@@ -178,14 +174,14 @@ def get_temp_dir(args):
     if not os.path.exists(args.temp_dir):
         os.makedirs(args.temp_dir)
 
-    logging.info(f'using ants tmp dir {args.temp_dir}')
+    args.logger.info(f'using ants tmp dir {args.temp_dir}')
     return(args)
 
 
 def apply_moco_parameters_to_channel_2(args, files,
                                        h5_files, transform_files):
     """Apply moco parameters to channel 2"""
-    logging.info('Applying moco parameters to channel 2')
+    args.logger.info('Applying moco parameters to channel 2')
     assert 'channel_2' in files, 'files must include channel_2'
 
     # load ch1 image to get dimensions for chunking
@@ -207,7 +203,7 @@ def apply_moco_parameters_to_channel_2(args, files,
         try:
             transform = transform_files[timepoint]
         except IndexError:
-            logging.warning(f'No transform file for timepoint {timepoint}')
+            args.logger.warning(f'No transform file for timepoint {timepoint}')
             continue
         # apply transform
         moving_img = ants.from_numpy(ch2_img.dataobj[..., timepoint].astype('float32'))
@@ -223,7 +219,7 @@ def apply_moco_parameters_to_channel_2(args, files,
             interpolator=args.interpolation_method)
         corrected_data[..., timepoint] = result.numpy()
     # save data
-    logging.info('Saving channel 2 data')
+    args.logger.info('Saving channel 2 data')
 
     # setup chunking into smaller parts (for memory)
     chunk_boundaries = get_chunk_boundaries(args.stepsize, n_timepoints)
@@ -235,22 +231,22 @@ def apply_moco_parameters_to_channel_2(args, files,
 def run_motion_correction(args, files, h5_files):
     """Run motion correction on tdTomato channel (1)"""
     if args.stepsize == 1:
-        logging.info('Running motion correction using ants.registration')
+        args.logger.info('Running motion correction using ants.registration')
     else:
-        logging.info('Running motion correction using ants.motion_correction')
+        args.logger.info('Running motion correction using ants.motion_correction')
 
     # NB: need to make sure that the data is in the correct orientation
     # (i.e. direction of mean brain and chunkdata must be identical)
-    logging.info('loading mean brain')
+    args.logger.info('loading mean brain')
     ch1_meanbrain = get_mean_brain(files['channel_1'])
-    logging.info(f'ch1_meanbrain shape: {ch1_meanbrain.shape}')
+    args.logger.info(f'ch1_meanbrain shape: {ch1_meanbrain.shape}')
     # load ch1 image to get dimensions for chunking
-    logging.info(f'opening file {files["channel_1"]}')
+    args.logger.info(f'opening file {files["channel_1"]}')
 
     ch1_img = nib.load(files['channel_1'])
     spacing = list(ch1_img.header.get_zooms())
 
-    logging.info('image loaded successfully')
+    args.logger.info('image loaded successfully')
     n_timepoints = ch1_img.shape[-1]
 
     # setup chunking into smaller parts (for memory)
@@ -261,7 +257,7 @@ def run_motion_correction(args, files, h5_files):
 
     # loop through chunks
     for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
-        logging.info(f'processing chunk {i + 1} of {len(chunk_boundaries)}')
+        args.logger.info(f'processing chunk {i + 1} of {len(chunk_boundaries)}')
         # get chunk data
         chunkdata = ch1_img.dataobj[..., chunk_start:chunk_end].astype('float32').squeeze()
 
@@ -301,7 +297,7 @@ def run_motion_correction(args, files, h5_files):
             corrected_img = myreg['warpedmovout'][:, :, :, np.newaxis]
 
         transform_files = transform_files + step_transforms
-        logging.info(f'get motion parameters on chunk {i + 1}')
+        args.logger.info(f'get motion parameters on chunk {i + 1}')
         # extract rigid body transform parameters (translation/rotation)
         if motion_parameters is None:
             # TODO: get_dataset_resolution is failing...
@@ -313,7 +309,7 @@ def run_motion_correction(args, files, h5_files):
                     step_transforms)[1]))
 
         # save results from chunk
-        logging.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
+        args.logger.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
         with h5py.File(h5_files['channel_1'], 'a') as f:
             f['data'][..., chunk_start:chunk_end] = corrected_img
     return(transform_files, motion_parameters)
@@ -338,10 +334,12 @@ def save_motcorr_settings_to_json(args, files, h5_files, nii_files=None):
     args_dict['h5_files'] = h5_files
     if args.save_nii:
         args_dict['nii_files'] = nii_files
-    if 'file_handler' in args_dict:
-        del args_dict['file_handler']
+    save_dict = {}
+    for key, value in args_dict.items():
+        if key not in ['logger', 'file_handler']:
+            save_dict[key] = value
     with open(os.path.join(args.moco_output_dir, 'moco_settings.json'), 'w') as f:
-        json.dump(args_dict, f, indent=4)
+        json.dump(save_dict, f, indent=4)
 
 
 def moco_plot(args, motion_file):
@@ -375,7 +373,7 @@ def save_nii(args, h5_files):
     """save moco data to nifti
     - reuse header info from existing nifti files"""
     for channel, h5_file in h5_files.items():
-        logging.info(f'converting {h5_file} to nifti')
+        args.logger.info(f'converting {h5_file} to nifti')
         _ = h5_to_nii(h5_file)
     return(None)
 
