@@ -53,11 +53,11 @@ def plot_comps(comps, varexp, compts, args):
         thresh = scipy.stats.scoreatpercentile(comp_img.dataobj, args.threshpct)
         plot_stat_map(comp_img, args.meanfile, threshold=thresh,
             display_mode='z', cut_coords=args.ncuts,
-            title=f'PCA Component {compnum} ({100*varexp[compnum]:.03} % var)',
+            title=f'PCA{labelstring} Component {compnum} ({100*varexp[compnum]:.03} % var)',
             output_file=os.path.join(args.outdir, f'PCA{labelstring}_comp_{compnum:03}.png'))
         plt.figure(figsize=(12, 3))
         plt.plot(comp_timeseries[:, compnum])
-        plt.title(f'PCA Component {compnum}')
+        plt.title(f'PCA{labelstring} Component {compnum}')
         plt.savefig(os.path.join(args.outdir, f'PCA{labelstring}_timeseries_comp_{compnum:03}.png'))
 
     compts_df = pd.DataFrame(compts,

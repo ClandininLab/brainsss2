@@ -391,15 +391,13 @@ def process_fly(args):
     # always overwrite for these
     if args.report or args.run_all:
         workflow_dict['check_status'] = {
-            'basedir': args.dir,
-            'dir': args.dir,
+            'dir': os.path.dirname(args.process),
             'cores': 2,
         }
         workflow_dict['check_status'].update(args.preproc_settings['check_status'])
         args.logger.debug(f'check_status workflow dict: {workflow_dict}')
         workflow_dict['report'] = {
-            'basedir': args.dir,
-            'dir': args.dir,
+            'basedir': args.process,
             'cores': 2,
         }
         workflow_dict['report'].update(args.preproc_settings['report'])

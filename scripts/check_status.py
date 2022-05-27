@@ -18,7 +18,7 @@ def parse_args(input, allow_unknown=True):
     parser = get_base_parser('preprocess')
 
     parser.add_argument(
-        "-d", "--basedir",
+        "-d", "--dir",
         type=str,
         help="fly directory to check",
         required=True)
@@ -408,14 +408,16 @@ def check_all_status(flyinfo):
 if __name__ == "__main__":
 
     args = parse_args(sys.argv[1:])
-    assert os.path.exists(args.basedir), f"Directory {args.basedir} does not exist"
-    print(f'Checking status of building/preprocessing for {args.basedir}')
+    print(args)
+    args.dir = os.path.dirname(args.dir)
+    assert os.path.exists(args.dir), f"Directory {args.dir} does not exist"
+    print(f'Checking status of building/preprocessing for {args.dir}')
 
-    flyinfo = {'metadata': get_flyinfo(args.basedir)}
+    flyinfo = {'metadata': get_flyinfo(args.dir)}
 
-    flyinfo['conversion'] = get_conversion_info(args.basedir)
+    flyinfo['conversion'] = get_conversion_info(args.dir)
 
-    flyinfo['dirs'] = find_dirs(args.basedir)
+    flyinfo['dirs'] = find_dirs(args.dir)
 
     # check func dirs
 
@@ -425,7 +427,7 @@ if __name__ == "__main__":
     for anatdir in flyinfo['dirs']['anat']:
         flyinfo['dirs']['anat'][anatdir] = check_dir(anatdir)
 
-    flyinfo_file = os.path.join(args.basedir, 'fly_processing_info.json')
+    flyinfo_file = os.path.join(args.dir, 'fly_processing_info.json')
     with open(flyinfo_file, 'w') as f:
         json.dump(flyinfo, f, indent=4)
 

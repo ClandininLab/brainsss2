@@ -145,7 +145,7 @@
     <h4>PCA results (on smoothed moco data)</h4>
     {% for key2, value2 in value['PCA_moco'].items() %}
     <img src="{{ value2 }}" width="{{ imgwidth }}">
-    <img src="{{ value2.replace('PCA_comp', 'PCA_timeseries_comp') }}" width="{{ imgwidth }}">
+    <img src="{{ value2.replace('PCA_moco_comp', 'PCA_moco_timeseries_comp') }}" width="{{ imgwidth }}">
     {% endfor %}
     {% endif %}
 
@@ -153,7 +153,7 @@
     <h4>PCA results (on confound model residuals)</h4>
     {% for key2, value2 in value['PCA_resid'].items() %}
     <img src="{{ value2 }}" width="{{ imgwidth }}">
-    <img src="{{ value2.replace('PCA_comp', 'PCA_timeseries_comp') }}" width="{{ imgwidth }}">
+    <img src="{{ value2.replace('PCA_resid_comp', 'PCA_resid_timeseries_comp') }}" width="{{ imgwidth }}">
     {% endfor %}
     {% endif %}
 
