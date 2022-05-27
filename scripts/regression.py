@@ -387,6 +387,5 @@ if __name__ == "__main__":
             f.create_dataset('qform', data=residual_img.header.get_qform())
             f.create_dataset('zooms', data=residual_img.header.get_zooms())
             f.create_dataset('xyzt_units', data=residual_img.header.get_xyzt_units())
-        nib.save(residual_img, residfile)
 
     args.logger.info(f'job completed: {datetime.datetime.now()}')
