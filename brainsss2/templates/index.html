@@ -142,9 +142,10 @@
     {% endif %}
 
     {% if value['PCA'] %}
-    <h4>PCA results</h4>
+    <h4>PCA results (on smoothed moco data)</h4>
     {% for key2, value2 in value['PCA'].items() %}
     <img src="{{ value2 }}" width="{{ imgwidth }}">
+    <img src="{{ value2.replace('PCA_comp', 'PCA_timeseries_comp') }}" width="{{ imgwidth }}">
     {% endfor %}
     {% endif %}
 

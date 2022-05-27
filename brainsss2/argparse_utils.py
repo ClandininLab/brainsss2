@@ -87,18 +87,16 @@ def add_preprocess_arguments(parser):
 
     parser.add_argument("--nice", action="store_true", help="nice")
     parser.add_argument(
-        "--no_require_settings", action="store_true", help="don't require settings file"
-    )
-    parser.add_argument(
         "--ignore_settings", action="store_true", help="ignore settings file"
     )
     parser.add_argument("-u", "--user", help="user", type=str, default=getpass.getuser())
     parser.add_argument(
         "-s",
         "--settings_file",
-        help="user settings file (JSON) - defaults to ~/.brainsss/settings.json",
+        help="custom settings file (overriding user/package defaults)",
     )
     parser.add_argument('--modules', help='modules to load', type=str, nargs="+")
+    parser.add_argument('--continue_on_error', action='store_true', help='keep going if a step fails')
     return(parser)
 
 
@@ -216,4 +214,11 @@ def add_dr_args(parser):
         help='func dir to process')
     parser.add_argument('--imgwidth', type=int, default=800)
     parser.add_argument('--imgheight', type=int, default=350)
+    parser.add_argument('--datafile', type=str,
+        default='preproc/functional_channel_2_moco_smooth-2.0mu.h5',
+        help='func data file subpath (defaults to preproc/functional_channel_2_moco_smooth-2.0mu.h5')
+    parser.add_argument('--meanfile', type=str,
+        default='preproc/functional_channel_1_moco_mean.nii')
+    parser.add_argument('--maskfile', type=str,
+        default='preproc/functional_channel_1_moco_mask.nii')
     return(parser)
