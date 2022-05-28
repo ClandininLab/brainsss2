@@ -8,6 +8,7 @@ The original data are located in basedir/imports
 
 Let's say that we want fly_2 recorded on March 29, 2022.  The organization in the imports folder looks like this:
 
+```
 imports
 ├── 20220329
 │   └── fly_2
@@ -37,14 +38,17 @@ imports
 │               ├── TSeries-12172018-1322-006_channel_1.nii
 │               └── TSeries-12172018-1322-006_channel_2.nii
 └── build_logs  # this is where logs for fly building will be put
+```
 
 In addition, there is one additional necessary directory for fly building:
 
 basedir/fictrac: this contains pairs of .log/.dat files that contain readout of ball movements
 
+```
 fictrac
 ├── fictrac-20220329_141649.dat
 └── fictrac-20220329_141649.log
+```
 
 Conversions are tracked within processed/conversion_db.csv - this is checked during building, and any imports already built will not be rebuilt unless the --overwrite flag is set.
 
@@ -56,7 +60,7 @@ TODO: devise a way to ensure a one-one mapping between import datasets and fly n
 
 The result from the fly_builder.py script will be as follows:
 
-
+```
 fly_009
 ├── anat_0
 │   └── imaging
@@ -87,6 +91,7 @@ fly_009
 │       └── stimulus_metadata.pkl
 └── logs
     └── flybuilder_20220411-170431.txt
+```
 
 Logging for fly_builder.py is in fly_XXX/logs; all other logging happens within the specific imaging directory (e.g. fly_XXX/func_0/logs).  Additional directories are also created:
 
@@ -100,6 +105,7 @@ Logging for fly_builder.py is in fly_XXX/logs; all other logging happens within 
 
 outputs:
 
+```
 func_0/
 ├── logs
 │   └── fictrac_qc_20220420-074747.log
@@ -107,18 +113,20 @@ func_0/
     ├── fictrac_2d_hist_fixed.png
     ├── fictrac_2d_hist.png
     └── fictrac_velocity_trace.png
+```
 
 ### Stimulus-triggered average behavior
 
 
 outputs: 
 
+```
 func_0/
 ├── logs
 │   └── stim_triggered_avg_beh_20220420-074802.log
 └── QC
     └── stim_triggered_turning.png
-
+```
 
 ### Bleaching QC
 
