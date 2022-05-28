@@ -251,6 +251,13 @@ if __name__ == "__main__":
     args.logger.info('loading data from h5 file')
     brain, qform, zooms, xyzt_units = load_brain(args)
 
+    if args.save_residuals:
+        args.logger.info('creating/loading functional mean')
+        funcmeanfile = os.path.join(args.dir, args.file.replace('.h5', '_mean.nii'))
+        if not os.path.exists(funcmeanfile):
+            imgmath(os.path.join(args.dir, args.file), 'mean', outfile_type='nii')
+        funcmean_img = nib.load(funcmeanfile)
+
     maskfile = args.bg_img.replace('mean.', 'mask.')
     assert maskfile != args.bg_img, 'maskfile should not be the same as the bg_img'
     if os.path.exists(maskfile):
@@ -348,6 +355,9 @@ if __name__ == "__main__":
             residuals_full[:, zmask_vec == 1] = residuals
             residual_img.dataobj[:, :, z, :] = residuals_full.T.reshape(
                 brain.shape[0], brain.shape[1], brain.shape[3])
+            # add mean back onto residuals - this is slow but not clear how else to do it
+            for timepoint in range(residual_img.shape[-1]):
+                residual_img.dataobj[:, :, z, timepoint] += funcmean_img.dataobj[:, :, z]
         squared_resids = (residuals)**2
         df = X.shape[0] - X.shape[1]
         MSE = squared_resids.sum(axis=0) / (df)
