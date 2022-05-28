@@ -2,14 +2,13 @@ BASEDIR = /data/brainsss
 #BASEDIR = /scratch/users/russpold/brainsss
 #BASEDIR = /Users/poldrack/data_unsynced/brainsss/flydata
 QUEUE = normal
-PROCESS =  --run_all
-FLYNUM = fly_001
-IMPORTDATE = 20220329 #20220420
-IMPORTDIR = fly_1 #fly_1
+PROCESS = --run_all
+FLYNUM = fly_002
+IMPORTDATE = 20220420
+IMPORTDIR = fly_1 
 
 reinstall:
-	cd ..
-	pip install -U .
+	cd ..; pip install -U .; cd scripts
 
 clean:
 	-rm -rf  sbatch_preproc_*.log $(BASEDIR)/logs/* $(basedir)/processed/fly_*/*/logs $(BASEDIR)/master_2P.xlsx
@@ -33,10 +32,10 @@ test-build-slurm:
 	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) --overwrite --no_require_settings --build --import_date $(IMPORTDATE) --fly_dirs $(IMPORTDIR)
 
 test-proc-slurm:
-	sbatch preprocess.sh --cores 6 --partition=$(QUEUE) -b $(BASEDIR) --settings_file user_settings.json $(PROCESS) --process $(BASEDIR)/processed/$(FLYNUM) --atlasdir /data/brainsss/atlas
+	sbatch preprocess.sh -v --cores 6 --partition=$(QUEUE) -b $(BASEDIR) --settings_file user_settings.json $(PROCESS) --process $(BASEDIR)/processed/$(FLYNUM) --atlasdir /data/brainsss/atlas
 
 test-both-slurm:
-	sbatch preprocess.sh --cores 6 --partition=$(QUEUE) -b $(BASEDIR) --import_date $(IMPORTDATE)  --fly_dirs $(IMPORTDIR) --no_require_settings $(PROCESS) --build 
+	sbatch preprocess.sh --cores 6 --partition=$(QUEUE) -b $(BASEDIR) --import_date $(IMPORTDATE)  --fly_dirs $(IMPORTDIR) $(PROCESS) --build --atlasdir /data/brainsss/atlas --settings_file user_settings.json
 
 test-build-slurm-sherlock:
 	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) --import_date 20220329 --fly_dirs fly_2 --func_dirs func_0 -v --no_require_settings --build-only --build --import_dir /oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports
@@ -48,5 +47,5 @@ test-proc-slurm-sherlock:
 	sbatch preprocess.sh --cores 8 --partition=$(QUEUE) -b $(BASEDIR) -v --no_require_settings --process $(BASEDIR)/processed/fly_001 $(PROCESS) --func_dirs func_0
 
 report:
-	python dimensionality_reduction.py  --dir /data/brainsss/processed/fly_001 --funcfile regression/model000_confound/residuals.nii
-	python generate_report.py --dir /data/brainsss/processed/fly_001
+	python dimensionality_reduction.py  --basedir /data/brainsss/processed/fly_001 --funcfile regression/model000_confound/residuals.nii
+	python generate_report.py --basedir /data/brainsss/processed/fly_001
