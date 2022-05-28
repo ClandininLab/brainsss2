@@ -242,7 +242,11 @@ if __name__ == "__main__":
 
     timestamps = load_timestamps(os.path.join(args.dir, 'imaging'))
 
-    fictrac_raw, expt_len = load_fictrac_data(args)
+    try:
+        fictrac_raw, expt_len = load_fictrac_data(args)
+    except FileNotFoundError:
+        args.logger.warning('Fictrac data not found - cannot run regression, exiting')
+        sys.exit(0)
 
     args.logger.info('loading data from h5 file')
     brain, qform, zooms, xyzt_units = load_brain(args)
