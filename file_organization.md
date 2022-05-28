@@ -9,23 +9,14 @@ The original data are located in basedir/imports
 Let's say that we want fly_2 recorded on March 29, 2022.  The organization in the imports folder looks like this:
 
 imports
-
 ├── 20220329
-
 │   └── fly_2
-
 │       ├── anat_0  # higher resolution image collected for anatomical registration
-
 │       │   └── TSeries-12172018-1322-009
-
 │       │       ├── References
-
 │       │       ├── TSeries-12172018-1322-009.xml
-
 │       │       ├── TSeries-12172018-1322-009_channel_1.nii  # tdTomato channel - used for primary anatomy
-
 │       │       └── TSeries-12172018-1322-009_channel_2.nii  # GCaMP channel - not used 
-
 │       ├── fly.json
 │       ├── func_0  # lower resolution image collected for functional imaging
 │       │   ├── 2022-03-29.hdf5
