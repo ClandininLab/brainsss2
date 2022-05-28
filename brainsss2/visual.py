@@ -84,22 +84,18 @@ def load_photodiode(vision_path):
 		t, ft_triggers, pd1, pd2 = load_h5py_pd_data(vision_path)
 	return t, ft_triggers, pd1, pd2
 
-def get_stimulus_metadata(vision_path, printlog=None):
-	# if this function is not being used with a printlog, redirect printlog to simply print
-	if printlog is None:
-		printlog = print
-
+def get_stimulus_metadata(vision_path):
 
 	### try to get from pickle ###
 	pickle_path = os.path.join(vision_path, 'stimulus_metadata.pkl')
 	if os.path.exists(pickle_path):
-		printlog("Loaded from Pickle.")
+		print("Loaded from Pickle.")
 		with open(pickle_path, 'rb') as f:
 			metadata = pickle.load(f)
 		return metadata['stim_ids'], metadata['angles']
 	
 	### if no pickle, load from .h5 and save pickle for future ###
-	printlog("No pickle; parsing visprotocol.h5")
+	print("No pickle; parsing visprotocol.h5")
 	fname = [x for x in os.listdir(vision_path) if '.hdf5' in x][0]
 	visprotocol_file = os.path.join(vision_path, fname)
 
@@ -107,19 +103,21 @@ def get_stimulus_metadata(vision_path, printlog=None):
 	angles = []
 	found_a_full_series = False
 	with h5py.File(visprotocol_file, 'r') as f:
-
+		if 'Flies' not in f:
+			print("No Flies in visual h5 file")
+			return None, None
 		### loop over flies and series to find the one that has many stim presentations (others were aborted)
 		# note it is critical each fly has their own .h5 file saved
 		fly_ids = list(f['Flies'].keys())
-		printlog("Found fly ids: {}".format(fly_ids))
+		print("Found fly ids: {}".format(fly_ids))
 		for fly_id in fly_ids:
 			
 			series = list(f['Flies'][fly_id]['epoch_runs'].keys())
-			printlog("Found series: {}".format(series))
+			print("Found series: {}".format(series))
 			for serie in series:
 
 				epoch_ids = f['Flies'][fly_id]['epoch_runs'][serie].get('epochs').keys()
-				printlog(str(len(epoch_ids)))
+				print(str(len(epoch_ids)))
 				for i, epoch_id in enumerate(epoch_ids):
 					stim_id = f['Flies'][fly_id]['epoch_runs'][serie].get('epochs').get(epoch_id).attrs['component_stim_type']
 					stim_ids.append(stim_id)
@@ -131,8 +129,8 @@ def get_stimulus_metadata(vision_path, printlog=None):
 						
 				if len(stim_ids) > 100:
 					if found_a_full_series:
-						printlog('WARNING - FOUND 2 FULL SERIES IN THIS VISPROTOCOL HDF5 FILE. YOU NEED TO RESOLVE WHICH TO CHOOSE')
-						printlog('QUITING')
+						print('WARNING - FOUND 2 FULL SERIES IN THIS VISPROTOCOL HDF5 FILE. YOU NEED TO RESOLVE WHICH TO CHOOSE')
+						print('QUITING')
 						return
 					found_a_full_series = True
 					### save dic for final save below
@@ -143,12 +141,12 @@ def get_stimulus_metadata(vision_path, printlog=None):
 			save_file = os.path.join(vision_path, 'stimulus_metadata.pkl')
 			with open(save_file, 'wb') as f:
 				pickle.dump(metadata, f)
-			printlog("created {}".format(save_file))
+			print("created {}".format(save_file))
 		else:
 			"did not find any series longer than 100 stimuli. Not saving metadata pickle."
 		
 		return stim_ids, angles
-		printlog('Could not get visual metadata.')
+		print('Could not get visual metadata.')
 	
 
 def extract_stim_times_from_pd(photodiode_trace, time_vector):

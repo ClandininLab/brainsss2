@@ -105,6 +105,9 @@ if __name__ == "__main__":
     stimulus_start_times = extract_stim_times_from_pd(pd2, t)
 
     stim_ids, angles = get_stimulus_metadata(vision_path)
+    if stim_ids is None:
+        args.logger.info("No stimulus metadata found")
+        sys.exit(0)
     args.logger.info(F"Found {len(stim_ids)} presented stimuli.")
 
     # *100 puts in units of 10ms, which will match fictrac
