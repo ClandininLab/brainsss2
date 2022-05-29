@@ -10,11 +10,15 @@ from brainsss2.slurm import SlurmBatchJob  # noqa
 import pytest  # noqa
 
 
+def clearlogs(logdir='logs'):
+    if os.path.exists(logdir):
+        shutil.rmtree(logdir)
+
 @pytest.fixture
 def sbatch():
     argdict = {"foo": 1, 'verbose': True}
     return SlurmBatchJob("test", "dummy_script.py",
-        argdict, logfile='logs/sbatch_test.log')
+        argdict, logfile='logs/sbatch_test.log', verbose=True)
 
 
 def test_sbatch_argdict():
