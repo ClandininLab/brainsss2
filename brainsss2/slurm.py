@@ -74,7 +74,7 @@ class SlurmBatchJob:
         else:
             sh = logging.StreamHandler()
             sh.setFormatter(formatter)
-            logger.addHandler()
+            logger.addHandler(sh)
             logger.debug('No logfile specified')
 
         assert os.path.exists(self.script)

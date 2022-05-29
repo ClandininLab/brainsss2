@@ -13,5 +13,6 @@ print('testing')
 # set up fake args for logging
 args = argparse.Namespace()
 setattr(args, 'logdir', 'logs')
+setattr(args, 'verbose', True)
 args = setup_logging(args, 'dummy_script_test')
 logging.info('testing logging within dummy script')

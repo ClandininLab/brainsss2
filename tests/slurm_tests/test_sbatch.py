@@ -12,9 +12,7 @@ import pytest  # noqa
 
 @pytest.fixture
 def sbatch():
-    if os.path.exists('logs'):
-        shutil.rmtree('logs')
-    argdict = {"foo": 1}
+    argdict = {"foo": 1, 'verbose': True}
     return SlurmBatchJob("test", "dummy_script.py",
         argdict, logfile='logs/sbatch_test.log')
 
