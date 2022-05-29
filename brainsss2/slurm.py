@@ -141,7 +141,7 @@ class SlurmBatchJob:
         if response is not None:
             setattr(self, 'local_run', True)
 
-    def wait(self, wait_time=5):
+    def wait(self, wait_time=30):
         if self.local:
             logger.warning('Cannot wait for local job - returning output from local job')
             return(self.local_response)
@@ -157,6 +157,7 @@ class SlurmBatchJob:
                     logger.debug(f'Job {self.job_id} still running with status {status}')
                     time.sleep(wait_time)
                     continue
+                logger.debug(f'Job {self.job_id} breaking with status {status}')
                 status = self.status(return_full_output=True)
                 logger.info(f'Job {self.job_id} finished with status: {status}\n\n')
                 logger.debug(f'reading log_file: {self.logfile}')
