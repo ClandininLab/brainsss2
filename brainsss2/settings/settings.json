@@ -63,11 +63,11 @@
     },
     "PCA_moco": {
         "script": "dimensionality_reduction.py",
-        "time_hours": 1
+        "time_hours": 4
     },
     "PCA_resid": {
         "script": "dimensionality_reduction.py",
-        "time_hours": 1
+        "time_hours": 4
     },
     "check_status": {
         "script": "check_status.py",
