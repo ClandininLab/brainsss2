@@ -42,6 +42,7 @@ setup(
         'matplotlib',
         'antspyx',
         'nilearn',
+        'jinja2',
         'GitPython'
     ],
 )
