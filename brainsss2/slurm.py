@@ -154,7 +154,7 @@ class SlurmBatchJob:
             if status is not None:
                 # check to see whether the job is still running, if so then wait and continue
                 if any([i in status for i in ['PENDING', 'RUNNING', 'CONFIGURING']]):
-                    logger.debug(f'Job {self.job_id} still running with status {status')
+                    logger.debug(f'Job {self.job_id} still running with status {status}')
                     time.sleep(wait_time)
                     continue
                 status = self.status(return_full_output=True)
