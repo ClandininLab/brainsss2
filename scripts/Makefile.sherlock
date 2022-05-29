@@ -3,10 +3,17 @@ BASEDIR = /scratch/users/russpold/brainsss
 #BASEDIR = /Users/poldrack/data_unsynced/brainsss/flydata
 QUEUE = normal
 PROCESS =  --run_all # --type_of_transform Rigid
-IMPORTDATE = 20220329 
+IMPORTDATE = 20220329
 IMPORTDIR = fly_2
-FLYNUM = fly_003
+FLYNUM = fly_001
+# 20220307/fly_0 -> fly_116
+# 20220315/fly_1 -> fly_122
+# 20220329/fly_2 -> fly_134
+# 20220401/fly_1 -> fly_137
+#
 
+reinstall:
+	cd ..; pip install -U .; cd scripts
 clean:
 	-rm -rf  $(BASEDIR)/logs/* $(basedir)/processed/fly_*/func_*/logs $(BASEDIR)/master_2P.xlsx
 
@@ -35,10 +42,13 @@ test-both-slurm:
 	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) --import_date $(IMPORTDATE)  --fly_dirs $(IMPORTDIR) -v --no_require_settings $(PROCESS) --build 
 
 test-build-slurm-sherlock:
-	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) --import_date $(IMPORTDATE) --fly_dirs $(IMPORTDIR) --func_dirs func_0 --no_require_settings --build_only --build --import_dir /oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports --fictrac_import_dir /oak/stanford/groups/trc/data/fictrac/luke --overwrite
+	sbatch preprocess.sh --partition=$(QUEUE) -b $(BASEDIR) --import_date $(IMPORTDATE) --fly_dirs $(IMPORTDIR) --func_dirs func_0 --build_only --build --import_dir /oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports --fictrac_import_dir /oak/stanford/groups/trc/data/fictrac/luke 
 
 test-both-slurm-sherlock:
-	sbatch preprocess.sh --cores 8 --partition=$(QUEUE) -b $(BASEDIR) --import_date $(IMPORTDATE) --fly_dirs $(IMPORTDIR) --func_dirs func_0 --no_require_settings $(PROCESS) --build --import_dir /oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports --fictrac_import_dir /oak/stanford/groups/trc/data/fictrac/luke 
+	sbatch preprocess.sh --cores 8 --partition=$(QUEUE) -b $(BASEDIR) --import_date $(IMPORTDATE) --fly_dirs $(IMPORTDIR) --func_dirs func_0 $(PROCESS) --build --import_dir /oak/stanford/groups/trc/data/Brezovec/2P_Imaging/imports --fictrac_import_dir /oak/stanford/groups/trc/data/fictrac/luke 
 
 test-proc-slurm-sherlock:
-	sbatch preprocess.sh --cores 8 --partition=$(QUEUE) -b $(BASEDIR) --no_require_settings --process $(BASEDIR)/processed/$(FLYNUM) $(PROCESS) --func_dirs func_0
+	-rm sbatch_preproc*.log
+	-rm $(BASEDIR)/processed/$(FLYNUM)/func_0/logs/*
+	-rm $(BASEDIR)/logs/*
+	sbatch preprocess.sh --cores 8 --partition=$(QUEUE) -b $(BASEDIR) --process $(BASEDIR)/processed/$(FLYNUM) $(PROCESS) 
