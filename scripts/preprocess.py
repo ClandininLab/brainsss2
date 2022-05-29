@@ -375,7 +375,8 @@ def process_fly(args):
             'overwrite': args.overwrite,
             'dir': args.dir,
             'datafile': f'preproc/functional_channel_2_moco_smooth-{args.preproc_settings["smoothing"]["fwhm"]:.1f}mu_residuals.h5',
-            'cores': min(args.cores, 16, get_max_slurm_cpus() - 1),
+            'time_hours': 8,
+            'cores': min(16, get_max_slurm_cpus() - 1),
         }
         workflow_dict['PCA_resid'].update(args.preproc_settings['PCA_resid'])
         args.logger.debug(f'PCA_resid workflow dict: {workflow_dict}')
@@ -384,7 +385,8 @@ def process_fly(args):
             'label': 'moco',
             'overwrite': args.overwrite,
             'dir': args.dir,
-            'cores': min(args.cores, 16, get_max_slurm_cpus() - 1),
+            'time_hours': 8,
+            'cores': min(16, get_max_slurm_cpus() - 1),
         }
         workflow_dict['PCA_moco'].update(args.preproc_settings['PCA_moco'])
         args.logger.debug(f'PCA_moco workflow dict: {workflow_dict}')
