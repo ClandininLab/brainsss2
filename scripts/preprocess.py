@@ -86,6 +86,7 @@ def build_fly(args):
         "verbose": args.verbose,
         "overwrite": args.overwrite,
         'basedir': args.basedir,
+        "time_hours": 4, 
         'logfile': os.path.join(
             args.basedir,
             'logs',
