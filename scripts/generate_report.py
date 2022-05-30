@@ -97,7 +97,8 @@ class DataDir:
                         desmtx = pd.read_csv(model['desmtx'])
                         fig = plt.figure(figsize=(10, 10))
                         ax = plt.gca()
-                        _ = sns.heatmap(desmtx.corr(), cmap='viridis', ax=ax)
+                        _ = sns.heatmap(desmtx.corr(), cmap='viridis', ax=ax,
+                            annot=True, fmt='.2f')
                         fig.tight_layout(rect=[0, 0, .9, 1])
                         fig.savefig(os.path.join(regdir_full, 'desmtx_corr.png'))
                         del fig, ax
