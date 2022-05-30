@@ -408,7 +408,6 @@ def check_all_status(flyinfo):
 if __name__ == "__main__":
 
     args = parse_args(sys.argv[1:])
-    print(args)
     if 'func' in os.path.basename(args.dir) or 'anat' in os.path.basename(args.dir):
         args.dir = os.path.dirname(args.dir)
     assert os.path.exists(args.dir), f"Directory {args.dir} does not exist"
