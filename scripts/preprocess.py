@@ -86,7 +86,7 @@ def build_fly(args):
         "verbose": args.verbose,
         "overwrite": args.overwrite,
         'basedir': args.basedir,
-        "time_hours": 4, 
+        "time_hours": 4,
         'logfile': os.path.join(
             args.basedir,
             'logs',
@@ -323,6 +323,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'dir': args.process,
             'cores': min(args.cores, 8, get_max_slurm_cpus() - 1),
+            'baseline_r2': 'regression/model000_confound/rsquared.nii'
         }
         workflow_dict['regression_XYZ'].update(args.preproc_settings['regression_XYZ'])
         args.logger.debug(f'regression_XYZ workflow dict: {workflow_dict}')
