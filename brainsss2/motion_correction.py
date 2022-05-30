@@ -248,6 +248,13 @@ def run_motion_correction(args, files, h5_files):
 
     args.logger.info('image loaded successfully')
     n_timepoints = ch1_img.shape[-1]
+    # prevent occurrence of a chunk that has only one timepoint as this
+    # seems to confuse ANTs
+    if (n_timepoints % args.stepsize) == 1:
+        args.stepsize += 1
+        args.logger.warning(
+            f'Number of timepoints ({n_timepoints}) is not divisible by stepsize ({args.stepsize}). '
+            'Setting stepsize to {args.stepsize')
 
     # setup chunking into smaller parts (for memory)
     chunk_boundaries = get_chunk_boundaries(args.stepsize, n_timepoints)
