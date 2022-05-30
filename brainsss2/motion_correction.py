@@ -330,7 +330,7 @@ def save_motion_parameters(args, motion_parameters):
     FD_df = pd.DataFrame(get_framewise_displacement(motion_parameters), columns=['FD'])
     FD_file = os.path.join(args.moco_output_dir, 'framewise_displacement.csv')
     FD_df.to_csv(FD_file, index=False)
-
+    extend_motpars(motion_file)
     return(motion_file)
 
 
@@ -395,3 +395,25 @@ def get_framewise_displacement(motion_parameters, radius=1):
     diff[:, 3:] *= radius
     fd[1:] = diff.sum(axis=1)
     return fd
+
+
+def extend_motpars(file, outfile=None):
+    df = pd.read_csv(file)
+    orig_cols = list(df.columns)
+
+    # add square
+    for col in orig_cols:
+        df[f"{col}^2"] = df[col]**2
+
+    # add derivatives
+    df_deriv = df.diff()
+    df_deriv.iloc[0, :] = 0
+    df_deriv.columns = [f"{col}_deriv" for col in df_deriv.columns]
+    df_combined = pd.concat((df, df_deriv), axis=1, ignore_index=True)
+    df_combined.columns = list(df.columns) + list(df_deriv.columns)
+
+    if outfile is None:
+        outfile = file.replace('.csv', '_extended.csv')
+        assert outfile != file, "outfile cannot be the same as input file"
+
+    df_combined.to_csv(outfile, index=False)
