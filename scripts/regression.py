@@ -51,8 +51,9 @@ def parse_args(input, allow_unknown=True):
     parser.add_argument('--outdir', type=str, help='directory to save output')
     parser.add_argument('--pthresh', type=float, default=0.05, help='p value cutoff for plotting')
     parser.add_argument('--cores', type=int, default=4, help='number of cores to use')
-    parser.add_argument('--dct_bases', type=int, default=8, help='number of dct bases to use')
+    parser.add_argument('--dct_bases', type=int, default=12, help='number of dct bases to use')
     parser.add_argument('--confound_files', type=str, nargs='+', help='confound files')
+    parser.add_argument('--baseline_r2', type=str, help='baseline r2 image to compute delta r2')
     parser.add_argument('--save_residuals', action='store_true',
         help='save model residuals')
     parser.add_argument('--residfile', type=str,
@@ -170,6 +171,22 @@ def save_regressiondata(
                         title='Regression r-squared',
                         output_file=os.path.join(
                             args.outdir, 'rsquared.png'))
+                    if args.baseline_r2 is not None:
+                        baseline_r2_img = nib.load(
+                            os.path.join(args.dir, args.baseline_r2))
+                        delta_r2 = result_data - baseline_r2_img.get_fdata()
+                        delta_r2 = np.clip(delta_r2, 0, 1)
+                        delta_r2_img = nib.Nifti1Image(
+                            delta_r2, img.affine, img.header
+                        )
+                        delta_r2_file = os.path.join(args.outdir, 'delta_r2.nii')
+                        delta_r2_img.to_filename(delta_r2_file)
+                        plot_stat_map(delta_r2_file, os.path.join(args.dir, args.bg_img),
+                            display_mode='z', threshold=0, draw_cross=False,
+                            cut_coords=cut_coords,
+                            title='Delta r-squared',
+                            output_file=os.path.join(
+                                args.outdir, 'delta_rsquared.png'))
                 else:
                     save_files[(k, args.behavior[i])] = save_file
 
@@ -325,8 +342,6 @@ if __name__ == "__main__":
             X = None
 
         zdata_trans, zmask_vec = get_transformed_data_slice(brain[:, :, z, :], mask[:, :, z])
-        if args.verbose:
-            print(f'slice {z}: ')
         if zdata_trans is None:
             args.logger.info(f'Skipping slice {z} because it has no brain')
             continue
