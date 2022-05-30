@@ -67,6 +67,15 @@
     {% endif %}
   
 
+    {% if value.STB_plot %}
+    <h4>Stimulus-triggered behavior results</h4>
+    <img src="{{ value.STB_plot }}" height="{{ imgheight }}">
+
+    {% else %} 
+    <h4>No Stimulus-triggered behavior results present</h4>
+    {% endif %}
+  
+
     {% if value.moco_completed %}
     <h4>Motion correction results</h4>
     <ul>

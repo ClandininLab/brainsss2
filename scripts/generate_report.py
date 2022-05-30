@@ -69,6 +69,17 @@ class DataDir:
                 self.bleaching = None
                 self.bleaching_plot = None
 
+            # STB
+
+            if 'visual' in data_dict and 'STB' in data_dict['visual']:
+                if data_dict['visual']['STB'] is not None:
+                    self.STB = data_dict['visual']['STB']
+                    shutil.copy(data_dict['visual']['STB'], qcdir_full)
+                self.STB_plot = os.path.join(qcdir, 'stim_triggered_turning.png')
+            else:
+                self.STB = None
+                self.STB_plot = None
+
             if 'smoothing' in data_dict and data_dict['smoothing'] is not None:
                 self.smoothed_files = data_dict['smoothing']['files']
             else:
@@ -97,7 +108,8 @@ class DataDir:
                         desmtx = pd.read_csv(model['desmtx'])
                         fig = plt.figure(figsize=(10, 10))
                         ax = plt.gca()
-                        _ = sns.heatmap(desmtx.corr(), cmap='viridis', ax=ax)
+                        _ = sns.heatmap(desmtx.corr(), cmap='viridis', ax=ax,
+                            annot=True, fmt='.2f')
                         fig.tight_layout(rect=[0, 0, .9, 1])
                         fig.savefig(os.path.join(regdir_full, 'desmtx_corr.png'))
                         del fig, ax
