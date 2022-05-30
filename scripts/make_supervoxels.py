@@ -93,9 +93,9 @@ if __name__ == "__main__":
         if args.verbose:
             args.logger.info(f"clustering slice {z}")
         if isinstance(brain, nib.nifti1.Nifti1Image):
-            neural_activity = brain.dataobj[:, :, z, :].reshape(-1, 3384)
+            neural_activity = brain.dataobj[:, :, z, :].reshape(-1, brain.shape[-1])
         else:
-            neural_activity = brain[:, :, z, :].reshape(-1, 3384)
+            neural_activity = brain[:, :, z, :].reshape(-1, brain.shape[-1])
         cluster_model = AgglomerativeClustering(
             n_clusters=args.nclusters,
             memory=cluster_dir,
@@ -119,9 +119,9 @@ if __name__ == "__main__":
     all_signals = []
     for z in range(49):
         if isinstance(brain, nib.nifti1.Nifti1Image):
-            neural_activity = brain.dataobj[:, :, z, :].reshape(-1, 3384)
+            neural_activity = brain.dataobj[:, :, z, :].reshape(-1, brain.shape[-1])
         else:
-            neural_activity = brain[:, :, z, :].reshape(-1, 3384)
+            neural_activity = brain[:, :, z, :].reshape(-1, brain.shape[-1])
         signals = []
         for cluster_num in range(args.nclusters):
             cluster_indicies = np.where(cluster_labels[z, :] == cluster_num)[0]
