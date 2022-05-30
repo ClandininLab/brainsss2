@@ -414,7 +414,11 @@ if __name__ == "__main__":
     assert os.path.exists(args.dir), f"Directory {args.dir} does not exist"
     print(f'Checking status of building/preprocessing for {args.dir}')
 
-    flyinfo = {'metadata': get_flyinfo(args.dir)}
+    try:
+        flyinfo = {'metadata': get_flyinfo(args.dir)}
+    except FileNotFoundError:
+        print('fly.json does not exist, fly building not complete')
+        sys.exit(0)
 
     flyinfo['conversion'] = get_conversion_info(args.dir)
 
