@@ -39,6 +39,10 @@ def prep_visual_stimuli(args):
 
     ### Get Metadata ###
     stim_ids, angles = get_stimulus_metadata(vision_path)
+    if stim_ids is None:
+        args.logger.error('No stimulus metadata found - exiting')
+        sys.exit(0)
+
     args.logger.info(F"Found {len(stim_ids)} presented stimuli.")
 
     # *100 puts in units of 10ms, which will match fictrac
