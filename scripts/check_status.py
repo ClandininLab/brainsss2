@@ -409,7 +409,8 @@ if __name__ == "__main__":
 
     args = parse_args(sys.argv[1:])
     print(args)
-    args.dir = os.path.dirname(args.dir)
+    if 'func' in os.path.basename(args.dir) or 'anat' in os.path.basename(args.dir):
+        args.dir = os.path.dirname(args.dir)
     assert os.path.exists(args.dir), f"Directory {args.dir} does not exist"
     print(f'Checking status of building/preprocessing for {args.dir}')
 
