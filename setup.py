@@ -33,6 +33,7 @@ setup(
         'lxml',
         'openpyxl',
         'nibabel',
+        'seaborn',
         'numpy',
         'pandas',
         'pytest',
