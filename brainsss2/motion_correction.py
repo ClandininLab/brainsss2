@@ -284,8 +284,7 @@ def run_motion_correction(args, files, h5_files):
         if args.stepsize > 1:
             mytx = ants.motion_correction(image=chunkdata_ants, fixed=ch1_meanbrain,
                 verbose=args.verbose, type_of_transform=args.type_of_transform,
-                total_sigma=args.total_sigma, flow_sigma=args.flow_sigma,
-                outprefix=os.path.join(args.temp_dir, f'moco_chunk_{i}_'))
+                total_sigma=args.total_sigma, flow_sigma=args.flow_sigma)
 
             assert mytx is not None, 'ants.motioncorrection failed'
             step_transforms = mytx['motion_parameters']
