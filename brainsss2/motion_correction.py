@@ -91,7 +91,7 @@ def set_stepsize(args, scantype_stepsize_dict=None):
     if args.stepsize is not None:
         return(args)
     if scantype_stepsize_dict is None:
-        scantype_stepsize_dict = {'func': 40, 'anat': 5}
+        scantype_stepsize_dict = {'func': 1, 'anat': 1}
     setattr(args, 'stepsize', scantype_stepsize_dict[args.dirtype])
     return(args)
 
@@ -165,19 +165,6 @@ def get_random_hash(length=8):
     return(''.join(random.choice(string.ascii_lowercase) for i in range(length)))
 
 
-def get_temp_dir(args):
-    if 'SCRATCH' in os.environ:
-        setattr(args, 'temp_dir',
-            os.path.join(os.environ['SCRATCH'], f'ants_tmp_{get_random_hash()}'))
-    else:
-        setattr(args, 'temp_dir', f'/tmp/{get_random_hash()}')
-    if not os.path.exists(args.temp_dir):
-        os.makedirs(args.temp_dir)
-
-    args.logger.info(f'using ants tmp dir {args.temp_dir}')
-    return(args)
-
-
 def apply_moco_parameters_to_channel_2(args, files,
                                        h5_files, transform_files):
     """Apply moco parameters to channel 2"""
@@ -228,12 +215,13 @@ def apply_moco_parameters_to_channel_2(args, files,
             f['data'][..., chunk_start:chunk_end] = corrected_data[..., chunk_start:chunk_end]
 
 
-def run_motion_correction(args, files, h5_files):
+def run_motion_correction(args, files, h5_files, log_pct=.1):
     """Run motion correction on tdTomato channel (1)"""
-    if args.stepsize == 1:
-        args.logger.info('Running motion correction using ants.registration')
+    args.logger.info('Running motion correction using ants.registration')
+    if 'channel_2' in files and files['channel_2'] is not None:
+        transform_ch2 = True
     else:
-        args.logger.info('Running motion correction using ants.motion_correction')
+        transform_ch2 = False
 
     # NB: need to make sure that the data is in the correct orientation
     # (i.e. direction of mean brain and chunkdata must be identical)
@@ -245,80 +233,74 @@ def run_motion_correction(args, files, h5_files):
 
     ch1_img = nib.load(files['channel_1'])
     spacing = list(ch1_img.header.get_zooms())
-
-    args.logger.info('image loaded successfully')
+    args.logger.info('moving image loaded successfully')
     n_timepoints = ch1_img.shape[-1]
-    # prevent occurrence of a chunk that has only one timepoint as this
-    # seems to confuse ANTs
-    if (n_timepoints % args.stepsize) == 1:
-        args.stepsize += 1
-        args.logger.warning(
-            f'Number of timepoints ({n_timepoints}) is not divisible by stepsize ({args.stepsize}). '
-            'Setting stepsize to {args.stepsize')
-
-    # setup chunking into smaller parts (for memory)
-    chunk_boundaries = get_chunk_boundaries(args.stepsize, n_timepoints)
 
     motion_parameters = None
-    transform_files = []
 
-    # loop through chunks
-    for i, (chunk_start, chunk_end) in enumerate(chunk_boundaries):
-        args.logger.info(f'processing chunk {i + 1} of {len(chunk_boundaries)}')
+    ch1_outfile = h5py.File(h5_files['channel_1'], 'a')
+    if transform_ch2:
+        ch2_img = nib.load(files['channel_2'])
+        ch2_outfile = h5py.File(h5_files['channel_2'], 'a')
+
+    for timepoint in range(n_timepoints):
+        if timepoint % round(log_pct * n_timepoints) == 0:
+            args.logger.info(f'Processing timepoint {timepoint + 1} of {n_timepoints}'
+                f' ({round(100*timepoint / n_timepoints)}%)')
         # get chunk data
-        chunkdata = ch1_img.dataobj[..., chunk_start:chunk_end].astype('float32').squeeze()
+        chunkdata = ch1_img.dataobj[..., timepoint].astype('float32').squeeze()
 
-        # create ants data obhect
-        if len(chunkdata.shape) == 3:
-            spacing = spacing[:3]
-            direction = np.diag([-1., -1., 1.])
-        else:
-            spacing = spacing[:4]
-            direction = np.diag([-1., -1., 1., 1.])
+        spacing = spacing[:3]
+        direction = np.diag([-1., -1., 1.])  # default ants direction
         chunkdata_ants = ants.from_numpy(
             chunkdata,
             spacing=spacing,
             direction=direction)
 
-        # run moco on chunk
-        if args.stepsize > 1:
-            mytx = ants.motion_correction(image=chunkdata_ants, fixed=ch1_meanbrain,
-                verbose=args.verbose, type_of_transform=args.type_of_transform,
-                total_sigma=args.total_sigma, flow_sigma=args.flow_sigma)
+        # NOTE: don't pass verbose to ANTS as this is really verbose
+        myreg = ants.registration(moving=chunkdata_ants, fixed=ch1_meanbrain,
+            type_of_transform=args.type_of_transform,
+            total_sigma=args.total_sigma, flow_sigma=args.flow_sigma)
 
-            assert mytx is not None, 'ants.motioncorrection failed'
-            step_transforms = mytx['motion_parameters']
-            corrected_img = mytx['motion_corrected'].numpy()
-        else:
-            # this addresses a failure of ants.motion_correction
-            # for high-resolution data - set stepsize to 1 to use
-            # ants.registration instead
-            myreg = ants.registration(moving=chunkdata_ants, fixed=ch1_meanbrain,
-                verbose=args.verbose, type_of_transform=args.type_of_transform,
-                total_sigma=args.total_sigma, flow_sigma=args.flow_sigma)
+        assert myreg is not None, 'ants.registration failed'
+        ch1_outfile['data'][..., timepoint] = myreg['warpedmovout'][:, :, :]
 
-            assert myreg is not None, 'ants.registration failed'
-            step_transforms = myreg['fwdtransforms']
-            # extend to 4d for insertion below into h5 file
-            corrected_img = myreg['warpedmovout'][:, :, :, np.newaxis]
+        step_transforms = myreg['fwdtransforms']
 
-        transform_files = transform_files + step_transforms
-        args.logger.info(f'get motion parameters on chunk {i + 1}')
         # extract rigid body transform parameters (translation/rotation)
+        # only take the affine, which is the last in the list
+        step_motpars = get_motion_parameters_from_transforms(
+            [step_transforms[-1]])[1]
         if motion_parameters is None:
-            # TODO: get_dataset_resolution is failing...
-            motion_parameters = get_motion_parameters_from_transforms(
-                step_transforms)[1]
+            motion_parameters = step_motpars
         else:
             motion_parameters = np.vstack((motion_parameters,
-                get_motion_parameters_from_transforms(
-                    step_transforms)[1]))
+                step_motpars))
 
-        # save results from chunk
-        args.logger.info(f'saving chunk {i + 1} of {len(chunk_boundaries)}')
-        with h5py.File(h5_files['channel_1'], 'a') as f:
-            f['data'][..., chunk_start:chunk_end] = corrected_img
-    return(transform_files, motion_parameters)
+        if transform_ch2:
+            # apply transform
+            moving_img = ants.from_numpy(ch2_img.dataobj[..., timepoint].astype('float32'))
+            moving_img.set_spacing(spacing[:3])
+            # for some reason ants.apply_transforms doesn't work with ch2_img.direction directly
+            direction_vec = np.eye(3)
+            direction_vec[np.diag_indices_from(direction_vec)] = np.diag(direction[:3])
+            moving_img.set_direction(direction_vec)
+            result = ants.apply_transforms(
+                fixed=ch1_meanbrain,
+                moving=moving_img,
+                transformlist=step_transforms,
+                interpolator=args.interpolation_method)
+            ch2_outfile['data'][..., timepoint] = result.numpy()
+
+        # remove transform files to protect /tmp disk space
+        for f in step_transforms:
+            args.logger.debug(f'Removing transform file {f}')
+            os.remove(f)
+            if os.path.exists(f.replace('Warp', 'InverseWarp')):
+                args.logger.debug(f"Removing transform file {f.replace('Warp', 'InverseWarp')}")
+                os.remove(f.replace('Warp', 'InverseWarp'))
+
+    return(motion_parameters)
 
 
 def save_motion_parameters(args, motion_parameters):
