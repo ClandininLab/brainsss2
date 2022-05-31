@@ -2,9 +2,7 @@
 
 import os
 import sys
-import json
 import datetime
-import shutil
 import logging
 from brainsss2.motion_correction import (
     parse_args,
@@ -14,11 +12,9 @@ from brainsss2.motion_correction import (
     get_dirtype,
     setup_h5_datasets,
     run_motion_correction,
-    apply_moco_parameters_to_channel_2,
     save_motcorr_settings_to_json,
     moco_plot,
-    save_nii,
-    get_temp_dir
+    save_nii
 )
 from brainsss2.argparse_utils import get_base_parser, add_moco_arguments # noqa
 from brainsss2.logging_utils import setup_logging # noqa
@@ -38,8 +34,6 @@ if __name__ == '__main__':
 
     check_for_existing_files(args, args.moco_output_dir, ['moco_settings.json'])
 
-    args = get_temp_dir(args)
-
     files, args = load_data(args)
 
     args.logger.info(f'files: {files}')
@@ -51,18 +45,8 @@ if __name__ == '__main__':
     args.logger.info('set up h5 datsets')
     h5_files = setup_h5_datasets(args, files)
 
-    if not args.use_existing:
-        args.logger.info('running motion correction')
-        transform_files, motion_parameters = run_motion_correction(args, files, h5_files)
-        with open(os.path.join(args.moco_output_dir, 'transform_files.json'), 'w') as f:
-            json.dump(transform_files, f, indent=4)
-    else:
-        with open(os.path.join(args.moco_output_dir, 'transform_files.json'), 'r') as f:
-            transform_files = json.load(f)
-
-    if 'channel_2' in files and files['channel_2'] is not None:
-        args.logger.info('applying motion correction for channel 2')
-        apply_moco_parameters_to_channel_2(args, files, h5_files, transform_files)
+    args.logger.info('running motion correction')
+    motion_parameters = run_motion_correction(args, files, h5_files)
 
     args.logger.info('saving motion parameters')
     motion_file = save_motion_parameters(args, motion_parameters)
@@ -76,8 +60,6 @@ if __name__ == '__main__':
     if args.save_nii:
         args.logger.info('saving nifti')
         save_nii(args, h5_files)
-
-    shutil.rmtree(args.temp_dir)
 
     args.logger.info('saving parameters to json')
     save_motcorr_settings_to_json(args, files, h5_files)

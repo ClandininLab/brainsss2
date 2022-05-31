@@ -287,7 +287,6 @@ def process_fly(args):
             'basedir': args.basedir,
             'dir': args.process,
             'time_hours': 8 if args.partition == 'normal' else 24,
-            'stepsize': 4,
             'cores': min(
                 args.cores,
                 8 if args.partition == 'normal' else 4,
