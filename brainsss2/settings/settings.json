@@ -14,7 +14,7 @@
         "script": "motion_correction.py",
         "type_of_transform": "SyN",
         "stepsize": 1,
-        "time_hours": 24,
+        "time_hours": 36,
         "dirtype": "func"
     },
     "motion_correction_anat": {
@@ -34,7 +34,7 @@
         "script": "regression.py",
         "label": "model001_dRotLabXYZ",
         "confound_files": "preproc/framewise_displacement.csv",
-        "time_hours": 1,
+        "time_hours": 4,
         "behavior": [
             "dRotLabY",
             "dRotLabZ+",
@@ -46,11 +46,11 @@
         "save_residuals": true,
         "label": "model000_confound",
         "confound_files": "preproc/framewise_displacement.csv",
-        "time_hours": 1
+        "time_hours": 4
     },
     "STA": {
         "script": "stim_triggered_avg_neu.py",
-        "time_hours": 1
+        "time_hours": 4
     },
     "atlasreg": {
         "script": "atlas_registration.py",
@@ -60,7 +60,7 @@
     },
     "supervoxels": {
         "script": "make_supervoxels.py",
-        "time_hours": 1
+        "time_hours": 4
     },
     "PCA_moco": {
         "script": "dimensionality_reduction.py",
