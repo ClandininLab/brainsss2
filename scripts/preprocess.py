@@ -136,6 +136,8 @@ def get_dirs_to_process(args):
     }
 
 
+# ashlu two different argument dicts is confusing. maybe just renaming them would help
+# ashlu (like "global args / meta args idk" vs processing_step_args)
 def run_preprocessing_step(script, args, args_dict):
     """run a preprocessing step
 
@@ -247,6 +249,8 @@ def process_fly(args):
 
     # each step starts with the session-dependent variables
     # which are then extended with the preproc settings (default or user-specified)
+    # ashlu - a bit confusing some of these items are only here and not in settings (cores for example)
+    # ashlu - or some hardcoded file names here. Maybe port more of these over to settings file
     if args.fictrac_qc or args.run_all:
         workflow_dict['fictrac_qc'] = {
             'basedir': args.basedir,
@@ -517,5 +521,6 @@ if __name__ == "__main__":
         setattr(args, 'script_path', os.path.dirname(os.path.realpath(__file__)))
         workflow_dict = process_fly(args)
 
+        # ashlu should this happen in process_fly after workflow_dict instead of waiting for processing to happen?
         with open(os.path.join(args.process, 'preproc_workflow.json'), 'w') as f:
             json.dump(workflow_dict, f, indent=4)

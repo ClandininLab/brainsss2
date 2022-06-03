@@ -1,0 +1,39 @@
+# ashlu high level comments
+- clarify directory names
+- clarify various arg lists
+
+# ashlu todo
+- understand logging
+- look through individual processing steps
+
+PARSE ARGS
+	First, type "sbatch preprocess.sh" with flags on command line.
+	This will pass all commandline args to preprocess.py
+	parse_args() will create a get_base_parser() object 
+		- Then argparse_utils will add all the possible arguments it may expect
+		- Finally, those command line arg will be parsed.
+		- These now exist in "args"
+	Next, modules are loaded with setup_modules()
+	Do some initial directory parsing *let's review this...
+	Then setup logging with setup_logging() (and add to args)
+	read and parse settings file (and add to args) (based on a flag either load default or user settings)
+
+BUILD FLIES
+	Ask args if should build fly
+	BUILD
+	setup_build_dirs()
+	build_fly()
+
+PROCESS FLIES
+	process_fly()
+		1. build workflow_dict
+			- for each potential/supported/available processing step, make a dict entry like
+			workflow_dict['fictrac_qc']
+			First manually add some needed args like directory names
+			Then add args previously read from settings file into "args"
+		2. loop over each processing step in workflow_dict
+			- call run_preprocessing_step()
+				parse dirtype
+				remove_existing_file_handlers()
+				loop over directories to process
+				Submit via SlurmBatchJob()
