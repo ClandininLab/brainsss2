@@ -114,7 +114,7 @@ def add_preprocess_arguments(parser):
     )
     return(parser)
 
-
+# ashlu move above preprocess arguments for logical flow
 def add_builder_arguments(parser):
     """add arguments for fly_builder"""
     builder = parser.add_argument_group('fly_builder arguments')

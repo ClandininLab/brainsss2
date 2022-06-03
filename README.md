@@ -51,7 +51,8 @@ Examples of usage can be found in the [example Makefile](scripts/Makefile.dell).
 The script should be launched by running the [preprocess.sh](scripts/preprocess.sh) script.  This is simply a wrapper for [preprocess.py](scripts/preprocess.py), which is necessary in order to properly configure the slurm job.  The shell script may require modifications for the local SLURM configuration, such as queue names.
 
 ### Full run (fly building + preprocessing)
-
+# ashlu clarify what "fly building" means
+# ashlu "base directory for flies" in confusing because "for" sounds like loop
 In order to perform the entire building and preprocessing workflow, the command would be:
 
 ```shell
@@ -119,6 +120,7 @@ fly_builder arguments:
   --xlsx_file XLSX_FILE
                         xlsx file to use for fly data
 
+# ashlu call this processing for consistency?
 workflow components:
   -a, --run_all         run all preprocessing steps
   --fictrac_qc          run fictrac QC

@@ -121,6 +121,7 @@ def load_user_settings_from_json(args, user_settings_file=None):
     args : argparse.Namespace
     """
 
+    # ashlu next sentence should be "must", not "just"
     assert args.default_settings is not None, "default settings just be created before adding user settings"
     # start with default settings
     setattr(args, 'preproc_settings', args.default_settings)

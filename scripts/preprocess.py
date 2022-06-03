@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Top-level script to build and/or process a single fly
+# ashlu this statment is not true? (won't wrap flies outside of this script)
 # will be wrapped by another script to allow processing of multiple flies
 
 # pyright: reportMissingImports=false
@@ -10,6 +11,7 @@ import datetime
 from pathlib import Path
 import json
 from brainsss2.argparse_utils import add_moco_arguments
+# ashlu listing these out explicitly is awesome
 from brainsss2.logging_utils import (
     setup_logging,
     get_logfile_name,
@@ -51,6 +53,7 @@ def parse_args(input):
 
     parser = add_preprocess_arguments(parser)
 
+    # ashlu why these commented out?
     # parser = add_fictrac_qc_arguments(parser)
 
     # parser = add_moco_arguments(parser)
@@ -508,6 +511,7 @@ if __name__ == "__main__":
             args.logger.info('build only, exiting')
             args.process = None
     # TODO: I am assuming that results of build_dirs should be passed along to fly_dirs after processing...
+    # ashlu what would these "results" be?
 
     if args.process is not None:
         args.logger.info(f'processing {args.process}')
