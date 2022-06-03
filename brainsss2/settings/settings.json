@@ -13,6 +13,7 @@
     "motion_correction_func": {
         "script": "motion_correction.py",
         "type_of_transform": "SyN",
+        "stepsize": 1,
         "time_hours": 24,
         "dirtype": "func"
     },
@@ -20,7 +21,7 @@
         "script": "motion_correction.py",
         "type_of_transform": "SyN",
         "time_hours": 8,
-        "stepsize": 4,
+        "stepsize": 1,
         "downsample": true,
         "dirtype": "anat"
     },
