@@ -137,6 +137,8 @@ if __name__ == "__main__":
         os.path.join(args.dir, 'imaging'),
         file='functional.xml')
 
+    args.logger.info(f'loading data from {brain_path}')
+
     with h5py.File(brain_path, 'r') as hf:
         dims = np.shape(hf['data'])
 
