@@ -44,6 +44,8 @@ setup(
         'antspyx',
         'nilearn',
         'jinja2',
+        'jsonschema',
+        'opencv-python',
         'GitPython'
     ],
 )
