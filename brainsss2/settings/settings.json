@@ -33,7 +33,7 @@
     "regression_XYZ": {
         "script": "regression.py",
         "label": "model001_dRotLabXYZ",
-        "confound_files": "preproc/framewise_displacement.csv",
+        "confound_files": "preproc/motion_parameters_extended.csv",
         "time_hours": 4,
         "behavior": [
             "dRotLabY",
@@ -45,7 +45,7 @@
         "script": "regression.py",
         "save_residuals": true,
         "label": "model000_confound",
-        "confound_files": "preproc/framewise_displacement.csv",
+        "confound_files": "preproc/motion_parameters_extended.csv",
         "time_hours": 4
     },
     "STA": {
