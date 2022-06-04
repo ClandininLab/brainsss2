@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy
 import time
-import h5py
 import json
 import nibabel as nib
 from scipy.ndimage import gaussian_filter1d
@@ -472,8 +471,6 @@ if __name__ == "__main__":
     # neural_bins = np.arange(bin_start,bin_end,bin_size)
 
     output_filename = os.path.join(STA_path, "STA_results.h5")
-    coef_group = outfile.create_group("coefs")
-    r2_group = outfile.create_group("rsquared")
 
     for condition in ["ve_no_0", "ve_no_180", "ve_0", "ve_180"]:
         if "180" in condition:
@@ -512,8 +509,6 @@ if __name__ == "__main__":
             if all_rsquared is None:
                 all_rsquared = np.zeros((all_coefs.shape[0], all_coefs.shape[1]))
             all_rsquared[slice, :] = rsquared
-        coef_group.create_dataset(condition, data=all_coefs)
-        r2_group.create_dataset(condition, data=all_rsquared)
         img = supervoxels_to_img(all_coefs, cluster_label_img)
         img.to_filename(os.path.join(STA_path, f"STA_coefs_{condition}.nii.gz"))
         img = supervoxels_to_img(1 - all_pvals, cluster_label_img)
