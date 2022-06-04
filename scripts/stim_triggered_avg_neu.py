@@ -33,11 +33,9 @@ def prep_visual_stimuli(args):
     vision_path = os.path.join(args.dir, 'visual')
     assert os.path.exists(vision_path), f'{vision_path} does not exist'
 
-    ### Load Photodiode ###
     t, ft_triggers, pd1, pd2 = load_photodiode(vision_path)
     stimulus_start_times = extract_stim_times_from_pd(pd2, t)
 
-    ### Get Metadata ###
     stim_ids, angles = get_stimulus_metadata(vision_path)
     if stim_ids is None:
         args.logger.error('No stimulus metadata found - exiting')
@@ -155,11 +153,9 @@ if __name__ == "__main__":
             args.logger.info(F"Slice: {slice_num}. Duration: {time()-t0}")
         stas_array = np.asarray(stas)
 
-        ### SAVE STA ###
         if not os.path.exists(args.outdir):
             os.mkdir(args.outdir)
         savefile = os.path.join(args.outdir, F'sta_{angle}.npy')
         np.save(savefile, stas_array)
 
-        ### SAVE PNG ###
         save_maxproj_img(savefile)
