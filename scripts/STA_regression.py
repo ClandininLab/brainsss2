@@ -1,9 +1,11 @@
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
 import time
 import h5py
+import json
 import nibabel as nib
 from scipy.ndimage import gaussian_filter1d
 from sklearn.linear_model import LinearRegression
@@ -51,6 +53,10 @@ def parse_args(input, allow_unknown=True):
     parser.add_argument(
         "--explosionroifile", type=str, default="20220425_explosion_plot_rois.pickle"
     )
+    parser.add_argument('--ntimepoints', type=int, default=20,
+        help='number of post-onset timepoints to estimate response')
+    parser.add_argument('--nprestim', type=int, default=4,
+        help='number of pre-onset timepoints to estimate response')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
     else:
@@ -106,22 +112,6 @@ def prep_fictrac(func_path):
         )
     # fictrac_timestamps = np.arange(0,expt_len,resolution)
     return fictrac
-
-
-def extract_traces(fictrac, stim_times, pre_window, post_window):
-    traces = []
-    for i in range(len(stim_times)):
-        trace = fictrac["Z"][
-            (stim_times[i] - pre_window) : (stim_times[i] + post_window)
-        ]
-        if (
-            len(trace) == pre_window + post_window
-        ):  # this handles fictrac that crashed or was aborted or some bullshit
-            traces.append(trace)
-    traces = np.asarray(traces)
-    mean_trace = np.mean(traces, axis=0)
-    sem_trace = scipy.stats.sem(traces, axis=0)
-    return traces, mean_trace, sem_trace
 
 
 def extract_STB(fictrac, starts_angle):
@@ -298,7 +288,6 @@ def get_resampled_slice_data(
     slicedata = all_signals[slice, :, :].squeeze().T
     if scale_data:
         slicedata = slicedata - np.mean(slicedata, axis=0)
-        std = np.std(slicedata, axis=0)
         slicedata = slicedata / np.std(slicedata, axis=0)
         slicedata = np.nan_to_num(slicedata)
 
@@ -331,19 +320,21 @@ def get_resampled_slice_data(
 
 
 # +
-def make_fir_desmtx(event_df, npts=20, n_prestim_pts=5, fit_intercept=False):
+def make_fir_desmtx(event_df, npts=20, n_prestim_pts=4, fit_intercept=False):
     """
     make a finite impulse response design matrix
-    
+
     event_vec: data farme
         data frame with one column named "event" and with a datetime index
     npts: int
         number of timepoints after onset
     n_prestim_pts: int
         number of timepoints before onset
-        
+    fit_intercept: bool
+        whether to include intercept in model
+
     returns:
-    
+
     desmtx: numpy ndarray
         design matrix
     """
@@ -370,23 +361,40 @@ def make_fir_desmtx(event_df, npts=20, n_prestim_pts=5, fit_intercept=False):
     return desmtx_df
 
 
-def run_fir_regression(resampled_df, desmtx_df, zero_onset=True):
+def run_fir_regression(resampled_df, desmtx_df, zero_onset=False):
     lr = LinearRegression()
     X = desmtx_df.values
     y = resampled_df.values
     lr.fit(X, y)
     coefs = lr.coef_
+
     if zero_onset:
         coefs = coefs - coefs[np.where(desmtx_df.columns == 0.0)[0][0]]
+
     predictions = lr.predict(X)
     residuals = y - predictions
+    squared_resids = (residuals)**2
+    df = X.shape[0] - X.shape[1]
+    MSE = squared_resids.sum(axis=0) / (df)
+    XtX = np.dot(X.T, X)
+    tstat = np.zeros(coefs.shape)
+    for i in range(coefs.shape[1]):
+        # use unscaled coefs for computing t
+        tstat[:, i] = lr.coef_[:, i] / np.sqrt(MSE[i] / np.diag(XtX)[i])
+        # compute two-tailed p-value
+    pval = (1 - scipy.stats.t.cdf(x=np.abs(tstat), df=df)) * 2
+    # set pvals for coefs that are nan to 1
+    pval = np.nan_to_num(pval, nan=1)
+    assert np.min(pval) >= 0
+    assert np.max(pval) <= 1
+
     rsquared = r2_score(y, predictions, multioutput="raw_values")
-    return (coefs, rsquared)
+    return (coefs, rsquared, tstat, pval)
 
 
 def supervoxels_to_img(supervoxel_data, cluster_img):
     """
-    takes in a supervoxel matrix (either (nslices X nclusters or 
+    takes in a supervoxel matrix (either (nslices X nclusters or
     nslices X ncluster X ntimepoints) and projects it into
     a nibabel img
 
@@ -396,7 +404,7 @@ def supervoxels_to_img(supervoxel_data, cluster_img):
         supervoxel matrix
     cluster_img: nibabel img
         img with the same shape as supervoxel_data with cluster labelings
-    
+
     returns:
     img: nibabel img
     """
@@ -464,7 +472,6 @@ if __name__ == "__main__":
     # neural_bins = np.arange(bin_start,bin_end,bin_size)
 
     output_filename = os.path.join(STA_path, "STA_results.h5")
-    outfile = h5py.File(output_filename, "w")
     coef_group = outfile.create_group("coefs")
     r2_group = outfile.create_group("rsquared")
 
@@ -479,21 +486,28 @@ if __name__ == "__main__":
             event_times_list = ve_turn_times[angle]
 
         all_coefs = None
+        all_pvals = None
         all_rsquared = None
         for slice in range(all_signals.shape[0]):
             resampled_df, event_df_resampled = get_resampled_slice_data(
                 all_signals, event_times_list, slice, interpolation_type="linear"
             )
 
-            desmtx_df = make_fir_desmtx(event_df_resampled)
+            desmtx_df = make_fir_desmtx(event_df_resampled,
+                args.ntimepoints, args.nprestim)
 
-            coefs, rsquared = run_fir_regression(resampled_df, desmtx_df)
+            coefs, rsquared, tstat, pval = run_fir_regression(
+                resampled_df, desmtx_df)
 
             if all_coefs is None:
                 all_coefs = np.zeros(
                     (all_signals.shape[0], coefs.shape[0], coefs.shape[1])
                 )
+                all_pvals = np.zeros(
+                    (all_signals.shape[0], coefs.shape[0], coefs.shape[1])
+                )
             all_coefs[slice, :, :] = coefs
+            all_pvals[slice, :, :] = pval
             print(f"Slice {slice}: {np.max(coefs)}")
             if all_rsquared is None:
                 all_rsquared = np.zeros((all_coefs.shape[0], all_coefs.shape[1]))
@@ -502,6 +516,10 @@ if __name__ == "__main__":
         r2_group.create_dataset(condition, data=all_rsquared)
         img = supervoxels_to_img(all_coefs, cluster_label_img)
         img.to_filename(os.path.join(STA_path, f"STA_coefs_{condition}.nii.gz"))
+        img = supervoxels_to_img(1 - all_pvals, cluster_label_img)
+        img.to_filename(os.path.join(STA_path, f"STA_1-pval_{condition}.nii.gz"))
         img = supervoxels_to_img(all_rsquared, cluster_label_img)
         img.to_filename(os.path.join(STA_path, f"STA_rsquared_{condition}.nii.gz"))
-    outfile.close()
+    setattr(args, 'timepoints', list(desmtx_df.columns))
+    with open(os.path.join(STA_path, 'STA_settings.json'), 'w') as f:
+        json.dump(vars(args), f, indent=4)
