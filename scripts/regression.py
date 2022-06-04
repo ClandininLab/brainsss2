@@ -203,8 +203,7 @@ def transform_behavior(behavior, transform):
     return(behavior)
 
 
-def setup_confounds(args, brain):
-    ntimepoints = brain.shape[-1]
+def setup_confounds(args, ntimepoints):
 
     confound_mtx = None
     confound_names = []
@@ -299,7 +298,7 @@ if __name__ == "__main__":
         results['beta'] = np.zeros(list(brain.shape[:-1]) + [len(args.behavior)])
         results['tstat'] = np.zeros(list(brain.shape[:-1]) + [len(args.behavior)])
 
-    confound_regressors, confound_names = setup_confounds(args, brain)
+    confound_regressors, confound_names = setup_confounds(args, brain.shape[-1])
     if len(confound_names) > 0:
         args.logger.info(f'confound regressors: {confound_names}')
 
