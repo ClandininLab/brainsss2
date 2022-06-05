@@ -40,11 +40,11 @@ def parse_args(input, allow_unknown=True):
         '--atlasfile',
         type=str,
         help='atlas file',
-        required=True)
+        default='20220301_luke_2_jfrc_affine_zflip_2umiso.nii')
     atlas.add_argument('--atlasname',
         type=str,
         help='identifier for atlas space',
-        required=True)
+        default='jfrc')
 
     group = parser.add_argument_group('ANTs registration options')
     group.add_argument('--type_of_transform', type=str, default='SyN',
