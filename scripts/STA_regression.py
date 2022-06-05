@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import scipy
 import time
 import json
+import h5py
 import nibabel as nib
 from scipy.ndimage import gaussian_filter1d
 from sklearn.linear_model import LinearRegression
@@ -34,6 +35,7 @@ from brainsss2.explosion_plot import (
 )
 from brainsss2.argparse_utils import get_base_parser
 from brainsss2.utils import load_timestamps
+from brainsss2.regression import setup_confounds
 
 
 def parse_args(input, allow_unknown=True):
@@ -56,6 +58,8 @@ def parse_args(input, allow_unknown=True):
         help='number of post-onset timepoints to estimate response')
     parser.add_argument('--nprestim', type=int, default=4,
         help='number of pre-onset timepoints to estimate response')
+    parser.add_argument('--dct_bases', type=int, default=12, help='number of dct bases to use')
+    parser.add_argument('--confound_files', type=str, nargs='+', help='confound files')
     if allow_unknown:
         args, unknown = parser.parse_known_args()
     else:
@@ -281,7 +285,7 @@ def old_STA():
 
 # following are for the new STA approach
 def get_resampled_slice_data(
-    all_signals, event_times_list, slice, scale_data=True, interpolation_type="linear"
+    all_signals, event_times_list, slice, scale_data=False, interpolation_type="linear"
 ):
 
     slicedata = all_signals[slice, :, :].squeeze().T
@@ -318,8 +322,18 @@ def get_resampled_slice_data(
     return (resampled_df, event_df_resampled)
 
 
-# +
-def make_fir_desmtx(event_df, npts=20, n_prestim_pts=4, fit_intercept=False):
+def resample_confound_df(confound_df, timestamps):
+    confound_df.index = pd.to_datetime(timestamps[:, 0] / 1000, unit="s")
+    return (
+        confound_df.resample("100ms")
+        .mean()
+        .interpolate(method='linear')
+    )
+
+
+def make_fir_desmtx(event_df, npts=20, n_prestim_pts=4,
+    fit_intercept=False, resampled_confound_df=None,
+    use_pct_signal_change=True):
     """
     make a finite impulse response design matrix
 
@@ -331,6 +345,10 @@ def make_fir_desmtx(event_df, npts=20, n_prestim_pts=4, fit_intercept=False):
         number of timepoints before onset
     fit_intercept: bool
         whether to include intercept in model
+    resampled_confound_df: dataframe
+        dataframe with columns for confound modeling 
+    use_pct_signal_change:
+        rescale data as percent signal change
 
     returns:
 
@@ -355,12 +373,19 @@ def make_fir_desmtx(event_df, npts=20, n_prestim_pts=4, fit_intercept=False):
         ctr += 1
     if fit_intercept:
         desmtx = np.hstack((desmtx, np.ones(desmtx.shape[0])[:, np.newaxis]))
-
-    desmtx_df = pd.DataFrame(desmtx, columns=timepoints)
+    desmtx_df = pd.DataFrame(desmtx, columns=timepoints,
+        index=event_df.index)
+    if resampled_confound_df is not None:
+        # demean confound regressors
+        resampled_confound_df = resampled_confound_df - resampled_confound_df.mean(axis=0)
+        # set to same index as data for this slice
+        resampled_confound_df.index = event_df.index
+        desmtx_df = pd.concat((desmtx_df, resampled_confound_df), axis=1)
     return desmtx_df
 
 
-def run_fir_regression(resampled_df, desmtx_df, zero_onset=False):
+def run_fir_regression(resampled_df, desmtx_df, zero_onset=False,
+    use_pct_signal_change=True):
     lr = LinearRegression()
     X = desmtx_df.values
     y = resampled_df.values
@@ -379,7 +404,7 @@ def run_fir_regression(resampled_df, desmtx_df, zero_onset=False):
     tstat = np.zeros(coefs.shape)
     for i in range(coefs.shape[1]):
         # use unscaled coefs for computing t
-        tstat[:, i] = lr.coef_[:, i] / np.sqrt(MSE[i] / np.diag(XtX)[i])
+        tstat[:, i] = lr.coef_[:, i] / np.sqrt(MSE / np.diag(XtX)[i])
         # compute two-tailed p-value
     pval = (1 - scipy.stats.t.cdf(x=np.abs(tstat), df=df)) * 2
     # set pvals for coefs that are nan to 1
@@ -388,7 +413,10 @@ def run_fir_regression(resampled_df, desmtx_df, zero_onset=False):
     assert np.max(pval) <= 1
 
     rsquared = r2_score(y, predictions, multioutput="raw_values")
-    return (coefs, rsquared, tstat, pval)
+    # rescale coefs as pct signal change
+    if use_pct_signal_change:
+        coefs = (coefs.T / lr.intercept_).T 
+    return (coefs, rsquared, pval, tstat)
 
 
 def supervoxels_to_img(supervoxel_data, cluster_img):
@@ -428,6 +456,38 @@ def supervoxels_to_img(supervoxel_data, cluster_img):
     return output_img
 
 
+def load_cluster_data(data_file, cluster_labels):
+    """
+    Loads the data from an h5 data file and the cluster label img.
+
+    Args:
+    data_file: str
+        path to data file
+    cluster_label_img: str
+        path to cluster label img
+
+    returns:
+    clusterdata: numpy ndarray
+        data matrix
+    """
+    tsdataimg = h5py.File(data_file, "r")
+    brain = tsdataimg["data"]
+    nclusters = len(np.unique(cluster_labels))
+    all_signals = []
+    for z in range(49):
+        neural_activity = brain[:, :, z, :].reshape(-1, brain.shape[-1])
+        signals = []
+        for cluster_num in range(nclusters):
+            cluster_indicies = np.where(cluster_labels[z, :] == cluster_num)[0]
+            mean_signal = np.mean(neural_activity[cluster_indicies, :], axis=0)
+            signals.append(mean_signal)
+        all_signals.append(np.asarray(signals))
+        print(f'finished slice {z}, mean {np.mean(np.asarray(signals))}')
+    all_signals = np.asarray(all_signals)
+
+    return all_signals
+
+
 if __name__ == "__main__":
 
     args = parse_args(sys.argv[1:])
@@ -447,11 +507,26 @@ if __name__ == "__main__":
 
     cluster_dir = os.path.join(args.dir, "clustering")
 
+    cluster_label_file = os.path.join(cluster_dir, "cluster_labels.npy")
+    cluster_labels = np.load(cluster_label_file)
+
     cluster_label_imgfile = os.path.join(cluster_dir, "cluster_labels.nii.gz")
     cluster_label_img = nib.load(cluster_label_imgfile)
 
-    load_file = os.path.join(cluster_dir, "cluster_signals.npy")
-    all_signals = np.load(load_file)
+    # extract data from clusters rather than using prestored cluster signals
+    # this allows using the original data rather than residuals
+    # which we do because we want to include confound modeling here
+    # to allow for extraction of percent signal change
+    data_file = os.path.join(args.dir, 'preproc/functional_channel_2_moco.h5')
+    cluster_signal_file = data_file.replace('.h5', '_clustersignal.npy').replace('preproc', 'clustering')
+    assert cluster_signal_file != data_file, 'cluster signal file should not be the same as the data file'
+    if os.path.exists(cluster_signal_file):
+        print('loading existing cluster data')
+        all_signals = np.load(cluster_signal_file)
+    else:
+        print('extracting cluster data')
+        all_signals = load_cluster_data(data_file, cluster_labels)
+        np.save(cluster_signal_file, all_signals)
 
     timestamps = load_timestamps(os.path.join(args.dir, "imaging"))
 
@@ -470,9 +545,17 @@ if __name__ == "__main__":
     # bin_start = -500; bin_end = 2000; bin_size = 100
     # neural_bins = np.arange(bin_start,bin_end,bin_size)
 
+    if args.confound_files is not None or args.dct_bases > 0:
+        confound_regressors, confound_names = setup_confounds(args, all_signals.shape[-1])
+        confound_df = pd.DataFrame(confound_regressors, columns=confound_names)
+        resampled_confound_df = resample_confound_df(confound_df, timestamps)
+    else:
+        confound_df = None
+
     output_filename = os.path.join(STA_path, "STA_results.h5")
 
     for condition in ["ve_no_0", "ve_no_180", "ve_0", "ve_180"]:
+        print(f'processing {condition}')
         if "180" in condition:
             angle = 180
         else:
@@ -485,17 +568,21 @@ if __name__ == "__main__":
         all_coefs = None
         all_pvals = None
         all_rsquared = None
+        all_tstats = None
         for slice in range(all_signals.shape[0]):
             resampled_df, event_df_resampled = get_resampled_slice_data(
                 all_signals, event_times_list, slice, interpolation_type="linear"
             )
 
             desmtx_df = make_fir_desmtx(event_df_resampled,
-                args.ntimepoints, args.nprestim)
+                args.ntimepoints, args.nprestim, resampled_confound_df=resampled_confound_df)
 
-            coefs, rsquared, tstat, pval = run_fir_regression(
+            coefs, rsquared, pval, tstat = run_fir_regression(
                 resampled_df, desmtx_df)
-
+            # remove confound coefs
+            coefs = coefs[:, :-(resampled_confound_df.shape[1])]
+            pval = pval[:, :-(resampled_confound_df.shape[1])]
+            tstat = tstat[:, :-(resampled_confound_df.shape[1])]
             if all_coefs is None:
                 all_coefs = np.zeros(
                     (all_signals.shape[0], coefs.shape[0], coefs.shape[1])
@@ -503,14 +590,21 @@ if __name__ == "__main__":
                 all_pvals = np.zeros(
                     (all_signals.shape[0], coefs.shape[0], coefs.shape[1])
                 )
+                all_tstats = np.zeros(
+                    (all_pvals.shape)
+                )
             all_coefs[slice, :, :] = coefs
             all_pvals[slice, :, :] = pval
+            all_tstats[slice, :, :] = tstat
+
             print(f"Slice {slice}: {np.max(coefs)}")
             if all_rsquared is None:
                 all_rsquared = np.zeros((all_coefs.shape[0], all_coefs.shape[1]))
             all_rsquared[slice, :] = rsquared
         img = supervoxels_to_img(all_coefs, cluster_label_img)
         img.to_filename(os.path.join(STA_path, f"STA_coefs_{condition}.nii.gz"))
+        img = supervoxels_to_img(all_tstats, cluster_label_img)
+        img.to_filename(os.path.join(STA_path, f"STA_tstats_{condition}.nii.gz"))
         img = supervoxels_to_img(1 - all_pvals, cluster_label_img)
         img.to_filename(os.path.join(STA_path, f"STA_1-pval_{condition}.nii.gz"))
         img = supervoxels_to_img(all_rsquared, cluster_label_img)
