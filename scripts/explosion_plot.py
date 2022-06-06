@@ -4,7 +4,6 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import ants
-from brainsss2.brain_utils import load_fda_meanbrain
 from brainsss2.explosion_plot import (
     load_roi_atlas,
     load_explosion_groups,
@@ -27,7 +26,7 @@ def parse_args(input, allow_unknown=True):
         type=str, help='fly dir',
         required=True)
     parser.add_argument('--timepoint', type=int, default=0,
-        help = 'timepoint to visualize for 4d files')
+        help='timepoint to visualize for 4d files')
     parser.add_argument('--anatfile', type=str,
         default='preproc/anatomy_channel_1_res-2.0mu_moco_mean.nii',
         help='channel 1 mean image for functional data (after moco)')
@@ -35,7 +34,7 @@ def parse_args(input, allow_unknown=True):
         default='explosion_plot.png',
         help='output file (will be expanded for 4d images')
     parser.add_argument('--cmap', type=str, default='hot',
-        help = 'color map to use for plotting')
+        help='color map to use for plotting')
     atlas = parser.add_argument_group('atlas options')
     atlas.add_argument('--atlasdir',
         type=str,
@@ -70,98 +69,55 @@ def get_transforms(args):
 
     transformfiles = {
         'anat_to_atlas_affine': os.path.join(warp_directory, "anat_to_atlas_0GenericAffine.mat"),
-        'anat_to_atlas_warp': os.path.join(warp_directory, "anat_to_atlas_1Warp.nii.gz"),
+        'anat_to_atlas_warp': os.path.join(warp_directory, "anat_to_atlas_1InverseWarp.nii.gz"),
         'func_to_anat_affine': os.path.join(warp_directory, "func_to_anat_0GenericAffine.mat"),
-        'func_to_anat_warp': os.path.join(warp_directory, "func_to_anat_1InverseWarpWarp.nii.gz"),
+        'func_to_anat_warp': os.path.join(warp_directory, "func_to_anat_1InverseWarp.nii.gz"),
     }
 
-    transforms = {'anat_to_atlas': [
-        transformfiles['anat_to_atlas_warp'],
-        transformfiles['anat_to_atlas_affine']],
+    transforms = {
+        'anat_to_atlas': [
+            transformfiles['anat_to_atlas_warp'],
+            transformfiles['anat_to_atlas_affine']],
         'func_to_anat': [
             transformfiles['func_to_anat_warp'],
             transformfiles['func_to_anat_affine']],
         'func_to_atlas': [
-            transformfiles['anat_to_atlas_warp'],
-            transformfiles['anat_to_atlas_affine'],
+            transformfiles['func_to_anat_affine'],
             transformfiles['func_to_anat_warp'],
-            transformfiles['func_to_anat_affine']]}
+            transformfiles['anat_to_atlas_affine'],
+            transformfiles['anat_to_atlas_warp'],]
+    }
 
     return transforms
 
 
-if __name__ == "__main__":
-
-    args = parse_args(sys.argv[1:])
-    basedir = '/'.join(args.flydir.split('/')[:-2])
-    if args.atlasdir is None:
-        args.atlasdir = os.path.join(basedir, 'atlas')
-        assert os.path.exists(args.atlasdir), 'atlas dir does not exist'
-
-    func_path = os.path.join(args.flydir, 'func_0/')
-    assert os.path.exists(func_path), f'func dir {func_path} does not exist'
-    anat_path = os.path.join(args.flydir, 'anat_0/')
-    assert os.path.exists(anat_path), f'anat dir {anat_path} does not exist'
-
+def warp_func_to_atlas(args, atlas):
     img_ants = ants.image_read(args.file)
 
-    atlasfile = os.path.join(args.atlasdir, args.atlasfile)
-    fixed = load_fda_meanbrain(atlasfile)
+    atlas_ants = ants.from_numpy(atlas)
+    atlas_ants.set_spacing(img_ants.spacing)
+    atlas_ants.set_direction(img_ants.direction)
 
+    transforms = get_transforms(args)
+
+    func2atlas = ants.apply_transforms(fixed=atlas_ants, moving=img_ants,
+                                    transformlist=transforms['func_to_atlas'],
+                                    which_to_invert=[True, False, True, False],
+                                    interpolator  = 'nearestNeighbor')
+    return(func2atlas)
+
+
+def get_atlas(args):
     atlasroifile = os.path.join(args.atlasdir, args.atlasroifile)
-    atlas = load_roi_atlas(atlasroifile)
+    return(load_roi_atlas(atlasroifile))
 
+
+def make_explosion_plot(args, atlas):
     explosion_roi_file = os.path.join(args.atlasdir, args.explosionroifile)
     explosion_rois = load_explosion_groups(explosion_roi_file)
     all_rois = unnest_roi_groups(explosion_rois)
     roi_masks = make_single_roi_masks(all_rois, atlas)
     roi_contours = make_single_roi_contours(roi_masks, atlas)
-
-    anat_file = os.path.join(anat_path, args.anatfile)
-    anat_ants = ants.image_read(anat_file)
-
-    atlas_ants = ants.image_read(atlasfile)
-
-    warp_directory = os.path.join(args.flydir, "registration/transforms")
-    assert os.path.exists(warp_directory)
-
-    anat_to_atlas_affine_file = os.path.join(
-        warp_directory, "anat_to_atlas_0GenericAffine.mat"
-    )
-    anat_to_atlas_warp_file = os.path.join(warp_directory, "anat_to_atlas_1Warp.nii.gz")
-    anat2atlas_transforms = [
-        anat_to_atlas_warp_file,
-        anat_to_atlas_affine_file,
-    ]
-
-    anat2atlas = ants.apply_transforms(fixed=atlas_ants, moving=anat_ants,
-                                    transformlist=anat2atlas_transforms,
-                                    which_to_invert=[False, True])
-
-    func_to_anat_affine_file = os.path.join(
-        warp_directory, "func_to_anat_0GenericAffine.mat"
-    )
-    func_to_anat_warp_file = os.path.join(warp_directory, "func_to_anat_1InverseWarp.nii.gz")
-
-    func2anat_transforms = [
-        func_to_anat_warp_file,
-        func_to_anat_affine_file,
-    ]
-
-    func2anat = ants.apply_transforms(fixed=anat_ants, moving=img_ants,
-                                    transformlist=func2anat_transforms,
-                                    which_to_invert=[False, True])
-
-    func2atlas_transforms = [
-        anat_to_atlas_warp_file,
-        anat_to_atlas_affine_file,
-        func_to_anat_warp_file,
-        func_to_anat_affine_file,
-    ]
-
-    func2atlas = ants.apply_transforms(fixed=atlas_ants, moving=img_ants,
-                                    transformlist=func2atlas_transforms,
-                                    which_to_invert=[False, True, False, True])
 
     input_canvas = np.ones((500, 500, 3))  #+.5 #.5 for diverging
     data_to_plot = func2atlas[:, :, ::-1]
@@ -174,9 +130,29 @@ if __name__ == "__main__":
         vmax=vmax,
         cmap=args.cmap)
 
-    fig = plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(10, 10))
     plt.imshow(explosion_map)
     plt.ylim(500, 175)
     plt.axis('off')
     plt.title(args.file)
     plt.savefig(args.outfile)
+
+
+if __name__ == "__main__":
+
+    args = parse_args(sys.argv[1:])
+    basedir = '/'.join(args.flydir.split('/')[:-2])
+    if args.atlasdir is None:
+        args.atlasdir = os.path.join(basedir, 'atlas')
+        assert os.path.exists(args.atlasdir), 'atlas dir does not exist'
+
+    setattr(args, 'func_path', os.path.join(args.flydir, 'func_0/'))
+    assert os.path.exists(args.func_path), f'func dir {args.func_path} does not exist'
+    setattr(args, 'anat_path', os.path.join(args.flydir, 'anat_0/'))
+    assert os.path.exists(args.anat_path), f'anat dir {args.anat_path} does not exist'
+
+    atlas = get_atlas(args)
+
+    func2atlas = warp_func_to_atlas(args, atlas)
+
+    make_explosion_plot(args, atlas)
