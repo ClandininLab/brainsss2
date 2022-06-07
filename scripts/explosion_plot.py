@@ -1,9 +1,25 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.13.8
+#   kernelspec:
+#     display_name: Python 3 (ipykernel)
+#     language: python
+#     name: python3
+# ---
+
+# %% tags=[]
 
 import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import ants
+import easydict
 from brainsss2.explosion_plot import (
     load_roi_atlas,
     load_explosion_groups,
@@ -14,17 +30,17 @@ from brainsss2.explosion_plot import (
 )
 from brainsss2.argparse_utils import get_base_parser
 
-
-def parse_args(input, allow_unknown=True):
+# %% tags=[]
+def parse_args(input, allow_unknown=True, require_args=True):
     parser = get_base_parser('explosion visualization')
 
     # need to add this manually to procesing steps in order to make required
 
-    parser.add_argument('-f', '--file', required=True,
+    parser.add_argument('--file', required=require_args,
         type=str, help='nii file to visualize')
     parser.add_argument('--flydir',
         type=str, help='fly dir',
-        required=True)
+        required=require_args)
     parser.add_argument('--timepoint', type=int, default=0,
         help='timepoint to visualize for 4d files')
     parser.add_argument('--anatfile', type=str,
@@ -85,11 +101,12 @@ def get_transforms(args):
             transformfiles['func_to_anat_affine'],
             transformfiles['func_to_anat_warp'],
             transformfiles['anat_to_atlas_affine'],
-            transformfiles['anat_to_atlas_warp'],]
+            transformfiles['anat_to_atlas_warp']]
     }
 
     return transforms
 
+# %% tags=[]
 
 def warp_func_to_atlas(args, atlas):
     img_ants = ants.image_read(args.file)
@@ -103,16 +120,22 @@ def warp_func_to_atlas(args, atlas):
     func2atlas = ants.apply_transforms(fixed=atlas_ants, moving=img_ants,
                                     transformlist=transforms['func_to_atlas'],
                                     which_to_invert=[True, False, True, False],
-                                    interpolator  = 'nearestNeighbor')
+                                    interpolator='nearestNeighbor')
+    
     return(func2atlas)
 
+# %% tags=[]
 
-def get_atlas(args):
+def get_atlas(args, flip_z=False):
     atlasroifile = os.path.join(args.atlasdir, args.atlasroifile)
-    return(load_roi_atlas(atlasroifile))
+    atlas = load_roi_atlas(atlasroifile)
+    if flip_z:
+        atlas = np.flip(atlas, axis=-1)
+    return(atlas)
 
+# %% tags=[]
 
-def make_explosion_plot(args, atlas):
+def make_explosion_plot(args, func2atlas, atlas):
     explosion_roi_file = os.path.join(args.atlasdir, args.explosionroifile)
     explosion_rois = load_explosion_groups(explosion_roi_file)
     all_rois = unnest_roi_groups(explosion_rois)
@@ -137,10 +160,21 @@ def make_explosion_plot(args, atlas):
     plt.title(args.file)
     plt.savefig(args.outfile)
 
-
+# %% tags=[]
 if __name__ == "__main__":
 
-    args = parse_args(sys.argv[1:])
+    args = easydict.EasyDict({
+        'file': '../notebooks/atlasroi_test.nii',
+        'flydir': '/data/brainsss/processed/fly_001',
+        'anatfile': 'preproc/anatomy_channel_1_res-2.0mu_moco_mean.nii',
+        'outfile': 'explosion_plot.png',
+        'cmap': 'hot',
+        'atlasdir': '/data/brainsss/atlas',
+        'atlasfile': '20220301_luke_2_jfrc_affine_zflip_2umiso.nii',
+        'atlasroifile': 'jfrc_2018_rois_improve_reorient_transformed.nii',
+        'explosionroifile': '20220425_explosion_plot_rois.pickle'
+    })
+    # args = parse_args(sys.argv[1:])
     basedir = '/'.join(args.flydir.split('/')[:-2])
     if args.atlasdir is None:
         args.atlasdir = os.path.join(basedir, 'atlas')
@@ -155,4 +189,6 @@ if __name__ == "__main__":
 
     func2atlas = warp_func_to_atlas(args, atlas)
 
-    make_explosion_plot(args, atlas)
+    make_explosion_plot(args, func2atlas, atlas)
+
+# %%
