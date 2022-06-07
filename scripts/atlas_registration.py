@@ -6,6 +6,13 @@ import os
 import sys
 import ants
 import logging
+from dipy.viz import regtools
+import nibabel as nib
+import scipy.stats
+import numpy as np
+from sklearn.preprocessing import quantile_transform
+from nilearn.plotting import plot_roi, plot_anat
+
 from brainsss2.argparse_utils import get_base_parser, add_moco_arguments # noqa
 from brainsss2.logging_utils import setup_logging # noqa
 from brainsss2.imgmath import imgmath # noqa
@@ -52,8 +59,12 @@ def parse_args(input, allow_unknown=True):
     group.add_argument('--interpolation_method', type=str, default='lanczosWindowedSinc')
     group.add_argument('--flow_sigma', type=float, default=3,
         help='flow sigma for registration - higher sigma focuses on coarser features')
+    group.add_argument('--grad_step', type=float, default=.1,
+        help='gradient step size')
     group.add_argument('--total_sigma', type=float, default=1,
         help='total sigma for registration - higher values will restrict the amount of deformation allowed')
+    group.add_argument('--syn_sampling', type=int, default=64,
+        help='he nbins or radius parameter for the syn metric')
     group.add_argument(
         '--maskthresh',
         type=float,
@@ -67,6 +78,43 @@ def parse_args(input, allow_unknown=True):
         args = parser.parse_args()
 
     return args
+
+
+def make_clean_anat(anatfile, sigma=5, thresh_pct=40, normalize=False):
+    anat_img = nib.load(anatfile)
+    anat_ants = ants.image_read(anatfile)
+    low_thresh = scipy.stats.scoreatpercentile(anat_ants.numpy(), thresh_pct)
+    anat_ants_masked = ants.get_mask(anat_ants,
+        low_thresh=low_thresh,
+        cleanup=4)
+    maskfile = anatfile.replace('.nii', '_mask.nii')
+    assert maskfile != anatfile, 'maskfile should not be the same as anatfile'
+    anat_ants_masked.to_filename(maskfile)
+
+    brain = anat_img.get_fdata(dtype='float32') * anat_ants_masked[...]
+
+    # ### Blur brain and mask small values ###
+    # brain_copy = brain.copy()
+    # brain_copy = gaussian_filter(brain_copy, sigma=sigma)
+    # threshold = triangle(brain_copy)
+    # brain_copy[np.where(brain_copy < threshold/2)] = 0
+
+    # ### Remove blobs outside contiguous brain ###
+    # labels, label_nb = scipy.ndimage.label(brain_copy)
+    # brain_label = np.bincount(labels.flatten())[1:].argmax()+1
+    # brain_copy = brain.copy().astype('float32')
+    # brain_copy[np.where(labels != brain_label)] = np.nan
+
+    ### Perform quantile normalization ###
+    if normalize:
+        brain_out = quantile_transform(brain.flatten().reshape(-1, 1), n_quantiles=500, random_state=0, copy=True)
+        brain_out = brain_out.reshape(brain.shape)
+        brain = np.nan_to_num(brain_out, copy=False)
+
+    clean_anatfile = anatfile.replace('.nii', '_clean.nii')
+    assert clean_anatfile != anatfile, 'clean_anatfile is same as anatfile'
+    nib.save(nib.Nifti1Image(brain, anat_img.affine, anat_img.header), clean_anatfile)
+    return clean_anatfile, maskfile
 
 
 if __name__ == "__main__":
@@ -106,7 +154,13 @@ if __name__ == "__main__":
 
     # first register anat channel 1 mean to atlas
 
-    meananatimg = ants.image_read(os.path.join(args.dir, args.anatfile))
+    clean_anat_file, maskfile = make_clean_anat(os.path.join(args.dir, args.anatfile))
+    mask_plot_file = maskfile.replace('.nii', '_plot.png')
+    assert mask_plot_file != maskfile, 'mask_plot_file should not be the same as maskfile'
+    plot_roi(maskfile, bg_img=clean_anat_file,
+        output_file=mask_plot_file, display_mode='z', cut_coords=np.arange(10, 100, 10))
+
+    meananatimg = ants.image_read(clean_anat_file)
 
     ## register anat channel 1 mean to atlas
     args.logger.info('registering anat channel 1 mean to atlas')
@@ -116,8 +170,12 @@ if __name__ == "__main__":
         verbose=args.verbose,
         outprefix=f'{args.transformdir}/anat_to_atlas_',
         type_of_transform=args.type_of_transform,
+        syn_sampling=args.syn_sampling,
         total_sigma=args.total_sigma,
-        flow_sigma=args.flow_sigma)
+        flow_sigma=args.flow_sigma,
+        grad_step=args.grad_step,
+        reg_iterations=[100, 100, 20]
+    )
 
     ## save transformed mean
     mean_reg_to_atlas_file = os.path.join(
@@ -134,6 +192,18 @@ if __name__ == "__main__":
     )
     setattr(args, "atlas_to_mean_reg_file", atlas_to_mean_reg_file)
     anat_to_atlas['warpedfixout'].to_filename(atlas_to_mean_reg_file)
+
+    regtools.overlay_slices(
+        atlasimg.numpy(),
+        anat_to_atlas['warpedmovout'].numpy(),
+        ltitle='atlas',
+        rtitle='warped anat',
+        fname=os.path.join(registration_dir, 'anat_to_atlas_overlay.png'))
+
+    p = plot_anat(anat_to_atlas['warpedmovout'].to_nibabel(),
+        display_mode='z', cut_coords=np.arange(10, 100, 10))
+    p.add_contours(atlasimg.to_nibabel(), linewidths=1)
+    p.savefig(os.path.join(registration_dir, 'anat_to_atlas_contours.png'))
 
     # then register functional channel 1 mean to anat channel 1 mean
     meanfuncimg = ants.image_read(os.path.join(args.dir, args.funcfile))
@@ -156,6 +226,17 @@ if __name__ == "__main__":
     )
     setattr(args, "func_reg_to_anat_file", func_reg_to_anat_file)
     func_to_anat['warpedmovout'].to_filename(func_reg_to_anat_file)
+    regtools.overlay_slices(
+        meananatimg.numpy(),
+        func_to_anat['warpedmovout'].numpy(),
+        ltitle='mean anat',
+        rtitle='warped func',
+        fname=os.path.join(registration_dir, 'func_to_anat_overlay.png'))
+
+    p = plot_anat(func_to_anat['warpedmovout'].to_nibabel(),
+        display_mode='z', cut_coords=np.arange(10, 100, 10))
+    p.add_contours(meananatimg.to_nibabel(), linewidths=1)
+    p.savefig(os.path.join(registration_dir, 'func_to_anat_contours.png'))
 
     # save inverse
     anat_reg_to_func_file = os.path.join(
@@ -169,13 +250,25 @@ if __name__ == "__main__":
     args.logger.info('warping atlas to functional space')
     atlas_to_func = ants.apply_transforms(moving=atlasimg,
         fixed=meanfuncimg,
-        transformlist=anat_to_atlas['invtransforms'] + func_to_anat['invtransforms'])
+        transformlist=anat_to_atlas['invtransforms'] + func_to_anat['invtransforms'],
+        whichtoinvert=[True, False, True, False])
     atlas_to_func_file = os.path.join(
         registration_dir,
         os.path.basename(args.atlasfile).replace('.nii', '_space-func.nii')
     )
     setattr(args, "atlas_to_func_file", atlas_to_func_file)
     atlas_to_func.to_filename(atlas_to_func_file)
+    regtools.overlay_slices(
+        meanfuncimg.numpy(),
+        atlas_to_func.numpy(),
+        ltitle='mean func',
+        rtitle='warped atlas',
+        fname=os.path.join(registration_dir, 'atlas_to_func_overlay.png'))
+
+    p = plot_anat(meanfuncimg.to_nibabel(),
+        display_mode='z', cut_coords=np.arange(10, 100, 10))
+    p.add_contours(atlas_to_func.to_nibabel(), linewidths=1)
+    p.savefig(os.path.join(registration_dir, 'atlas_to_func_contours.png'))
 
     setattr(args, 'completed', True)
 
