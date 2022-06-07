@@ -45,6 +45,7 @@ setup(
         'nilearn',
         'jinja2',
         'jsonschema',
+        'dipy',
         'opencv-python',
         'GitPython'
     ],
