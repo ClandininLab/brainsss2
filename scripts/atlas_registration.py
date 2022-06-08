@@ -219,9 +219,10 @@ if __name__ == "__main__":
 
     # warp atlas to func space
     args.logger.info('warping atlas to functional space')
+    atlas_to_func_transforms = func_to_anat['invtransforms'] + anat_to_atlas['invtransforms']
     atlas_to_func = ants.apply_transforms(moving=atlasimg,
         fixed=meanfuncimg,
-        transformlist=anat_to_atlas['invtransforms'] + func_to_anat['invtransforms'],
+        transformlist=atlas_to_func_transforms,
         whichtoinvert=[True, False, True, False])
     atlas_to_func_file = os.path.join(
         registration_dir,
