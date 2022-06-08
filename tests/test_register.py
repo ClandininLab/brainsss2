@@ -9,6 +9,7 @@ from brainsss2.atlas_registration import make_clean_anat
 import pytest
 
 TESTDATADIR = 'testdata'
+INTERP = 'lanczosWindowedSinc'
 
 
 @pytest.fixture
@@ -21,14 +22,14 @@ def funcimg():
 @pytest.fixture
 def anatimg():
     anatimgfile = os.path.join(TESTDATADIR, 'anatomy_channel_1_res-2.0mu_moco_mean.nii')
-    clean_anatimgfile, _ = make_clean_anat(anatimgfile)
+    clean_anatimgfile, _ = make_clean_anat(anatimgfile, normalize=True)
     anatimg = ants.image_read(clean_anatimgfile)
     return(anatimg)
 
 
 @pytest.fixture
 def atlasimg():
-    atlasimgfile = os.path.join(TESTDATADIR, '20220301_luke_2_jfrc_affine_fixed_2um.nii')
+    atlasimgfile = os.path.join(TESTDATADIR, '20220301_luke_2_jfrc_affine_zflip_2umiso.nii')
     atlasimg = ants.image_read(atlasimgfile)
     return(atlasimg)
 
@@ -40,6 +41,7 @@ def func_anat_reg(funcimg, anatimg):
         fixed=anatimg,
         moving=funcimg,
         type_of_transform='SyN',
+        interpolator=INTERP,
         total_sigma=3,
         flow_sigma=3)
 
@@ -51,6 +53,7 @@ def func_anat_reg(funcimg, anatimg):
     )
     return(func_to_anat, inverse_func_to_anat)
 
+
 @pytest.fixture
 def anat_atlas_reg(anatimg, atlasimg):
 
@@ -58,11 +61,12 @@ def anat_atlas_reg(anatimg, atlasimg):
         fixed=atlasimg,
         moving=anatimg,
         type_of_transform='SyN',
+        interpolator=INTERP,
         syn_sampling=64,
-        total_sigma=1,
+        total_sigma=3,
         flow_sigma=3,
         grad_step=.1,
-        reg_iterations=[100, 100, 20]
+        reg_iterations=[200, 200, 50]
     )
 
     inverse_anat_to_atlas = ants.apply_transforms(
@@ -98,3 +102,25 @@ def test_anat_to_atlas(anat_atlas_reg, anatimg):
     assert np.corrcoef(anatimg.numpy().flatten(), inverse_anat_to_atlas.numpy().flatten())[0, 1] > .99
 
 
+def test_func_to_atlas(func_anat_reg, anat_atlas_reg, funcimg, atlasimg):
+    func_to_anat, inverse_func_to_anat = func_anat_reg
+    anat_to_atlas, inverse_anat_to_atlas = anat_atlas_reg
+
+    func_to_atlas_transforms = anat_to_atlas['invtransforms'] + func_to_anat['invtransforms']  # noqa
+    func_to_atlas = ants.apply_transforms(
+        fixed=atlasimg, moving=funcimg,
+        transformlist=func_to_atlas_transforms,
+        interpolator=INTERP)
+
+    # take back to func space from atlas space
+    atlas_to_func_transforms = func_to_anat['invtransforms'] + anat_to_atlas['invtransforms']
+    atlas_to_func_transforms
+
+    inverse_func_to_atlas = ants.apply_transforms(
+        fixed=funcimg, moving=func_to_atlas,
+        transformlist=atlas_to_func_transforms,
+        whichtoinvert=[True, False, True, False, ],
+        interpolator=INTERP)
+
+    # allow more leeway here because of the dual interpolation
+    assert np.corrcoef(funcimg.numpy().flatten(), inverse_func_to_atlas.numpy().flatten())[0, 1] > .9
