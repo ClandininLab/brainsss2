@@ -31,6 +31,7 @@ def anatimg():
 def atlasimg():
     atlasimgfile = os.path.join(TESTDATADIR, '20220301_luke_2_jfrc_affine_zflip_2umiso.nii')
     atlasimg = ants.image_read(atlasimgfile)
+    atlasimg.set_spacing([2, 2, 2])  # make sure the spacing is correct
     return(atlasimg)
 
 
