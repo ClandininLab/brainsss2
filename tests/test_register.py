@@ -5,15 +5,36 @@
 import os
 import ants
 import numpy as np
+from brainsss2.atlas_registration import make_clean_anat
+import pytest
+
+TESTDATADIR = 'testdata'
 
 
-def test_func_to_anat():
-    testdir = 'testdata'
-    funcimgfile = os.path.join(testdir, 'functional_channel_1_moco_mean.nii')
+@pytest.fixture
+def funcimg():
+    funcimgfile = os.path.join(TESTDATADIR, 'functional_channel_1_moco_mean.nii')
     funcimg = ants.image_read(funcimgfile)
+    return(funcimg)
 
-    anatimgfile = os.path.join(testdir, 'anatomy_channel_1_res-2.0mu_moco_mean.nii')
-    anatimg = ants.image_read(anatimgfile)
+
+@pytest.fixture
+def anatimg():
+    anatimgfile = os.path.join(TESTDATADIR, 'anatomy_channel_1_res-2.0mu_moco_mean.nii')
+    clean_anatimgfile, _ = make_clean_anat(anatimgfile)
+    anatimg = ants.image_read(clean_anatimgfile)
+    return(anatimg)
+
+
+@pytest.fixture
+def atlasimg():
+    atlasimgfile = os.path.join(TESTDATADIR, '20220301_luke_2_jfrc_affine_fixed_2um.nii')
+    atlasimg = ants.image_read(atlasimgfile)
+    return(atlasimg)
+
+
+@pytest.fixture
+def func_anat_reg(funcimg, anatimg):
 
     func_to_anat = ants.registration(
         fixed=anatimg,
@@ -28,19 +49,10 @@ def test_func_to_anat():
         transformlist=func_to_anat['invtransforms'],
         whichtoinvert=[True, False]
     )
+    return(func_to_anat, inverse_func_to_anat)
 
-    assert inverse_func_to_anat.shape == funcimg.shape
-    assert np.corrcoef(funcimg.numpy().flatten(), inverse_func_to_anat.numpy().flatten())[0, 1] > .99
-
-
-def test_anat_to_atlas():
-    testdir = 'testdata'
-
-    anatimgfile = os.path.join(testdir, 'anatomy_channel_1_res-2.0mu_moco_mean.nii')
-    anatimg = ants.image_read(anatimgfile)
-
-    atlasimgfile = os.path.join(testdir, '20220301_luke_2_jfrc_affine_fixed_2um.nii')
-    atlasimg = ants.image_read(atlasimgfile)
+@pytest.fixture
+def anat_atlas_reg(anatimg, atlasimg):
 
     anat_to_atlas = ants.registration(
         fixed=atlasimg,
@@ -59,6 +71,30 @@ def test_anat_to_atlas():
         transformlist=anat_to_atlas['invtransforms'],
         whichtoinvert=[True, False]
     )
+    return(anat_to_atlas, inverse_anat_to_atlas)
 
+
+def test_funcimg(funcimg):
+    assert funcimg is not None
+
+
+def test_anatimg(anatimg):
+    assert anatimg is not None
+
+
+def test_atlasimg(atlasimg):
+    assert atlasimg is not None
+
+
+def test_func_to_anat(func_anat_reg, funcimg):
+    func_to_anat, inverse_func_to_anat = func_anat_reg
+    assert inverse_func_to_anat.shape == funcimg.shape
+    assert np.corrcoef(funcimg.numpy().flatten(), inverse_func_to_anat.numpy().flatten())[0, 1] > .99
+
+
+def test_anat_to_atlas(anat_atlas_reg, anatimg):
+    anat_to_atlas, inverse_anat_to_atlas = anat_atlas_reg
     assert inverse_anat_to_atlas.shape == anatimg.shape
     assert np.corrcoef(anatimg.numpy().flatten(), inverse_anat_to_atlas.numpy().flatten())[0, 1] > .99
+
+
