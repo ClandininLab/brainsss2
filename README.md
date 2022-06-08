@@ -18,7 +18,7 @@ The workflow includes the following steps:
 
 The workflow also generates an html report showing the main results.
 
-This package is meant for use on high-performance computing systems that implement the [SLURM scheduling system](https://slurm.schedmd.com/documentation.html), but may not work on all such systems due to differences in SLURM configuration.  It uses a custom SLURM launcher defined in [slurm.py][brainsss2/slurm.py].  
+This package is meant for use on high-performance computing systems that implement the [SLURM scheduling system](https://slurm.schedmd.com/documentation.html), but may not work on all such systems due to differences in SLURM configuration.  It uses a custom SLURM launcher defined in [slurm.py](brainsss2/slurm.py).  
 
 ## Installing:
 
