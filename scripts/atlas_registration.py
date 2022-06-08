@@ -111,7 +111,11 @@ if __name__ == "__main__":
     filestem = os.path.basename(args.funcfile).split('.')[0]
 
     atlasimg = ants.image_read(args.atlasfile)
-    print(atlasimg)
+
+    # this is a hack to deal with misspecified image dimensions in the atlas
+    if '2umiso' in args.atlasfile:
+        args.logger.info('setting atlas spacing to 2um iso')
+        atlasimg.set_spacing([2, 2, 2])  # make sure the spacing is correct
 
     # first register anat channel 1 mean to atlas
 
@@ -165,6 +169,12 @@ if __name__ == "__main__":
         display_mode='z', cut_coords=np.arange(10, 100, 10))
     p.add_contours(atlasimg.to_nibabel(), linewidths=1)
     p.savefig(os.path.join(registration_dir, 'anat_to_atlas_contours.png'))
+
+    anat_to_atlas_cc = np.corrcoef(
+        atlasimg.numpy().flatten(),
+        anat_to_atlas['warpedmovout'].numpy().flatten())[0, 1]
+    args.logger.info(f'anat_to_atlas_cc: {anat_to_atlas_cc}')
+    setattr(args, "anat_to_atlas_cc", anat_to_atlas_cc)
 
     # then register functional channel 1 mean to anat channel 1 mean
     meanfuncimg = ants.image_read(os.path.join(args.dir, args.funcfile))
@@ -227,7 +237,7 @@ if __name__ == "__main__":
         fname=os.path.join(registration_dir, 'atlas_to_func_overlay.png'))
 
     p = plot_anat(meanfuncimg.to_nibabel(),
-        display_mode='z', cut_coords=np.arange(10, 100, 10))
+        display_mode='z', cut_coords=np.arange(60, 180, 20))
     p.add_contours(atlas_to_func.to_nibabel(), linewidths=1)
     p.savefig(os.path.join(registration_dir, 'atlas_to_func_contours.png'))
 
