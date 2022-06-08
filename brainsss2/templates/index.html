@@ -1,13 +1,15 @@
 
     <h1>{{ h1 }}</h1>
-     
+    
+    {% if value.moco_completed %}
     <h2>Fly metadata (from fly.json)</h2>
     <ul>
     {% for key, value in fly_metadata.items() %}
     <li>{{key}}: {{ value }}</li>
     {% endfor %}    
     </ul>
-
+    {% endif %}
+    
     <h2>Anatomical data</h2>
     {% for key, value in anat_info.items() %}
     <h3>{{key}}</h3>
