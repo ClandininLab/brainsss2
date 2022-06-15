@@ -12,7 +12,6 @@ This BIDS-inspired layout was designed to make understanding of the data structu
 
 ### Example layout:
 
-processed/
     fly-001/        
         func/
             raw/   # formerly labeled "imaging", contains raw imaging data
