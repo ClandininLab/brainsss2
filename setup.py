@@ -41,7 +41,7 @@ setup(
         'scipy',
         'h5py',
         'matplotlib',
-        'antspyx',
+        'antspyx==0.3.2',
         'nilearn',
         'jinja2',
         'jsonschema',
