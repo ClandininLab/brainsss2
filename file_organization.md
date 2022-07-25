@@ -1,4 +1,6 @@
-## File organization scheme
+## Original file organization scheme
+
+NOTE: see the [new scheme](new_file_organization.md), this is retained for historical information.
 
 The overall idea here is to develop a scheme that departs minimally from the existing scheme, while also moving towards a bit more systematicity in the organization of the various files.
 

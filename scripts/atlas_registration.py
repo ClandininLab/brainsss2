@@ -127,13 +127,13 @@ if __name__ == "__main__":
 
     meananatimg = ants.image_read(clean_anat_file)
 
-    ## register anat channel 1 mean to atlas
+    # register anat channel 1 mean to atlas
     args.logger.info('registering anat channel 1 mean to atlas')
     anat_to_atlas = ants.registration(
         fixed=atlasimg,
         moving=meananatimg,
         verbose=args.verbose,
-        outprefix=f'{args.transformdir}/anat_to_atlas_',
+        outprefix=f'{args.transformdir}/anat_to_{args.atlasname}_',
         type_of_transform=args.type_of_transform,
         syn_sampling=args.syn_sampling,
         total_sigma=args.total_sigma,
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         reg_iterations=[100, 100, 20]
     )
 
-    ## save transformed mean
+    # save transformed mean
     mean_reg_to_atlas_file = os.path.join(
         registration_dir,
         os.path.basename(args.anatfile).replace('.nii', f'_space-{args.atlasname}.nii')
@@ -161,14 +161,14 @@ if __name__ == "__main__":
     regtools.overlay_slices(
         atlasimg.numpy(),
         anat_to_atlas['warpedmovout'].numpy(),
-        ltitle='atlas',
+        ltitle=args.atlasname,
         rtitle='warped anat',
-        fname=os.path.join(registration_dir, 'anat_to_atlas_overlay.png'))
+        fname=os.path.join(registration_dir, f'anat_to_{args.atlasname}_overlay.png'))
 
     p = plot_anat(anat_to_atlas['warpedmovout'].to_nibabel(),
         display_mode='z', cut_coords=np.arange(10, 100, 10))
     p.add_contours(atlasimg.to_nibabel(), linewidths=1)
-    p.savefig(os.path.join(registration_dir, 'anat_to_atlas_contours.png'))
+    p.savefig(os.path.join(registration_dir, f'anat_to_{args.atlasname}_contours.png'))
 
     anat_to_atlas_cc = np.corrcoef(
         atlasimg.numpy().flatten(),
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     # then register functional channel 1 mean to anat channel 1 mean
     meanfuncimg = ants.image_read(os.path.join(args.dir, args.funcfile))
 
-    ## register functional channel 1 mean to anat channel 1 mean
+    # register functional channel 1 mean to anat channel 1 mean
     args.logger.info('registering functional channel 1 mean to anat channel 1 mean')
     func_to_anat = ants.registration(
         fixed=meananatimg,
@@ -190,7 +190,7 @@ if __name__ == "__main__":
         total_sigma=args.total_sigma,
         flow_sigma=args.flow_sigma)
 
-    ## save transformed mean
+    # save transformed mean
     func_reg_to_anat_file = os.path.join(
         registration_dir,
         os.path.basename(args.funcfile).replace('.nii', '_space-anat.nii')
@@ -235,12 +235,12 @@ if __name__ == "__main__":
         atlas_to_func.numpy(),
         ltitle='mean func',
         rtitle='warped atlas',
-        fname=os.path.join(registration_dir, 'atlas_to_func_overlay.png'))
+        fname=os.path.join(registration_dir, f'{args.atlasname}_to_func_overlay.png'))
 
     p = plot_anat(meanfuncimg.to_nibabel(),
         display_mode='z', cut_coords=np.arange(60, 180, 20))
     p.add_contours(atlas_to_func.to_nibabel(), linewidths=1)
-    p.savefig(os.path.join(registration_dir, 'atlas_to_func_contours.png'))
+    p.savefig(os.path.join(registration_dir, f'{args.atlasname}_to_func_contours.png'))
 
     setattr(args, 'completed', True)
 
