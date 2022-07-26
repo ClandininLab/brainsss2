@@ -178,13 +178,14 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
     if args.verbose:
         logger.debug(f"verbose logging enabled: {args.logfile}")
 
+    logger.info("abc")
     logger.info("\n\nArguments:")
     args_dict = vars(args)
     for key, value in args_dict.items():
         logger.info(f"{key}: {value}")
     logger.info("\n")
 
-    logger.info("abc")
+    logger.info("defgh")
     setattr(args, 'logger', logger)
     logger.info("1")
     args.logger.info("2")
