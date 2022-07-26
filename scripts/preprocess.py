@@ -495,7 +495,11 @@ if __name__ == "__main__":
     args = setup_logging(args, logtype='preprocess',
         logdir=os.path.join(args.basedir, "logs"))
 
+    args.logger.info("3")
+
     args = load_default_settings_from_json(args)
+
+    args.logger.info("5")
 
     if not args.ignore_settings:
         args = load_user_settings_from_json(args)

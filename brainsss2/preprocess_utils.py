@@ -102,6 +102,7 @@ def load_default_settings_from_json(args):
     with open(default_settings_file) as f:
         setattr(args, 'default_settings', json.load(f))
     logging.info("loaded default settings")
+    args.logger.info("4")
     return args
 
 

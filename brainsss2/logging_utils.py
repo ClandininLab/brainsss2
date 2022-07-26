@@ -184,4 +184,8 @@ def setup_logging(args, logtype, logdir=None, logfile=None, preamble=True):
         logger.info(f"{key}: {value}")
     logger.info("\n")
     setattr(args, 'logger', logger)
+
+    logger.info("1")
+    args.logger.info("2")
+
     return args
