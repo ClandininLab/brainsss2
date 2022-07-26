@@ -500,7 +500,7 @@ if __name__ == "__main__":
     args = load_default_settings_from_json(args)
 
     args.logger.info("5")
-    rgs.logger.info(args.process)
+    args.logger.info(args.process)
 
     if not args.ignore_settings:
         args = load_user_settings_from_json(args)
