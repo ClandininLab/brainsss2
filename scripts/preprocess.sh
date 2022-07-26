@@ -2,8 +2,8 @@
 # A shell script to run the python preprocessing script via slurm
 
 #SBATCH --job-name=prepro
-#SBATCH --partition=normal
-#SBATCH --time=48:00:00
+#SBATCH --partition=trc
+#SBATCH --time=00:05:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --open-mode=append
