@@ -197,7 +197,7 @@ def run_preprocessing_step(script, args, args_dict):
         args_dict['verbose'] = args.verbose
         args_dict['logfile'] = logfile
 
-        args.logger.info(f'HELLO. user_args:'{args_dict})
+        args.logger.info(f'HELLO. user_args:{args_dict}')
 
         sbatch[procdir] = SlurmBatchJob(stepname, script,
                                         user_args=args_dict,
