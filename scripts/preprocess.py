@@ -203,7 +203,7 @@ def run_preprocessing_step(script, args, args_dict):
                                         user_args=args_dict,
                                         local=args.local,
                                         verbose=args.verbose)
-        #sbatch[procdir].run()
+        sbatch[procdir].run()
 
     output = {}
     # loop through processes, waiting for each one

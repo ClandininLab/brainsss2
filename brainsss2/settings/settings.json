@@ -14,7 +14,8 @@
         "script": "motion_correction.py",
         "type_of_transform": "SyN",
         "stepsize": 1,
-        "time_hours": 48,
+        "time_hours": 36,
+        "cores": 12,
         "dirtype": "func"
     },
     "motion_correction_anat": {
