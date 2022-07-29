@@ -500,7 +500,9 @@ if __name__ == "__main__":
     args = setup_logging(args, logtype='preprocess',
         logdir=os.path.join(args.basedir, "logs"))
 
+    args.logger.info(f'A only')
     args.logger.info(f'A: args.cores = {args.cores}')
+    print(f'print A: args.cores = {args.cores}')
 
     args = load_default_settings_from_json(args)
 
