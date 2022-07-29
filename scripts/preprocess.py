@@ -279,6 +279,7 @@ def process_fly(args):
         workflow_dict['bleaching_qc'].update(args.preproc_settings['bleaching_qc'])
         args.logger.debug(f'bleaching_qc workflow dict: {workflow_dict}')
 
+    args.logger.info(f'HIIIII 1 args.cors = {args.cores}')
     if args.motion_correction in ['func', 'both'] or args.run_all:
         workflow_dict['motion_correction_func'] = {
             'basedir': args.basedir,
@@ -288,6 +289,7 @@ def process_fly(args):
                 16 if args.partition == 'normal' else 4,
                 get_max_slurm_cpus() - 1),
         }
+        args.logger.info(f'HIIIII 2 args.cors = {args.cores}')
         workflow_dict['motion_correction_func'].update(args.preproc_settings['motion_correction_func'])
         args.logger.debug(f'motion_correction_func workflow dict: {workflow_dict}')
 
