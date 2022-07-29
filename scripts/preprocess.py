@@ -224,6 +224,7 @@ def run_preprocessing_step(script, args, args_dict):
 
 
 def process_fly(args):
+    args.logger.info(f'E: args.cores = {args.cores}')
     """perform preprocessing on a single fly
 
     Parameters:
@@ -499,18 +500,22 @@ if __name__ == "__main__":
     args = setup_logging(args, logtype='preprocess',
         logdir=os.path.join(args.basedir, "logs"))
 
-    args.logger.info("3")
+    args.logger.info(f'A: args.cores = {args.cores}')
 
     args = load_default_settings_from_json(args)
 
-    args.logger.info("5")
+    args.logger.info(f'B: args.cores = {args.cores}')
     args.logger.info(F"args.process: {args.process}")
 
     if not args.ignore_settings:
         args = load_user_settings_from_json(args)
 
+    args.logger.info(f'C: args.cores = {args.cores}')
+
     if args.settings_file is not None:
         args = load_user_settings_from_json(args, args.settings_file)
+
+    args.logger.info(f'D: args.cores = {args.cores}')
 
     if args.build:
         args.logger.info("building fly")
