@@ -70,8 +70,8 @@ class DataDir:
                 self.bleaching_plot = None
 
             # STB
-            print(f'HELLO data_dict is:'{data_dict})
-            print(f'HELLO data_dict[visual] is:'{data_dict['visual']})
+            print(f'HELLO data_dict is:{data_dict}')
+            print(f'HELLO data_dict[visual] is:{data_dict['visual']}')
             if 'visual' in data_dict and 'STB' in data_dict['visual']:
                 if data_dict['visual']['STB'] is not None:
                     self.STB = data_dict['visual']['STB']
