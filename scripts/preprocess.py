@@ -282,7 +282,7 @@ def process_fly(args):
             'basedir': args.basedir,
             'dir': args.process,
             'time_hours': 24 if args.partition == 'normal' else 24,
-            'cores': args.cores if args.cores is not None else min(
+            'cores': min(
                 16 if args.partition == 'normal' else 4,
                 get_max_slurm_cpus() - 1),
         }
